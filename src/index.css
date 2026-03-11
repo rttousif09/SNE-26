@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sap-bg: #f2f6fa;
+  --color-sap-blue: #0056b3;
+  --color-sap-header: #d9e4f1;
+  --color-sap-border: #8c9ba8;
+  --color-sap-highlight: #e6f2ff;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 11px;
+  background-color: var(--color-sap-bg);
+  color: #000000;
+}
+
+/* Classic SAP 3D Button */
+.sap-btn {
+  background: linear-gradient(to bottom, #f9fafb 0%, #e2e6ea 100%);
+  border: 1px solid #8c9ba8;
+  border-radius: 2px;
+  padding: 2px 8px;
+  color: #333;
+  cursor: pointer;
+  box-shadow: inset 1px 1px 0px rgba(255,255,255,0.8), inset -1px -1px 0px rgba(0,0,0,0.1);
+}
+.sap-btn:hover {
+  background: linear-gradient(to bottom, #ffffff 0%, #e6ebf0 100%);
+  border-color: #0056b3;
+}
+.sap-btn:active {
+  background: #d2d8df;
+  box-shadow: inset 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Classic SAP 3D Input */
+.sap-input {
+  background-color: #ffffff;
+  border: 1px solid #8c9ba8;
+  border-top-color: #6c7a87;
+  border-left-color: #6c7a87;
+  padding: 2px 4px;
+  border-radius: 1px;
+}
+.sap-input:focus {
+  outline: none;
+  background-color: #fffbdd; /* Classic yellow focus */
+  border-color: #0056b3;
+}
+
+/* Classic SAP Panel */
+.sap-panel {
+  background-color: #eef2f6;
+  border: 1px solid #8c9ba8;
+  box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Classic SAP Header */
+.sap-header {
+  background: linear-gradient(to bottom, #e4ebf3 0%, #d1dce8 100%);
+  border-bottom: 1px solid #8c9ba8;
+  color: #333;
+  font-weight: bold;
+}
+
+/* Custom scrollbar for classic look */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-left: 1px solid #e0e0e0;
+}
+::-webkit-scrollbar-thumb {
+  background: #cdcdcd;
+  border: 1px solid #f0f0f0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a6a6a6;
+}
+::-webkit-scrollbar-button {
+  display: block;
+  background-color: #f0f0f0;
+  border: 1px solid #e0e0e0;
+  height: 16px;
+  width: 16px;
+}
+

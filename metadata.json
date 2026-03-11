@@ -1,0 +1,5 @@
+{
+  "name": "Enterprise Resource Management",
+  "description": "SAP-style business management software for projects, workers, billing, and payments.",
+  "requestFramePermissions": []
+}
