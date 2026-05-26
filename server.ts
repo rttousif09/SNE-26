@@ -46,6 +46,9 @@ function initDbSchema() {
       amount REAL NOT NULL,
       month TEXT NOT NULL,
       certifyDate TEXT NOT NULL,
+      tds REAL DEFAULT 0,
+      retention REAL DEFAULT 0,
+      gst REAL DEFAULT 0,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -107,6 +110,17 @@ function initDbSchema() {
     );
   `);
 
+  // Migrate existing databases to make sure they have the new columns
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN tds REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN retention REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN gst REAL DEFAULT 0");
+  } catch (e) {}
+
   // Insert initial seed data if table is completely empty
   const countRow = db.prepare("SELECT COUNT(*) as count FROM projects").get() as { count: number };
   if (countRow.count === 0) {
@@ -135,9 +149,9 @@ function initDbSchema() {
     baseWorkers.forEach(w => insertWorker.run(w.id, w.serialNo, w.workerId, w.name, w.projectId, w.designation, w.joiningDate, w.exitDate));
 
     db.prepare(`
-      INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run("b1", "1", "p1", "BILL-001", "Foundation Work", 250000, "2025-02", "2025-02-28");
+      INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run("b1", "1", "p1", "BILL-001", "Foundation Work", 250000, "2025-02", "2025-02-28", 5000, 12500, 45000);
 
     db.prepare(`
       INSERT INTO client_payments (id, projectId, amountReceived, date, remarks, status)
@@ -276,11 +290,23 @@ async function startServer() {
 
   app.post("/api/billings", (req, res) => {
     try {
-      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate } = req.body;
+      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst } = req.body;
       db.prepare(`
-        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, srNo || null, projectId, billNo, workNature, parseFloat(amount), month, certifyDate);
+        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        srNo || null,
+        projectId,
+        billNo,
+        workNature,
+        parseFloat(amount),
+        month,
+        certifyDate,
+        parseFloat(tds || 0),
+        parseFloat(retention || 0),
+        parseFloat(gst || 0)
+      );
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -290,12 +316,24 @@ async function startServer() {
   app.put("/api/billings/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { srNo, projectId, billNo, workNature, amount, month, certifyDate } = req.body;
+      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst } = req.body;
       db.prepare(`
         UPDATE billings
-        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?
+        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?
         WHERE id = ?
-      `).run(srNo || null, projectId, billNo, workNature, parseFloat(amount), month, certifyDate, id);
+      `).run(
+        srNo || null,
+        projectId,
+        billNo,
+        workNature,
+        parseFloat(amount),
+        month,
+        certifyDate,
+        parseFloat(tds || 0),
+        parseFloat(retention || 0),
+        parseFloat(gst || 0),
+        id
+      );
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -606,11 +644,23 @@ async function startServer() {
 
       if (backup.billings && Array.isArray(backup.billings)) {
         const insert = db.prepare(`
-          INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const b of backup.billings) {
-          insert.run(b.id, b.srNo || null, b.projectId, b.billNo, b.workNature, parseFloat(b.amount), b.month, b.certifyDate);
+          insert.run(
+            b.id,
+            b.srNo || null,
+            b.projectId,
+            b.billNo,
+            b.workNature,
+            parseFloat(b.amount),
+            b.month,
+            b.certifyDate,
+            parseFloat(b.tds || 0),
+            parseFloat(b.retention || 0),
+            parseFloat(b.gst || 0)
+          );
         }
       }
 

@@ -27,6 +27,9 @@ export interface Billing {
   amount: number;
   month: string; // YYYY-MM
   certifyDate: string;
+  tds?: number;
+  retention?: number;
+  gst?: number;
 }
 
 export interface ClientPayment {

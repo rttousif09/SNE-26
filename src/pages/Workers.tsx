@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2 } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Search } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Workers: React.FC = () => {
@@ -10,6 +10,16 @@ export const Workers: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: ''
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredWorkers = workers.filter(worker => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      worker.name.toLowerCase().includes(query) ||
+      worker.workerId.toLowerCase().includes(query)
+    );
   });
 
   const handleEdit = (worker: any) => {
@@ -51,11 +61,31 @@ export const Workers: React.FC = () => {
 
   return (
     <div className="text-[11px]">
-      <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
+      <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
         <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
           {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
           <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
         </button>
+        <div className="flex items-center space-x-1.5 pr-1">
+          <Search size={12} className="text-gray-600" />
+          <span className="font-semibold text-gray-700">Search:</span>
+          <input
+            type="text"
+            className="sap-input w-48 text-[11px]"
+            placeholder="Filter by Name or ID..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="hover:bg-gray-300 p-0.5 rounded text-gray-500 cursor-pointer flex items-center"
+              title="Clear Search"
+            >
+              <X size={10} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex space-x-2 mb-4">
@@ -134,7 +164,7 @@ export const Workers: React.FC = () => {
           </tr>
         </thead>
         <tbody>
-          {workers.map((worker) => (
+          {filteredWorkers.map((worker) => (
             <tr key={worker.id} className="hover:bg-[#e6f2ff] cursor-default">
               <td className="border border-[#8c9ba8] px-2 py-1">{worker.serialNo}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{worker.workerId}</td>
@@ -153,7 +183,7 @@ export const Workers: React.FC = () => {
               </td>
             </tr>
           ))}
-          {workers.length === 0 && (
+          {filteredWorkers.length === 0 && (
             <tr>
               <td colSpan={8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No workers found.</td>
             </tr>
