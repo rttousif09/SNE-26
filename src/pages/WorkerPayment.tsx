@@ -4,7 +4,8 @@ import { Save, Edit, X, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const WorkerPayment: React.FC = () => {
-  const { workerPayments, projects, workers, kharchis, advances, addWorkerPayment, updateWorkerPayment, deleteWorkerPayment } = useAppContext();
+  const { user, workerPayments, projects, workers, kharchis, advances, addWorkerPayment, updateWorkerPayment, deleteWorkerPayment } = useAppContext();
+  const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -105,7 +106,7 @@ export const WorkerPayment: React.FC = () => {
         </select>
       </div>
 
-      {selectedProject && (
+      {selectedProject && !isReadOnly && (
         <div className="sap-panel p-2 mb-4">
           <div className="font-semibold mb-2 border-b border-[#8c9ba8] pb-1 text-[#0056b3]">
             {editingId ? 'Edit Payment Details' : 'Record Worker Payment'}
@@ -179,7 +180,7 @@ export const WorkerPayment: React.FC = () => {
               <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600">Kharchi</th>
               <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600">Advance</th>
               <th className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-700">Net Pay</th>
-              <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>
+              {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -198,20 +199,22 @@ export const WorkerPayment: React.FC = () => {
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-700">
                     {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.netPayment)}
                   </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-center">
-                    <button onClick={() => handleEdit(payment)} className="text-blue-600 hover:text-blue-800" title="Edit">
-                      <Edit size={14} />
-                    </button>
-                    <button onClick={() => setDeleteId(payment.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
+                  {!isReadOnly && (
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                      <button onClick={() => handleEdit(payment)} className="text-blue-600 hover:text-blue-800" title="Edit">
+                        <Edit size={14} />
+                      </button>
+                      <button onClick={() => setDeleteId(payment.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {filteredPayments.length === 0 && (
               <tr>
-                <td colSpan={10} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No payment records found for this project.</td>
+                <td colSpan={isReadOnly ? 9 : 10} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No payment records found for this project.</td>
               </tr>
             )}
           </tbody>

@@ -4,7 +4,8 @@ import { Plus, X, Save, Edit, Trash2, RefreshCw, AlertCircle, ArrowUpRight, Arro
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const ClientPayment: React.FC = () => {
-  const { clientPayments, billings, projects, addClientPayment, updateClientPayment, deleteClientPayment } = useAppContext();
+  const { user, clientPayments, billings, projects, addClientPayment, updateClientPayment, deleteClientPayment } = useAppContext();
+  const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -266,10 +267,14 @@ export const ClientPayment: React.FC = () => {
       {/* Action panel */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-[#eef2f6] border border-[#8c9ba8] p-1.5 gap-2 shadow-sm print:hidden">
         <div className="flex flex-wrap items-center gap-1.5">
-          <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1 font-semibold self-start md:self-auto cursor-pointer">
-            {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-            <span>{isAdding ? 'Cancel' : 'Record Payment'}</span>
-          </button>
+          {!isReadOnly ? (
+            <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1 font-semibold self-start md:self-auto cursor-pointer">
+              {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+              <span>{isAdding ? 'Cancel' : 'Record Payment'}</span>
+            </button>
+          ) : (
+            <span className="font-semibold text-gray-700 px-1 py-0.5">Payments Flow Ledger (Read Only)</span>
+          )}
           
           <button onClick={() => exportToCSV(false)} className="sap-btn flex items-center space-x-1 font-semibold bg-[#107c41]/10 text-[#107c41] border-[#107c41]/50 hover:bg-[#107c41] hover:text-white transition cursor-pointer" title="Export current filtered view ledger and payment history data to Microsoft Excel CSV format">
             <FileSpreadsheet size={12} />
@@ -641,7 +646,7 @@ export const ClientPayment: React.FC = () => {
                 <th className="excel-col-letter text-left px-2">Col C [Remarks]</th>
                 <th className="excel-col-letter text-left px-2">Col D [Status]</th>
                 <th className="excel-col-letter text-right px-2">Col E [Credit Amount]</th>
-                <th className="excel-col-letter text-center px-1 print:hidden">Actions</th>
+                {!isReadOnly && <th className="excel-col-letter text-center px-1 print:hidden">Actions</th>}
               </tr>
               {/* Actual column labels */}
               <tr className="sap-header font-bold text-gray-800 divide-x divide-[#8c9ba8] border-b border-[#bcc5cf]">
@@ -662,7 +667,7 @@ export const ClientPayment: React.FC = () => {
                 <th className="border border-[#bcc5cf] px-2 py-1 text-left font-semibold">Remarks/Instrument</th>
                 <th className="border border-[#bcc5cf] px-2 py-1 text-left font-semibold">Status</th>
                 <th className="border border-[#bcc5cf] px-2 py-1 text-right font-semibold text-green-900">Amount Received</th>
-                <th className="border border-[#bcc5cf] px-2 py-1 text-center font-semibold w-12 text-gray-750 print:hidden">Edit</th>
+                {!isReadOnly && <th className="border border-[#bcc5cf] px-2 py-1 text-center font-semibold w-12 text-gray-750 print:hidden">Edit</th>}
               </tr>
             </thead>
             <tbody>
@@ -687,20 +692,22 @@ export const ClientPayment: React.FC = () => {
                   <td className="border border-[#bcc5cf] px-2 py-1 text-right font-semibold text-green-700 font-mono">
                     {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amountReceived)}
                   </td>
-                  <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none print:hidden">
-                    <button onClick={() => handleEdit(payment)} className="text-blue-600 hover:text-blue-800 transition cursor-pointer" title="Edit">
-                      <Edit size={12} />
-                    </button>
-                    <button onClick={() => setDeleteId(payment.id)} className="text-red-600 hover:text-red-800 ml-2 transition cursor-pointer" title="Delete">
-                      <Trash2 size={12} />
-                    </button>
-                  </td>
+                  {!isReadOnly && (
+                    <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none print:hidden">
+                      <button onClick={() => handleEdit(payment)} className="text-blue-600 hover:text-blue-800 transition cursor-pointer" title="Edit">
+                        <Edit size={12} />
+                      </button>
+                      <button onClick={() => setDeleteId(payment.id)} className="text-red-600 hover:text-red-800 ml-2 transition cursor-pointer" title="Delete">
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filteredClientPayments.length === 0 && (
                 <tr>
                   <td className="excel-row-num">3</td>
-                  <td colSpan={6} className="border border-[#bcc5cf] px-2 py-4 text-center text-gray-500">No payment history found for selection.</td>
+                  <td colSpan={isReadOnly ? 5 : 6} className="border border-[#bcc5cf] px-2 py-4 text-center text-gray-500">No payment history found for selection.</td>
                 </tr>
               )}
               {filteredClientPayments.length > 0 && (

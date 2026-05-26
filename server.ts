@@ -108,6 +108,18 @@ function initDbSchema() {
       FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS approvals (
+      id TEXT PRIMARY KEY,
+      workerId TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      amount REAL NOT NULL,
+      remarks TEXT,
+      date TEXT NOT NULL,
+      status TEXT DEFAULT 'Pending',
+      FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate existing databases to make sure they have the new columns
@@ -574,6 +586,54 @@ async function startServer() {
     }
   });
 
+  // 8.5. Approvals (Managing Director requests, Owner Saddam Hussain approves/rejects)
+  app.get("/api/approvals", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM approvals").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/approvals", (req, res) => {
+    try {
+      const { id, workerId, projectId, amount, remarks, date, status } = req.body;
+      db.prepare(`
+        INSERT INTO approvals (id, workerId, projectId, amount, remarks, date, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, workerId, projectId, parseFloat(amount), remarks || "", date, status || "Pending");
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      db.prepare(`
+        UPDATE approvals
+        SET status = ?
+        WHERE id = ?
+      `).run(status, id);
+      res.json({ id, status });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM approvals WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // 9. Full Backup Export/Import APIs
   app.get("/api/backup/export", (req, res) => {
     try {
@@ -585,6 +645,7 @@ async function startServer() {
       const advances = db.prepare("SELECT * FROM advances").all();
       const workerPayments = db.prepare("SELECT * FROM worker_payments").all();
       const attendance = db.prepare("SELECT * FROM attendance").all();
+      const approvals = db.prepare("SELECT * FROM approvals").all();
 
       res.json({
         projects,
@@ -601,7 +662,8 @@ async function startServer() {
         kharchis,
         advances,
         workerPayments,
-        attendance
+        attendance,
+        approvals
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -612,6 +674,7 @@ async function startServer() {
     const backup = req.body;
     const transaction = db.transaction(() => {
       // Clear all data
+      db.prepare("DELETE FROM approvals").run();
       db.prepare("DELETE FROM worker_payments").run();
       db.prepare("DELETE FROM advances").run();
       db.prepare("DELETE FROM kharchis").run();
@@ -711,6 +774,16 @@ async function startServer() {
         `);
         for (const att of backup.attendance) {
           insert.run(att.id, att.workerId, att.projectId, att.date, att.status);
+        }
+      }
+
+      if (backup.approvals && Array.isArray(backup.approvals)) {
+        const insert = db.prepare(`
+          INSERT INTO approvals (id, workerId, projectId, amount, remarks, date, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const app of backup.approvals) {
+          insert.run(app.id, app.workerId, app.projectId, parseFloat(app.amount), app.remarks || "", app.date, app.status || "Pending");
         }
       }
     });

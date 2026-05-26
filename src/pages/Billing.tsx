@@ -4,7 +4,8 @@ import { Plus, X, Save, Edit, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Billing: React.FC = () => {
-  const { billings, projects, addBilling, updateBilling, deleteBilling } = useAppContext();
+  const { user, billings, projects, addBilling, updateBilling, deleteBilling } = useAppContext();
+  const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -208,10 +209,14 @@ export const Billing: React.FC = () => {
   return (
     <div className="text-[11px]">
       <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
-        <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
-          {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-          <span>{isAdding ? 'Cancel' : 'New Bill'}</span>
-        </button>
+        {!isReadOnly ? (
+          <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+            {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+            <span>{isAdding ? 'Cancel' : 'New Bill'}</span>
+          </button>
+        ) : (
+          <div className="font-semibold text-gray-700 px-1 py-0.5">Billing Directory (Read Only)</div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 mb-4 bg-gray-50 p-2 border border-[#8c9ba8]">
@@ -410,7 +415,7 @@ export const Billing: React.FC = () => {
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Retention (-)</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">GST (+)</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-semibold bg-green-50">Net Amount</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>
+            {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -443,20 +448,22 @@ export const Billing: React.FC = () => {
                 <td className="border border-[#8c9ba8] px-2 py-1 text-right font-semibold bg-green-50/50 text-[#0056b3]">
                   {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(netAmount)}
                 </td>
-                <td className="border border-[#8c9ba8] px-2 py-1 text-center">
-                  <button onClick={() => handleEdit(bill)} className="text-blue-600 hover:text-blue-800" title="Edit">
-                    <Edit size={14} />
-                  </button>
-                  <button onClick={() => setDeleteId(bill.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
-                    <Trash2 size={14} />
-                  </button>
-                </td>
+                {!isReadOnly && (
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                    <button onClick={() => handleEdit(bill)} className="text-blue-600 hover:text-blue-800" title="Edit">
+                      <Edit size={14} />
+                    </button>
+                    <button onClick={() => setDeleteId(bill.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                )}
               </tr>
             );
           })}
           {billings.length === 0 && (
             <tr>
-              <td colSpan={12} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No bills found.</td>
+              <td colSpan={isReadOnly ? 11 : 12} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No bills found.</td>
             </tr>
           )}
         </tbody>

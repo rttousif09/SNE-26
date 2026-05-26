@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Building2, Lock, User, AlertCircle, Server } from 'lucide-react';
+import { SNLogo } from './SNLogo';
 
 interface LoginProps {
   onLoginSuccess: (user: { username: string; name: string }) => void;
@@ -20,6 +21,11 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         username: trimmedUsername,
         name: 'Reja Tousif'
       });
+    } else if (trimmedUsername === 'saddamsne' && password === 'Saddam09@') {
+      onLoginSuccess({
+        username: trimmedUsername,
+        name: 'Saddam Hussain'
+      });
     } else {
       setError('Logon failed: Incorrect User ID or Password.');
     }
@@ -29,12 +35,12 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     <div className="min-h-screen flex flex-col justify-between bg-gradient-to-b from-[#f2f6fa] to-[#cbd8e6] font-sans text-xs">
       
       {/* Brand Header */}
-      <header className="bg-[#002f6c] text-white px-6 py-3 flex items-center justify-between border-b-2 border-[#8c9ba8] shadow-md">
-        <div className="flex items-center space-x-3.5">
-          <Building2 size={24} className="text-blue-300" />
+      <header className="bg-[#002f6c] text-white px-6 py-2.5 flex items-center justify-between border-b-2 border-[#8c9ba8] shadow-md">
+        <div className="flex items-center space-x-3">
+          <SNLogo size={36} className="text-white hover:scale-105 transition-transform" />
           <div>
-            <h1 className="text-lg font-bold tracking-wider font-mono text-white leading-none">SN ENTERPRISE</h1>
-            <p className="text-[9px] text-[#cbd8e6] mt-0.5 uppercase tracking-widest leading-none">Enterprise Resource Planning System</p>
+            <h1 className="text-lg font-black tracking-wider font-mono text-white leading-none">SN ENTERPRISE</h1>
+            <p className="text-[9px] text-[#cbd8e6] mt-0.5 uppercase tracking-widest leading-none font-medium">Enterprise Resource Planning System</p>
           </div>
         </div>
         <div className="flex items-center space-x-2 text-[10px] text-blue-200">

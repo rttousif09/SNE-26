@@ -71,3 +71,13 @@ export interface WorkerPayment {
   netPayment: number;
   date: string;
 }
+
+export interface Approval {
+  id: string;
+  workerId: string;
+  projectId: string;
+  amount: number;
+  remarks: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+}

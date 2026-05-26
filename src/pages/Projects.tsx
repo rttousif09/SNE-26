@@ -4,7 +4,8 @@ import { Plus, X, Save, Edit, Trash2, Search } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Projects: React.FC = () => {
-  const { projects, addProject, updateProject, deleteProject } = useAppContext();
+  const { user, projects, addProject, updateProject, deleteProject } = useAppContext();
+  const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -57,10 +58,14 @@ export const Projects: React.FC = () => {
   return (
     <div className="text-[11px]">
       <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
-        <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
-          {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-          <span>{isAdding ? 'Cancel' : 'New Project'}</span>
-        </button>
+        {!isReadOnly ? (
+          <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+            {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+            <span>{isAdding ? 'Cancel' : 'New Project'}</span>
+          </button>
+        ) : (
+          <div className="font-semibold text-gray-700 px-1 py-0.5">Projects List (Read Only)</div>
+        )}
         <div className="flex items-center space-x-1.5 pr-1">
           <Search size={12} className="text-gray-600" />
           <span className="font-semibold text-gray-700">Search:</span>
@@ -134,7 +139,7 @@ export const Projects: React.FC = () => {
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Completion Date</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Address</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Budget</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>
+            {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -146,19 +151,21 @@ export const Projects: React.FC = () => {
               <td className="border border-[#8c9ba8] px-2 py-1">{project.completionDate || '-'}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.address}</td>
               <td className="border border-[#8c9ba8] px-2 py-1 text-right">{project.budget.toLocaleString()}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1 text-center">
-                <button onClick={() => handleEdit(project)} className="text-blue-600 hover:text-blue-800" title="Edit">
-                  <Edit size={14} />
-                </button>
-                <button onClick={() => setDeleteId(project.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
-                  <Trash2 size={14} />
-                </button>
-              </td>
+              {!isReadOnly && (
+                <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                  <button onClick={() => handleEdit(project)} className="text-blue-600 hover:text-blue-800" title="Edit">
+                    <Edit size={14} />
+                  </button>
+                  <button onClick={() => setDeleteId(project.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
           {filteredProjects.length === 0 && (
             <tr>
-              <td colSpan={7} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No projects found.</td>
+              <td colSpan={isReadOnly ? 6 : 7} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No projects found.</td>
             </tr>
           )}
         </tbody>

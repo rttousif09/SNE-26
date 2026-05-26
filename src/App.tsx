@@ -16,6 +16,7 @@ import { ClientPayment } from './pages/ClientPayment';
 import { Kharchi } from './pages/Kharchi';
 import { Advance } from './pages/Advance';
 import { WorkerPayment } from './pages/WorkerPayment';
+import { Approvals } from './pages/Approvals';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 
 function AppContent({ user, onLogout }: { user: { username: string; name: string } | null; onLogout: () => void }) {
@@ -36,6 +37,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'kharchi': return <Kharchi />;
       case 'advance': return <Advance />;
       case 'worker-payment': return <WorkerPayment />;
+      case 'approvals': return <Approvals />;
       default: return <Dashboard />;
     }
   };
@@ -50,6 +52,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'kharchi': return 'Kharchi';
       case 'advance': return 'Advance';
       case 'worker-payment': return 'Workers Payment';
+      case 'approvals': return 'Approvals Workflow';
       default: return 'Overview';
     }
   };
@@ -234,33 +237,28 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   );
 }
 
-export default function App() {
-  const [user, setUser] = useState<{ username: string; name: string } | null>(() => {
-    try {
-      const saved = localStorage.getItem('erp_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+function AppWithAuth() {
+  const { user, setUser } = useAppContext();
 
   const handleLoginSuccess = (usr: { username: string; name: string }) => {
-    localStorage.setItem('erp_auth_user', JSON.stringify(usr));
     setUser(usr);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('erp_auth_user');
     setUser(null);
   };
 
+  return user ? (
+    <AppContent user={user} onLogout={handleLogout} />
+  ) : (
+    <Login onLoginSuccess={handleLoginSuccess} />
+  );
+}
+
+export default function App() {
   return (
     <AppProvider>
-      {user ? (
-        <AppContent user={user} onLogout={handleLogout} />
-      ) : (
-        <Login onLoginSuccess={handleLoginSuccess} />
-      )}
+      <AppWithAuth />
     </AppProvider>
   );
 }

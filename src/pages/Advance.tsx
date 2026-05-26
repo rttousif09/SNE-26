@@ -4,7 +4,8 @@ import { Save, Edit, X, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Advance: React.FC = () => {
-  const { advances, projects, workers, addAdvance, updateAdvance, deleteAdvance } = useAppContext();
+  const { user, advances, projects, workers, addAdvance, updateAdvance, deleteAdvance } = useAppContext();
+  const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -88,7 +89,7 @@ export const Advance: React.FC = () => {
         </select>
       </div>
 
-      {selectedProject && (
+      {selectedProject && !isReadOnly && (
         <div className="sap-panel p-2 mb-4">
           <div className="font-semibold mb-2 border-b border-[#8c9ba8] pb-1 text-[#0056b3]">
             {editingId ? 'Edit Advance Details' : 'Record Advance'}
@@ -150,7 +151,7 @@ export const Advance: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Paid By</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Amount</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>
+                {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -167,20 +168,22 @@ export const Advance: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right">
                       {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(advance.amount)}
                     </td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
-                      <button onClick={() => handleEdit(advance)} className="text-blue-600 hover:text-blue-800" title="Edit">
-                        <Edit size={14} />
-                      </button>
-                      <button onClick={() => setDeleteId(advance.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+                    {!isReadOnly && (
+                      <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                        <button onClick={() => handleEdit(advance)} className="text-blue-600 hover:text-blue-800" title="Edit">
+                          <Edit size={14} />
+                        </button>
+                        <button onClick={() => setDeleteId(advance.id)} className="text-red-600 hover:text-red-800 ml-2" title="Delete">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {filteredAdvances.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No advance records found for this project.</td>
+                  <td colSpan={isReadOnly ? 7 : 8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No advance records found for this project.</td>
                 </tr>
               )}
             </tbody>

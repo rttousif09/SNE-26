@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown } from 'lucide-react';
+import { SNLogo } from './SNLogo';
 
 interface TopBarProps {
   user: { username: string; name: string } | null;
@@ -24,12 +25,12 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout }) => {
   }, []);
 
   return (
-    <div className="flex flex-col bg-[#eef2f6] border-b border-[#8c9ba8] select-none">
+    <div className="flex flex-col bg-[#eef2f6] border-b border-[#8c9ba8] select-none text-[11px]">
       {/* Brand & Profile Section */}
-      <div className="bg-[#002f6c] text-white px-3 py-1.5 flex items-center justify-between border-b border-[#8c9ba8] shadow-sm">
-        <div className="flex items-center space-x-2.5">
-          <Building2 size={15} className="text-blue-300" />
-          <span className="font-mono text-xs font-extrabold uppercase tracking-widest text-white">SN ENTERPRISE</span>
+      <div className="bg-[#002f6c] text-white px-3 py-1 flex items-center justify-between border-b border-[#8c9ba8] shadow-sm">
+        <div className="flex items-center space-x-2">
+          <SNLogo size={22} className="text-white hover:scale-105 transition-transform" />
+          <span className="font-mono text-xs font-black uppercase tracking-widest text-white">SN ENTERPRISE</span>
           <span className="text-[9px] text-blue-200 bg-[#001f4d] px-1.5 py-0.5 rounded border border-blue-900 font-mono">ERP_PRD</span>
         </div>
         
@@ -55,7 +56,7 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout }) => {
                 <div className="p-3 bg-white border border-[#8c9ba8] border-t-0 text-[10px] space-y-2">
                   <div className="flex items-center space-x-2">
                     <div className="w-8 h-8 bg-[#0056b3] text-white rounded-full flex items-center justify-center font-mono text-xs font-semibold uppercase shrink-0">
-                      RT
+                      {user.name.split(' ').map((n: any) => n.charAt(0)).join('')}
                     </div>
                     <div>
                       <span className="text-gray-400 block text-[8px] uppercase">User Full Name</span>
@@ -68,7 +69,9 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout }) => {
                   </div>
                   <div>
                     <span className="text-gray-400 block text-[8px] uppercase">Access Role</span>
-                    <span className="text-gray-700 font-semibold">Manager / Owner</span>
+                    <span className="text-gray-700 font-semibold">
+                      {user.username === 'saddamsne' ? 'Owner' : 'Managing Director'}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-400 block text-[8px] uppercase">Connection Status</span>

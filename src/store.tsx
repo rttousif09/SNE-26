@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -10,10 +10,13 @@ interface AppState {
   kharchis: Kharchi[];
   advances: Advance[];
   workerPayments: WorkerPayment[];
+  approvals: Approval[];
 }
 
 interface AppContextType extends AppState {
   isDbLoaded: boolean;
+  user: { username: string; name: string } | null;
+  setUser: (user: { username: string; name: string } | null) => void;
   importBackup: (backupState: AppState) => Promise<boolean>;
   addProject: (project: Omit<Project, 'id'>) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
@@ -36,6 +39,9 @@ interface AppContextType extends AppState {
   addWorkerPayment: (payment: Omit<WorkerPayment, 'id'>) => void;
   updateWorkerPayment: (id: string, payment: Partial<WorkerPayment>) => void;
   deleteWorkerPayment: (id: string) => void;
+  addApproval: (approval: Omit<Approval, 'id' | 'status'>) => void;
+  updateApproval: (id: string, approval: Partial<Approval>) => void;
+  deleteApproval: (id: string) => void;
 }
 
 const initialState: AppState = {
@@ -62,11 +68,30 @@ const initialState: AppState = {
     { id: 'a1', projectId: 'p1', workerId: 'w1', amount: 5000, paidBy: 'Admin', remarks: 'Medical emergency', date: '2025-02-15' },
   ],
   workerPayments: [],
+  approvals: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUserState] = useState<{ username: string; name: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('erp_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const setUser = (usr: { username: string; name: string } | null) => {
+    if (usr) {
+      localStorage.setItem('erp_auth_user', JSON.stringify(usr));
+    } else {
+      localStorage.removeItem('erp_auth_user');
+    }
+    setUserState(usr);
+  };
+
   const [state, setState] = useState<AppState>({
     projects: [],
     workers: [],
@@ -75,20 +100,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     kharchis: [],
     advances: [],
     workerPayments: [],
+    approvals: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes] = await Promise.all([
+        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
           fetch('/api/billings').then(r => r.json()),
           fetch('/api/client-payments').then(r => r.json()),
           fetch('/api/kharchis').then(r => r.json()),
           fetch('/api/advances').then(r => r.json()),
-          fetch('/api/worker-payments').then(r => r.json())
+          fetch('/api/worker-payments').then(r => r.json()),
+          fetch('/api/approvals').then(r => r.json()).catch(() => [])
         ]);
 
         setState({
@@ -98,7 +125,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           clientPayments: cpRes,
           kharchis: kRes,
           advances: aRes,
-          workerPayments: wpRes
+          workerPayments: wpRes,
+          approvals: apRes
         });
 
         // Sync with IndexedDB
@@ -109,6 +137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('kharchis', kRes);
         await saveAllToStore('advances', aRes);
         await saveAllToStore('workerPayments', wpRes);
+        await saveAllToStore('approvals', apRes);
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -119,10 +148,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const kharchis = await getAllFromStore('kharchis');
           const advances = await getAllFromStore('advances');
           const workerPayments = await getAllFromStore('workerPayments');
+          const approvals = await getAllFromStore('approvals');
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
-                            workerPayments.length === 0;
+                            workerPayments.length === 0 && approvals.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -134,7 +164,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               clientPayments,
               kharchis,
               advances,
-              workerPayments
+              workerPayments,
+              approvals
             });
           }
         } catch (e) {
@@ -482,10 +513,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addApproval = async (approval: Omit<Approval, 'id' | 'status'>) => {
+    const newApproval: Approval = { ...approval, id: generateId(), status: 'Pending' };
+    setState(s => ({ ...s, approvals: [...s.approvals, newApproval] }));
+    try {
+      await fetch('/api/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newApproval)
+      });
+      await saveAllToStore('approvals', [...state.approvals, newApproval]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateApproval = async (id: string, approval: Partial<Approval>) => {
+    setState(s => ({ ...s, approvals: s.approvals.map(app => app.id === id ? { ...app, ...approval } : app) }));
+    try {
+      const existing = state.approvals.find(app => app.id === id);
+      if (existing) {
+        const merged = { ...existing, ...approval };
+        await fetch(`/api/approvals/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: merged.status })
+        });
+        await saveAllToStore('approvals', state.approvals.map(app => app.id === id ? merged : app));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteApproval = async (id: string) => {
+    setState(s => ({ ...s, approvals: s.approvals.filter(app => app.id !== id) }));
+    try {
+      await fetch(`/api/approvals/${id}`, { method: 'DELETE' });
+      await saveAllToStore('approvals', state.approvals.filter(app => app.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
       isDbLoaded,
+      user,
+      setUser,
       importBackup,
       addProject,
       updateProject,
@@ -507,7 +583,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteAdvance,
       addWorkerPayment,
       updateWorkerPayment,
-      deleteWorkerPayment
+      deleteWorkerPayment,
+      addApproval,
+      updateApproval,
+      deleteApproval
     }}>
       {children}
     </AppContext.Provider>

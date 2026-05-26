@@ -5,6 +5,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Workers: React.FC = () => {
   const { 
+    user,
     workers, 
     projects, 
     workerPayments, 
@@ -14,6 +15,8 @@ export const Workers: React.FC = () => {
     updateWorker, 
     deleteWorker 
   } = useAppContext();
+
+  const isReadOnly = user?.username === 'saddamsne';
 
   const [activeView, setActiveView] = useState<'directory' | 'ledger'>('directory');
   
@@ -318,10 +321,14 @@ export const Workers: React.FC = () => {
         <div className="flex-1 overflow-y-auto pt-2 print:hidden">
           {/* Action and Search Panel */}
           <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1.5">
-            <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
-              {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-              <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
-            </button>
+            {!isReadOnly ? (
+              <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+                {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+                <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
+              </button>
+            ) : (
+              <div className="font-semibold text-gray-700 px-1 py-0.5">Workers Directory (Read Only)</div>
+            )}
             <div className="flex items-center space-x-1.5 pr-1">
               <Search size={12} className="text-gray-600" />
               <span className="font-semibold text-gray-700">Filter Search:</span>
@@ -419,7 +426,7 @@ export const Workers: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold w-24">Joining Date</th>
                 <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold w-24">Exit Date</th>
                 <th className="border border-[#8c9ba8] px-2 py-1.5 text-center font-bold w-24">Deep Ledger</th>
-                <th className="border border-[#8c9ba8] px-2 py-1.5 text-center font-bold w-16">Editor</th>
+                {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1.5 text-center font-bold w-16">Editor</th>}
               </tr>
             </thead>
             <tbody>
@@ -444,21 +451,23 @@ export const Workers: React.FC = () => {
                       <ArrowRight size={10} className="ml-1" />
                     </button>
                   </td>
-                  <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
-                    <div className="flex items-center justify-center space-x-2">
-                      <button onClick={() => handleEdit(worker)} className="text-blue-600 hover:text-blue-800 p-0.5 border border-transparent hover:border-blue-300 rounded" title="Edit Profile Details">
-                        <Edit size={12} />
-                      </button>
-                      <button onClick={() => setDeleteId(worker.id)} className="text-red-600 hover:text-red-800 p-0.5 border border-transparent hover:border-red-300 rounded" title="Delete Worker Registration">
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </td>
+                  {!isReadOnly && (
+                    <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button onClick={() => handleEdit(worker)} className="text-blue-600 hover:text-blue-800 p-0.5 border border-transparent hover:border-blue-300 rounded" title="Edit Profile Details">
+                          <Edit size={12} />
+                        </button>
+                        <button onClick={() => setDeleteId(worker.id)} className="text-red-600 hover:text-red-800 p-0.5 border border-transparent hover:border-red-300 rounded" title="Delete Worker Registration">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filteredWorkers.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="border border-[#8c9ba8] px-3 py-8 text-center text-gray-500 font-semibold italic bg-amber-50/10">No workers registered matching search query terms.</td>
+                  <td colSpan={isReadOnly ? 8 : 9} className="border border-[#8c9ba8] px-3 py-8 text-center text-gray-500 font-semibold italic bg-amber-50/10">No workers registered matching search query terms.</td>
                 </tr>
               )}
             </tbody>

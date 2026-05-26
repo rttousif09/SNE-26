@@ -19,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
     { id: 'kharchi', label: 'Kharchi (Pocket Money)', icon: Folder },
     { id: 'advance', label: 'Advance', icon: Folder },
     { id: 'worker-payment', label: 'Workers Payment', icon: Folder },
+    { id: 'approvals', label: 'Approvals Workflow', icon: Folder },
   ];
 
   return (
