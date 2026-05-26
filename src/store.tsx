@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment } from './types';
+import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
   projects: Project[];
@@ -12,6 +13,8 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
+  isDbLoaded: boolean;
+  importBackup: (backupState: AppState) => Promise<boolean>;
   addProject: (project: Omit<Project, 'id'>) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
@@ -64,111 +67,426 @@ const initialState: AppState = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('erp_state');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return initialState;
-      }
-    }
-    return initialState;
+  const [state, setState] = useState<AppState>({
+    projects: [],
+    workers: [],
+    billings: [],
+    clientPayments: [],
+    kharchis: [],
+    advances: [],
+    workerPayments: [],
   });
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('erp_state', JSON.stringify(state));
-  }, [state]);
+    const loadAllData = async () => {
+      try {
+        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes] = await Promise.all([
+          fetch('/api/projects').then(r => r.json()),
+          fetch('/api/workers').then(r => r.json()),
+          fetch('/api/billings').then(r => r.json()),
+          fetch('/api/client-payments').then(r => r.json()),
+          fetch('/api/kharchis').then(r => r.json()),
+          fetch('/api/advances').then(r => r.json()),
+          fetch('/api/worker-payments').then(r => r.json())
+        ]);
+
+        setState({
+          projects: pRes,
+          workers: wRes,
+          billings: bRes,
+          clientPayments: cpRes,
+          kharchis: kRes,
+          advances: aRes,
+          workerPayments: wpRes
+        });
+
+        // Sync with IndexedDB
+        await saveAllToStore('projects', pRes);
+        await saveAllToStore('workers', wRes);
+        await saveAllToStore('billings', bRes);
+        await saveAllToStore('clientPayments', cpRes);
+        await saveAllToStore('kharchis', kRes);
+        await saveAllToStore('advances', aRes);
+        await saveAllToStore('workerPayments', wpRes);
+      } catch (err) {
+        console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
+        try {
+          const projects = await getAllFromStore('projects');
+          const workers = await getAllFromStore('workers');
+          const billings = await getAllFromStore('billings');
+          const clientPayments = await getAllFromStore('clientPayments');
+          const kharchis = await getAllFromStore('kharchis');
+          const advances = await getAllFromStore('advances');
+          const workerPayments = await getAllFromStore('workerPayments');
+
+          const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
+                            clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
+                            workerPayments.length === 0;
+
+          if (isDbEmpty) {
+            setState(initialState);
+          } else {
+            setState({
+              projects,
+              workers,
+              billings,
+              clientPayments,
+              kharchis,
+              advances,
+              workerPayments
+            });
+          }
+        } catch (e) {
+          console.error('IndexedDB fallback failed: ', e);
+          setState(initialState);
+        }
+      } finally {
+        setIsDbLoaded(true);
+      }
+    };
+
+    loadAllData();
+  }, []);
+
+  const importBackup = async (backupState: AppState): Promise<boolean> => {
+    try {
+      if (!backupState || !Array.isArray(backupState.projects) || !Array.isArray(backupState.workers)) {
+        throw new Error('Invalid backup format');
+      }
+      
+      const res = await fetch('/api/backup/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backupState)
+      });
+      if (!res.ok) throw new Error('API importFailed');
+
+      // Also save to IndexedDB as fallback
+      await saveAllToStore('projects', backupState.projects || []);
+      await saveAllToStore('workers', backupState.workers || []);
+      await saveAllToStore('billings', backupState.billings || []);
+      await saveAllToStore('clientPayments', backupState.clientPayments || []);
+      await saveAllToStore('kharchis', backupState.kharchis || []);
+      await saveAllToStore('advances', backupState.advances || []);
+      await saveAllToStore('workerPayments', backupState.workerPayments || []);
+
+      setState(backupState);
+      return true;
+    } catch (e) {
+      console.error('Backup import failed:', e);
+      return false;
+    }
+  };
 
   const generateId = () => crypto.randomUUID();
 
-  const addProject = (project: Omit<Project, 'id'>) => {
-    setState(s => ({ ...s, projects: [...s.projects, { ...project, id: generateId() }] }));
+  const addProject = async (project: Omit<Project, 'id'>) => {
+    const newProject = { ...project, id: generateId() };
+    setState(s => ({ ...s, projects: [...s.projects, newProject] }));
+    try {
+      await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProject)
+      });
+      await saveAllToStore('projects', [...state.projects, newProject]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateProject = (id: string, project: Partial<Project>) => {
+  const updateProject = async (id: string, project: Partial<Project>) => {
     setState(s => ({ ...s, projects: s.projects.map(p => p.id === id ? { ...p, ...project } : p) }));
+    try {
+      const existing = state.projects.find(p => p.id === id);
+      if (existing) {
+        const merged = { ...existing, ...project };
+        await fetch(`/api/projects/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('projects', state.projects.map(p => p.id === id ? merged : p));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteProject = (id: string) => {
+  const deleteProject = async (id: string) => {
     setState(s => ({ ...s, projects: s.projects.filter(p => p.id !== id) }));
+    try {
+      await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      await saveAllToStore('projects', state.projects.filter(p => p.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const addWorker = (worker: Omit<Worker, 'id'>) => {
-    setState(s => ({ ...s, workers: [...s.workers, { ...worker, id: generateId() }] }));
+  const addWorker = async (worker: Omit<Worker, 'id'>) => {
+    const newWorker = { ...worker, id: generateId() };
+    setState(s => ({ ...s, workers: [...s.workers, newWorker] }));
+    try {
+      await fetch('/api/workers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newWorker)
+      });
+      await saveAllToStore('workers', [...state.workers, newWorker]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateWorker = (id: string, worker: Partial<Worker>) => {
+  const updateWorker = async (id: string, worker: Partial<Worker>) => {
     setState(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, ...worker } : w) }));
+    try {
+      const existing = state.workers.find(w => w.id === id);
+      if (existing) {
+        const merged = { ...existing, ...worker };
+        await fetch(`/api/workers/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('workers', state.workers.map(w => w.id === id ? merged : w));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteWorker = (id: string) => {
+  const deleteWorker = async (id: string) => {
     setState(s => ({ ...s, workers: s.workers.filter(w => w.id !== id) }));
+    try {
+      await fetch(`/api/workers/${id}`, { method: 'DELETE' });
+      await saveAllToStore('workers', state.workers.filter(w => w.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const addBilling = (billing: Omit<Billing, 'id'>) => {
-    setState(s => ({ ...s, billings: [...s.billings, { ...billing, id: generateId() }] }));
+  const addBilling = async (billing: Omit<Billing, 'id'>) => {
+    const newBilling = { ...billing, id: generateId() };
+    setState(s => ({ ...s, billings: [...s.billings, newBilling] }));
+    try {
+      await fetch('/api/billings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newBilling)
+      });
+      await saveAllToStore('billings', [...state.billings, newBilling]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateBilling = (id: string, billing: Partial<Billing>) => {
+  const updateBilling = async (id: string, billing: Partial<Billing>) => {
     setState(s => ({ ...s, billings: s.billings.map(b => b.id === id ? { ...b, ...billing } : b) }));
+    try {
+      const existing = state.billings.find(b => b.id === id);
+      if (existing) {
+        const merged = { ...existing, ...billing };
+        await fetch(`/api/billings/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('billings', state.billings.map(b => b.id === id ? merged : b));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteBilling = (id: string) => {
+  const deleteBilling = async (id: string) => {
     setState(s => ({ ...s, billings: s.billings.filter(b => b.id !== id) }));
+    try {
+      await fetch(`/api/billings/${id}`, { method: 'DELETE' });
+      await saveAllToStore('billings', state.billings.filter(b => b.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const addClientPayment = (payment: Omit<ClientPayment, 'id'>) => {
-    setState(s => ({ ...s, clientPayments: [...s.clientPayments, { ...payment, id: generateId() }] }));
+  const addClientPayment = async (payment: Omit<ClientPayment, 'id'>) => {
+    const newPayment = { ...payment, id: generateId() };
+    setState(s => ({ ...s, clientPayments: [...s.clientPayments, newPayment] }));
+    try {
+      await fetch('/api/client-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPayment)
+      });
+      await saveAllToStore('clientPayments', [...state.clientPayments, newPayment]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateClientPayment = (id: string, payment: Partial<ClientPayment>) => {
+  const updateClientPayment = async (id: string, payment: Partial<ClientPayment>) => {
     setState(s => ({ ...s, clientPayments: s.clientPayments.map(cp => cp.id === id ? { ...cp, ...payment } : cp) }));
+    try {
+      const existing = state.clientPayments.find(cp => cp.id === id);
+      if (existing) {
+        const merged = { ...existing, ...payment };
+        await fetch(`/api/client-payments/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('clientPayments', state.clientPayments.map(cp => cp.id === id ? merged : cp));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteClientPayment = (id: string) => {
+  const deleteClientPayment = async (id: string) => {
     setState(s => ({ ...s, clientPayments: s.clientPayments.filter(cp => cp.id !== id) }));
+    try {
+      await fetch(`/api/client-payments/${id}`, { method: 'DELETE' });
+      await saveAllToStore('clientPayments', state.clientPayments.filter(cp => cp.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const addKharchi = (kharchi: Omit<Kharchi, 'id'>) => {
-    setState(s => ({ ...s, kharchis: [...s.kharchis, { ...kharchi, id: generateId() }] }));
+  const addKharchi = async (kharchi: Omit<Kharchi, 'id'>) => {
+    const newKharchi = { ...kharchi, id: generateId() };
+    setState(s => ({ ...s, kharchis: [...s.kharchis, newKharchi] }));
+    try {
+      await fetch('/api/kharchis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newKharchi)
+      });
+      await saveAllToStore('kharchis', [...state.kharchis, newKharchi]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateKharchi = (id: string, kharchi: Partial<Kharchi>) => {
+  const updateKharchi = async (id: string, kharchi: Partial<Kharchi>) => {
     setState(s => ({ ...s, kharchis: s.kharchis.map(k => k.id === id ? { ...k, ...kharchi } : k) }));
+    try {
+      const existing = state.kharchis.find(k => k.id === id);
+      if (existing) {
+        const merged = { ...existing, ...kharchi };
+        await fetch(`/api/kharchis/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('kharchis', state.kharchis.map(k => k.id === id ? merged : k));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteKharchi = (id: string) => {
+  const deleteKharchi = async (id: string) => {
     setState(s => ({ ...s, kharchis: s.kharchis.filter(k => k.id !== id) }));
+    try {
+      await fetch(`/api/kharchis/${id}`, { method: 'DELETE' });
+      await saveAllToStore('kharchis', state.kharchis.filter(k => k.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const addAdvance = (advance: Omit<Advance, 'id'>) => {
-    setState(s => ({ ...s, advances: [...s.advances, { ...advance, id: generateId() }] }));
+  const addAdvance = async (advance: Omit<Advance, 'id'>) => {
+    const newAdvance = { ...advance, id: generateId() };
+    setState(s => ({ ...s, advances: [...s.advances, newAdvance] }));
+    try {
+      await fetch('/api/advances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAdvance)
+      });
+      await saveAllToStore('advances', [...state.advances, newAdvance]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateAdvance = (id: string, advance: Partial<Advance>) => {
+  const updateAdvance = async (id: string, advance: Partial<Advance>) => {
     setState(s => ({ ...s, advances: s.advances.map(a => a.id === id ? { ...a, ...advance } : a) }));
+    try {
+      const existing = state.advances.find(a => a.id === id);
+      if (existing) {
+        const merged = { ...existing, ...advance };
+        await fetch(`/api/advances/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('advances', state.advances.map(a => a.id === id ? merged : a));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteAdvance = (id: string) => {
+  const deleteAdvance = async (id: string) => {
     setState(s => ({ ...s, advances: s.advances.filter(a => a.id !== id) }));
+    try {
+      await fetch(`/api/advances/${id}`, { method: 'DELETE' });
+      await saveAllToStore('advances', state.advances.filter(a => a.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const addWorkerPayment = (payment: Omit<WorkerPayment, 'id'>) => {
-    setState(s => ({ ...s, workerPayments: [...s.workerPayments, { ...payment, id: generateId() }] }));
+  const addWorkerPayment = async (payment: Omit<WorkerPayment, 'id'>) => {
+    const newPayment = { ...payment, id: generateId() };
+    setState(s => ({ ...s, workerPayments: [...s.workerPayments, newPayment] }));
+    try {
+      await fetch('/api/worker-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPayment)
+      });
+      await saveAllToStore('workerPayments', [...state.workerPayments, newPayment]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateWorkerPayment = (id: string, payment: Partial<WorkerPayment>) => {
+  const updateWorkerPayment = async (id: string, payment: Partial<WorkerPayment>) => {
     setState(s => ({ ...s, workerPayments: s.workerPayments.map(wp => wp.id === id ? { ...wp, ...payment } : wp) }));
+    try {
+      const existing = state.workerPayments.find(wp => wp.id === id);
+      if (existing) {
+        const merged = { ...existing, ...payment };
+        await fetch(`/api/worker-payments/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('workerPayments', state.workerPayments.map(wp => wp.id === id ? merged : wp));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteWorkerPayment = (id: string) => {
+  const deleteWorkerPayment = async (id: string) => {
     setState(s => ({ ...s, workerPayments: s.workerPayments.filter(wp => wp.id !== id) }));
+    try {
+      await fetch(`/api/worker-payments/${id}`, { method: 'DELETE' });
+      await saveAllToStore('workerPayments', state.workerPayments.filter(wp => wp.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
     <AppContext.Provider value={{
       ...state,
+      isDbLoaded,
+      importBackup,
       addProject,
       updateProject,
       deleteProject,

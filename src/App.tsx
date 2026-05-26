@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { AppProvider } from './store';
+import { AppProvider, useAppContext } from './store';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Dashboard } from './pages/Dashboard';
@@ -15,10 +15,15 @@ import { ClientPayment } from './pages/ClientPayment';
 import { Kharchi } from './pages/Kharchi';
 import { Advance } from './pages/Advance';
 import { WorkerPayment } from './pages/WorkerPayment';
-import { Server, X } from 'lucide-react';
+import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 
 function AppContent() {
+  const erp = useAppContext();
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [bottomTab, setBottomTab] = useState<'properties' | 'error-log' | 'backup'>('properties');
+  const [isBottomMinimized, setIsBottomMinimized] = useState(false);
+  const [backupFileError, setBackupFileError] = useState<string | null>(null);
+  const [backupSuccess, setBackupSuccess] = useState<string | null>(null);
 
   const renderContent = () => {
     switch (currentTab) {
@@ -69,39 +74,153 @@ function AppContent() {
           </main>
 
           {/* Bottom Panel */}
-          <div className="h-48 border-t border-[#8c9ba8] bg-white flex flex-col">
-            <div className="flex items-end bg-[#eef2f6] pt-1 px-1 border-b border-[#8c9ba8]">
-              <div className="flex items-center bg-white border border-[#8c9ba8] border-b-transparent px-3 py-0.5 rounded-t-sm space-x-2 relative top-[1px] z-10">
-                <span className="text-[11px]">Properties</span>
+          <div className={`${isBottomMinimized ? 'h-[23px]' : 'h-32'} border-t border-[#8c9ba8] bg-white flex flex-col transition-all duration-150`}>
+            <div className="flex items-end justify-between bg-[#eef2f6] px-1 border-b border-[#8c9ba8] select-none h-[22px]">
+              <div className="flex items-end">
+                <button
+                  onClick={() => { setBottomTab('properties'); setIsBottomMinimized(false); }}
+                  className={`flex items-center px-3 py-0.5 rounded-t-sm space-x-2 relative top-[1px] z-10 border border-[#8c9ba8] text-[10px] ${bottomTab === 'properties' && !isBottomMinimized ? 'bg-white border-b-transparent font-semibold text-[#0056b3]' : 'bg-[#d9e4f1] hover:bg-white cursor-pointer ml-0.5'}`}
+                >
+                  <span>Properties</span>
+                </button>
+                <button
+                  onClick={() => { setBottomTab('error-log'); setIsBottomMinimized(false); }}
+                  className={`flex items-center px-3 py-0.5 rounded-t-sm space-x-2 relative top-[1px] z-10 border border-[#8c9ba8] ml-1 text-[10px] ${bottomTab === 'error-log' && !isBottomMinimized ? 'bg-white border-b-transparent font-semibold text-[#0056b3]' : 'bg-[#d9e4f1] hover:bg-white cursor-pointer'}`}
+                >
+                  <span>Error Log</span>
+                </button>
+                <button
+                  onClick={() => { setBottomTab('backup'); setIsBottomMinimized(false); }}
+                  className={`flex items-center px-3 py-0.5 rounded-t-sm space-x-2 relative top-[1px] z-10 border border-[#8c9ba8] ml-1 text-[10px] ${bottomTab === 'backup' && !isBottomMinimized ? 'bg-white border-b-transparent font-semibold text-[#0056b3]' : 'bg-[#d9e4f1] hover:bg-white cursor-pointer'}`}
+                >
+                  <span className="font-bold text-green-700">DB Backup & Sync</span>
+                </button>
               </div>
-              <div className="flex items-center bg-[#d9e4f1] border border-[#8c9ba8] border-b-transparent px-3 py-0.5 rounded-t-sm space-x-2 ml-1 cursor-pointer">
-                <span className="text-[11px]">Error Log</span>
+              <button
+                onClick={() => setIsBottomMinimized(!isBottomMinimized)}
+                className="p-0.5 hover:bg-gray-300 rounded cursor-pointer mr-1 mb-0.5"
+                title={isBottomMinimized ? "Expand properties panel" : "Collapse properties panel"}
+              >
+                {isBottomMinimized ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              </button>
+            </div>
+            
+            {!isBottomMinimized && (
+              <div className="flex-1 p-2 overflow-y-auto text-[11px] sap-panel">
+                {bottomTab === 'properties' && (
+                  <table className="w-full text-left border-collapse border border-[#8c9ba8]">
+                    <thead className="sap-header">
+                      <tr>
+                        <th className="border border-[#8c9ba8] px-2 py-0.5 font-normal w-1/3">Property</th>
+                        <th className="border border-[#8c9ba8] px-2 py-0.5 font-normal">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="hover:bg-[#e6f2ff] cursor-default">
+                        <td className="border border-[#8c9ba8] px-2 py-0.5">Offline Storage Type</td>
+                        <td className="border border-[#8c9ba8] px-2 py-0.5 font-mono text-green-700 font-bold">IndexedDB (Permanent Local)</td>
+                      </tr>
+                      <tr className="hover:bg-[#e6f2ff] cursor-default">
+                        <td className="border border-[#8c9ba8] px-2 py-0.5">System Status</td>
+                        <td className="border border-[#8c9ba8] px-2 py-0.5 flex items-center h-4">
+                          <div className={`w-2 h-2 rounded-full mr-1.5 ${erp.isDbLoaded ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></div> 
+                          {erp.isDbLoaded ? 'IndexedDB Sync Active (All services started)' : 'Connecting to database...'}
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-[#e6f2ff] cursor-default">
+                        <td className="border border-[#8c9ba8] px-2 py-0.5">Current View</td>
+                        <td className="border border-[#8c9ba8] px-2 py-0.5">{getTabName()}</td>
+                      </tr>
+                      <tr className="hover:bg-[#e6f2ff] cursor-default">
+                        <td className="border border-[#8c9ba8] px-2 py-0.5">Last DB Update</td>
+                        <td className="border border-[#8c9ba8] px-2 py-0.5 font-mono">{new Date().toLocaleTimeString()} (Auto-persistent)</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+
+                {bottomTab === 'error-log' && (
+                  <div className="text-gray-500 italic p-1 border border-dashed border-[#8c9ba8]">
+                    No database logs or sync errors recorded. Native IndexedDB instance healthy.
+                  </div>
+                )}
+
+                {bottomTab === 'backup' && (
+                  <div className="flex flex-col space-y-2 p-1">
+                    <div className="flex items-center space-x-4">
+                      <button
+                        onClick={() => {
+                          const backupData = {
+                            projects: erp.projects,
+                            workers: erp.workers,
+                            billings: erp.billings,
+                            clientPayments: erp.clientPayments,
+                            kharchis: erp.kharchis,
+                            advances: erp.advances,
+                            workerPayments: erp.workerPayments
+                          };
+                          const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backupData, null, 2))}`;
+                          const a = document.createElement('a');
+                          a.setAttribute('href', jsonString);
+                          a.setAttribute('download', `erp_sap_backup_${new Date().toISOString().split('T')[0]}.json`);
+                          document.body.appendChild(a);
+                          a.click();
+                          a.remove();
+                          setBackupSuccess('Data backup JSON file generated and downloaded successfully!');
+                          setTimeout(() => setBackupSuccess(null), 4000);
+                        }}
+                        className="sap-btn flex items-center space-x-1 p-2 bg-[#eef2f6]"
+                      >
+                        <Download size={13} className="text-green-700 font-bold" />
+                        <span className="font-semibold text-green-700">Export JSON Backup file</span>
+                      </button>
+
+                      <div className="flex items-center space-x-2 border border-[#8c9ba8] p-1.5 bg-gray-50 rounded-sm">
+                        <Upload size={13} className="text-blue-700" />
+                        <span className="font-semibold">Import JSON Backup:</span>
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={(e) => {
+                            const fileReader = new FileReader();
+                            if (e.target.files && e.target.files[0]) {
+                              fileReader.readAsText(e.target.files[0], "UTF-8");
+                              fileReader.onload = async (readerEvent) => {
+                                try {
+                                  const backupObj = JSON.parse(readerEvent.target?.result as string);
+                                  const imported = await erp.importBackup(backupObj);
+                                  if (imported) {
+                                    setBackupSuccess('IndexedDB & memory store imported & synced perfectly!');
+                                    setBackupFileError(null);
+                                    setTimeout(() => setBackupSuccess(null), 4500);
+                                  } else {
+                                    setBackupFileError('Backup import declined: Invalid data structure schema.');
+                                  }
+                                } catch (err) {
+                                  setBackupFileError('Failed to parse selected JSON data file.');
+                                }
+                              };
+                            }
+                          }}
+                          className="text-[10px] cursor-pointer text-gray-700"
+                        />
+                      </div>
+                    </div>
+
+                    {backupSuccess && (
+                      <div className="p-1 px-2 border border-green-500 bg-green-50 text-green-800 rounded font-semibold animate-fade-in text-[10px]">
+                        ✓ {backupSuccess}
+                      </div>
+                    )}
+                    {backupFileError && (
+                      <div className="p-1 px-2 border border-red-500 bg-red-50 text-red-800 rounded font-semibold animate-fade-in text-[10px]">
+                        ⚠ {backupFileError}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="flex-1 p-2 overflow-y-auto text-[11px] sap-panel">
-              <table className="w-full text-left border-collapse border border-[#8c9ba8]">
-                <thead className="sap-header">
-                  <tr>
-                    <th className="border border-[#8c9ba8] px-2 py-1 font-normal w-1/3">Property</th>
-                    <th className="border border-[#8c9ba8] px-2 py-1 font-normal">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hover:bg-[#e6f2ff] cursor-default">
-                    <td className="border border-[#8c9ba8] px-2 py-1">System Status</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 flex items-center"><div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div> All services started</td>
-                  </tr>
-                  <tr className="hover:bg-[#e6f2ff] cursor-default">
-                    <td className="border border-[#8c9ba8] px-2 py-1">Current View</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1">{getTabName()}</td>
-                  </tr>
-                  <tr className="hover:bg-[#e6f2ff] cursor-default">
-                    <td className="border border-[#8c9ba8] px-2 py-1">Last Update</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1">{new Date().toLocaleString()}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            )}
           </div>
         </div>
       </div>

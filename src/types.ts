@@ -15,6 +15,7 @@ export interface Worker {
   projectId: string;
   designation: string;
   joiningDate: string;
+  exitDate?: string;
 }
 
 export interface Billing {
@@ -34,6 +35,7 @@ export interface ClientPayment {
   amountReceived: number;
   date: string;
   remarks: string;
+  status?: string;
 }
 
 export interface Kharchi {

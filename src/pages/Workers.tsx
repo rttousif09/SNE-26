@@ -9,7 +9,7 @@ export const Workers: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: ''
+    serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: ''
   });
 
   const handleEdit = (worker: any) => {
@@ -19,7 +19,8 @@ export const Workers: React.FC = () => {
       name: worker.name,
       projectId: worker.projectId,
       designation: worker.designation,
-      joiningDate: worker.joiningDate
+      joiningDate: worker.joiningDate,
+      exitDate: worker.exitDate || ''
     });
     setEditingId(worker.id);
     setIsAdding(true);
@@ -28,7 +29,7 @@ export const Workers: React.FC = () => {
   const handleCancel = () => {
     setIsAdding(false);
     setEditingId(null);
-    setFormData({ serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '' });
+    setFormData({ serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -99,6 +100,10 @@ export const Workers: React.FC = () => {
               <label className="w-32">Joining Date:</label>
               <input required type="date" className="sap-input flex-1" value={formData.joiningDate} onChange={e => setFormData({...formData, joiningDate: e.target.value})} />
             </div>
+            <div className="flex items-center">
+              <label className="w-32">Exit Date:</label>
+              <input type="date" className="sap-input flex-1" value={formData.exitDate} onChange={e => setFormData({...formData, exitDate: e.target.value})} />
+            </div>
             <div className="col-span-2 flex justify-end pt-2 space-x-2">
               <button type="submit" className="sap-btn flex items-center space-x-1">
                 <Save size={12} className="text-[#0056b3]"/>
@@ -124,6 +129,7 @@ export const Workers: React.FC = () => {
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Designation</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Joining Date</th>
+            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Exit Date</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>
           </tr>
         </thead>
@@ -136,6 +142,7 @@ export const Workers: React.FC = () => {
               <td className="border border-[#8c9ba8] px-2 py-1">{getProjectName(worker.projectId)}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{worker.designation}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{worker.joiningDate}</td>
+              <td className="border border-[#8c9ba8] px-2 py-1">{worker.exitDate || '-'}</td>
               <td className="border border-[#8c9ba8] px-2 py-1 text-center">
                 <button onClick={() => handleEdit(worker)} className="text-blue-600 hover:text-blue-800" title="Edit">
                   <Edit size={14} />
@@ -148,7 +155,7 @@ export const Workers: React.FC = () => {
           ))}
           {workers.length === 0 && (
             <tr>
-              <td colSpan={7} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No workers found.</td>
+              <td colSpan={8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No workers found.</td>
             </tr>
           )}
         </tbody>

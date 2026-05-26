@@ -9,7 +9,7 @@ export const ClientPayment: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    projectId: '', amountReceived: '', date: '', remarks: ''
+    projectId: '', amountReceived: '', date: '', remarks: '', status: 'Received'
   });
 
   const handleEdit = (payment: any) => {
@@ -17,7 +17,8 @@ export const ClientPayment: React.FC = () => {
       projectId: payment.projectId,
       amountReceived: payment.amountReceived.toString(),
       date: payment.date,
-      remarks: payment.remarks || ''
+      remarks: payment.remarks || '',
+      status: payment.status || 'Received'
     });
     setEditingId(payment.id);
     setIsAdding(true);
@@ -26,7 +27,7 @@ export const ClientPayment: React.FC = () => {
   const handleCancel = () => {
     setIsAdding(false);
     setEditingId(null);
-    setFormData({ projectId: '', amountReceived: '', date: '', remarks: '' });
+    setFormData({ projectId: '', amountReceived: '', date: '', remarks: '', status: 'Received' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -90,6 +91,15 @@ export const ClientPayment: React.FC = () => {
               <label className="w-32">Remarks:</label>
               <input type="text" className="sap-input flex-1" value={formData.remarks} onChange={e => setFormData({...formData, remarks: e.target.value})} />
             </div>
+            <div className="flex items-center">
+              <label className="w-32">Status:</label>
+              <select className="sap-input flex-1" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                <option value="Received">Received</option>
+                <option value="Cleared">Cleared</option>
+                <option value="Pending">Pending</option>
+                <option value="Bounced">Bounced</option>
+              </select>
+            </div>
             <div className="col-span-2 flex justify-end pt-2 space-x-2">
               <button type="submit" className="sap-btn flex items-center space-x-1">
                 <Save size={12} className="text-[#0056b3]"/>
@@ -145,6 +155,7 @@ export const ClientPayment: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Date</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Status</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Amount Received</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>
               </tr>
@@ -155,6 +166,16 @@ export const ClientPayment: React.FC = () => {
                   <td className="border border-[#8c9ba8] px-2 py-1">{payment.date}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1">{getProjectName(payment.projectId)}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1">{payment.remarks}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1">
+                    <span className={`px-1.5 py-0.5 rounded-sm font-semibold text-[9px] ${
+                      payment.status === 'Cleared' ? 'bg-green-100 text-green-800 border border-green-300' :
+                      payment.status === 'Pending' ? 'bg-yellow-105 bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                      payment.status === 'Bounced' ? 'bg-red-100 text-red-800 border border-red-300' :
+                      'bg-blue-100 text-blue-800 border border-blue-300'
+                    }`}>
+                      {payment.status || 'Received'}
+                    </span>
+                  </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700">
                     {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amountReceived)}
                   </td>
@@ -170,7 +191,7 @@ export const ClientPayment: React.FC = () => {
               ))}
               {clientPayments.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No payment history found.</td>
+                  <td colSpan={6} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No payment history found.</td>
                 </tr>
               )}
             </tbody>
