@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { AppProvider, useAppContext } from './store';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
+import { Login } from './components/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Projects } from './pages/Projects';
 import { Workers } from './pages/Workers';
@@ -17,7 +18,7 @@ import { Advance } from './pages/Advance';
 import { WorkerPayment } from './pages/WorkerPayment';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 
-function AppContent() {
+function AppContent({ user, onLogout }: { user: { username: string; name: string } | null; onLogout: () => void }) {
   const erp = useAppContext();
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [bottomTab, setBottomTab] = useState<'properties' | 'error-log' | 'backup'>('properties');
@@ -55,7 +56,7 @@ function AppContent() {
 
   return (
     <div className="flex flex-col h-screen bg-[var(--color-sap-bg)] text-[11px] font-sans overflow-hidden">
-      <TopBar />
+      <TopBar user={user} onLogout={onLogout} />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} />
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -225,17 +226,41 @@ function AppContent() {
         </div>
       </div>
       {/* Status Bar */}
-      <div className="h-5 bg-[#d9e4f1] border-t border-[#8c9ba8] flex items-center px-2 text-[10px] text-gray-800">
-        <span>System: ERP_PRD Host: erp.local Instance: 00 Connected User: SYSTEM</span>
+      <div className="h-5 bg-[#d9e4f1] border-t border-[#8c9ba8] flex items-center px-2 text-[10px] text-gray-800 justify-between">
+        <span>System: ERP_PRD Host: erp.local Instance: 00 Connected User: {user ? user.username : 'SYSTEM'}</span>
+        <span className="text-gray-500 text-[9px] font-mono select-none">Client: SN ENTERPRISE</span>
       </div>
     </div>
   );
 }
 
 export default function App() {
+  const [user, setUser] = useState<{ username: string; name: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('erp_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const handleLoginSuccess = (usr: { username: string; name: string }) => {
+    localStorage.setItem('erp_auth_user', JSON.stringify(usr));
+    setUser(usr);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('erp_auth_user');
+    setUser(null);
+  };
+
   return (
     <AppProvider>
-      <AppContent />
+      {user ? (
+        <AppContent user={user} onLogout={handleLogout} />
+      ) : (
+        <Login onLoginSuccess={handleLoginSuccess} />
+      )}
     </AppProvider>
   );
 }

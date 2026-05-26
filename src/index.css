@@ -88,3 +88,110 @@ body {
   width: 16px;
 }
 
+/* Excel Style Grid styling */
+.excel-grid {
+  border-collapse: collapse;
+  outline: 1px solid #bcc5cf;
+}
+.excel-grid th {
+  background-color: #f3f4f6;
+  border: 1px solid #bcc5cf;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  position: relative;
+}
+.excel-grid td {
+  border: 1px solid #e5e7eb;
+}
+.excel-row-num {
+  background-color: #f3f4f6;
+  border: 1px solid #bcc5cf !important;
+  color: #6b7280;
+  text-align: center;
+  font-size: 9px;
+  font-weight: bold;
+  user-select: none;
+  width: 24px;
+}
+.excel-col-letter {
+  background-color: #f3f4f6;
+  border: 1px solid #bcc5cf !important;
+  color: #6b7280;
+  text-align: center;
+  font-size: 9px;
+  font-weight: bold;
+  user-select: none;
+  height: 16px;
+}
+
+/* Print Overrides for professional landscapes and PDF conversion */
+@media print {
+  html, body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    overflow: visible !important;
+    font-size: 10pt !important;
+  }
+  
+  /* Hide sidebars, menus, controls */
+  aside,
+  header,
+  footer,
+  .print-hidden,
+  .print\:hidden,
+  button,
+  select,
+  nav,
+  .sap-btn,
+  form {
+    display: none !important;
+  }
+
+  /* Make main content area expand */
+  main,
+  .overflow-y-auto,
+  .overflow-hidden,
+  .flex-col,
+  .flex-1 {
+    overflow: visible !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    position: static !important;
+    display: block !important;
+    box-shadow: none !important;
+  }
+
+  /* Print specific header */
+  .print-header-show {
+    display: block !important;
+  }
+  
+  /* Grid lines visible in black/white */
+  .excel-grid,
+  .excel-grid td,
+  .excel-grid th,
+  table,
+  td,
+  th {
+    border: 1px solid #555555 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  tr {
+    page-break-inside: avoid !important;
+  }
+  
+  /* Avoid overlapping components */
+  .space-y-4 > * + * {
+    margin-top: 1.5rem !important;
+  }
+}
+
+
