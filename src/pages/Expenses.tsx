@@ -6,6 +6,7 @@ import {
   ArrowDownCircle, ArrowUpCircle, Wallet, Download, Printer, Filter, Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { jsPDF } from 'jspdf';
 
 export const Expenses: React.FC = () => {
   const { 
@@ -26,6 +27,10 @@ export const Expenses: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [projectIdFilter, setProjectIdFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [exportMonth, setExportMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   // Form State
   const [transactionType, setTransactionType] = useState<'credit' | 'spent'>('spent');
@@ -272,6 +277,298 @@ export const Expenses: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const getMonthLabel = (monthStr: string) => {
+    if (!monthStr) return '';
+    const [year, month] = monthStr.split('-');
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  const getCategoryLabel = (item: ExpenseEntry) => {
+    if (item.crBalance > 0) return 'Credit Inflow';
+    if (item.kharchi > 0) return 'Kharchi';
+    if (item.mess > 0) return 'Mess / Fooding';
+    if (item.workerAdvance > 0) return 'Worker Advance';
+    if (item.tiffin > 0) return 'Tiffin / Snacks';
+    if (item.travel > 0) return 'Travel Expenses';
+    if (item.machineryMaterial > 0) return 'Machinery/Mat';
+    if (item.workerPayment > 0) return 'Worker Payment';
+    if (item.stationery > 0) return 'Stationery';
+    if (item.others > 0) return 'Others';
+    return '-';
+  };
+
+  const exportToPDF = (targetMonth: string) => {
+    if (!targetMonth) return;
+    
+    // Determine opening balance (balance before month starts)
+    const beforeItems = processedLedger.filter(item => item.date < `${targetMonth}-01`);
+    const openingBalance = beforeItems.length > 0 ? beforeItems[beforeItems.length - 1].avlBalance : 0;
+
+    const monthItems = processedLedger.filter(item => item.date.startsWith(targetMonth));
+    
+    const totalCredits = monthItems.reduce((sum, item) => sum + item.crBalance, 0);
+    const totalSpent = monthItems.reduce((sum, item) => sum + item.totalSpent, 0);
+    const closingBalance = monthItems.length > 0 ? monthItems[monthItems.length - 1].avlBalance : openingBalance;
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const monthLabel = getMonthLabel(targetMonth);
+
+    const drawPageHeader = (page: number) => {
+      // Draw professional double-frame borders
+      doc.setDrawColor(0, 47, 108); // Corporate Navy Blue
+      doc.setLineWidth(0.5);
+      doc.rect(8, 8, 281, 194);
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.2);
+      doc.rect(9, 9, 279, 192);
+
+      // Main header titles
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(217, 30, 18); // Accent red
+      doc.text("SN ENTERPRISE", 148.5, 18, { align: "center" });
+
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text("MONTHLY EXPENSES LEDGER REPORT | STATEMENT OF ACCOUNTS", 148.5, 23, { align: "center" });
+
+      doc.setFont("Helvetica", "bold");
+      doc.setTextColor(0, 47, 108);
+      doc.text(`WAGE MONTH: ${monthLabel.toUpperCase()}`, 12, 33);
+
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(110, 110, 110);
+      doc.text(`Exported On: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 285, 33, { align: "right" });
+
+      // Dividing corporate bar
+      doc.setDrawColor(0, 47, 108);
+      doc.setLineWidth(0.5);
+      doc.line(12, 35, 285, 35);
+    };
+
+    const drawFooter = (page: number, totalPages: number) => {
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(150, 150, 150);
+      doc.text("SYSTEM AUTO-GENERATED STATEMENT OF LEDGERS (SN_ERP_PRD)", 12, 198);
+      doc.text(`Page ${page} of ${totalPages}`, 285, 198, { align: "right" });
+    };
+
+    // PAGE 1
+    drawPageHeader(1);
+
+    // Draw KPI statistics cards
+    const drawKPIBox = (x: number, y: number, w: number, h: number, title: string, amount: number, colorText: [number, number, number]) => {
+      doc.setDrawColor(180, 180, 180);
+      doc.setFillColor(252, 253, 255);
+      doc.setLineWidth(0.2);
+      doc.rect(x, y, w, h, "FD");
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 100, 100);
+      doc.text(title, x + 3, y + 4.5);
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(colorText[0], colorText[1], colorText[2]);
+      doc.text("INR " + amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), x + 3, y + 10);
+    };
+
+    drawKPIBox(12, 38, 64, 13, "PREVIOUS OPENING BALANCE", openingBalance, [0, 47, 108]);
+    drawKPIBox(80, 38, 64, 13, "TOTAL INFLOWS (OWNER CREDIT)", totalCredits, [0, 110, 0]);
+    drawKPIBox(148, 38, 64, 13, "TOTAL STRUCTURED SPENT (-)", totalSpent, [206, 42, 42]);
+    drawKPIBox(216, 38, 69, 13, "CLOSING RESERVE BALANCE", closingBalance, [0, 30, 80]);
+
+    // Table Column Header rendering
+    const tableHeaderY = 56;
+    doc.setFillColor(238, 242, 246);
+    doc.rect(12, tableHeaderY, 273, 8, "F");
+    
+    doc.setDrawColor(120, 120, 120);
+    doc.setLineWidth(0.3);
+    doc.rect(12, tableHeaderY, 273, 8, "D");
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(40, 40, 40);
+
+    doc.text("SR", 16, tableHeaderY + 5.5, { align: "center" });
+    doc.text("DATE", 31, tableHeaderY + 5.5, { align: "center" });
+    doc.text("DESCRIPTION / TRANSACTION MEMO", 44, tableHeaderY + 5.5);
+    doc.text("PROJECT LINK", 119, tableHeaderY + 5.5);
+    doc.text("CATEGORY", 154, tableHeaderY + 5.5);
+    doc.text("SPENT (OUT)", 217, tableHeaderY + 5.5, { align: "right" });
+    doc.text("CREDIT (IN)", 249, tableHeaderY + 5.5, { align: "right" });
+    doc.text("AVL BALANCE", 283, tableHeaderY + 5.5, { align: "right" });
+
+    let currentY = 64;
+    const pageHeightLimit = 188;
+    let pageNumber = 1;
+
+    if (monthItems.length === 0) {
+      doc.setFont("Helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text("No transactions recorded for this month.", 148.5, 90, { align: "center" });
+    } else {
+      monthItems.forEach((row, idx) => {
+        if (currentY > pageHeightLimit) {
+          doc.addPage();
+          pageNumber++;
+          drawPageHeader(pageNumber);
+
+          // Draw table header again
+          doc.setFillColor(238, 242, 246);
+          doc.rect(12, 38, 273, 8, "F");
+          doc.setDrawColor(120, 120, 120);
+          doc.setLineWidth(0.3);
+          doc.rect(12, 38, 273, 8, "D");
+
+          doc.setFont("Helvetica", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(40, 40, 40);
+          doc.text("SR", 16, 43.5, { align: "center" });
+          doc.text("DATE", 31, 43.5, { align: "center" });
+          doc.text("DESCRIPTION / TRANSACTION MEMO", 44, 43.5);
+          doc.text("PROJECT LINK", 119, 43.5);
+          doc.text("CATEGORY", 154, 43.5);
+          doc.text("SPENT (OUT)", 217, 43.5, { align: "right" });
+          doc.text("CREDIT (IN)", 249, 43.5, { align: "right" });
+          doc.text("AVL BALANCE", 283, 43.5, { align: "right" });
+
+          currentY = 46;
+        }
+
+        const isCredit = row.crBalance > 0;
+        
+        // Background row highlight
+        if (isCredit) {
+          doc.setFillColor(236, 248, 238); // Soft green for credits
+          doc.rect(12, currentY, 273, 6.5, "F");
+        } else if (idx % 2 === 1) {
+          doc.setFillColor(250, 251, 252); // Alt striping
+          doc.rect(12, currentY, 273, 6.5, "F");
+        }
+
+        doc.setDrawColor(215, 218, 224);
+        doc.setLineWidth(0.15);
+        doc.line(12, currentY + 6.5, 285, currentY + 6.5);
+
+        doc.setFont("Helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(50, 50, 50);
+
+        // SR
+        doc.text((idx + 1).toString(), 16, currentY + 4.5, { align: "center" });
+
+        // Date
+        doc.text(row.date.split('-').reverse().join('-'), 31, currentY + 4.5, { align: "center" });
+
+        // Memo Description (truncated gracefully to prevent margins bleed)
+        let desc = row.description;
+        if (desc.length > 50) desc = desc.substring(0, 47) + "...";
+        doc.text(desc, 44, currentY + 4.5);
+
+        // Project
+        let proj = getProjectName(row.projectId) || "General";
+        if (proj.length > 22) proj = proj.substring(0, 19) + "...";
+        doc.text(proj, 119, currentY + 4.5);
+
+        // Category
+        doc.text(getCategoryLabel(row), 154, currentY + 4.5);
+
+        // Spent (Out)
+        if (row.totalSpent > 0) {
+          doc.setTextColor(180, 20, 20);
+          doc.text(row.totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 217, currentY + 4.5, { align: "right" });
+        }
+
+        // Credit (In)
+        doc.setTextColor(50, 50, 50);
+        if (row.crBalance > 0) {
+          doc.setTextColor(0, 100, 0);
+          doc.text(row.crBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 249, currentY + 4.5, { align: "right" });
+        }
+
+        // Running balance
+        doc.setTextColor(0, 47, 108);
+        doc.setFont("Helvetica", "bold");
+        doc.text(row.avlBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 283, currentY + 4.5, { align: "right" });
+
+        currentY += 6.5;
+      });
+
+      // Subtotals Row
+      if (currentY > pageHeightLimit - 8) {
+        doc.addPage();
+        pageNumber++;
+        drawPageHeader(pageNumber);
+        currentY = 38;
+      }
+
+      doc.setFillColor(242, 245, 249);
+      doc.rect(12, currentY, 273, 7.5, "F");
+      doc.setDrawColor(120, 120, 120);
+      doc.setLineWidth(0.3);
+      doc.line(12, currentY, 285, currentY);
+      doc.line(12, currentY + 7.5, 285, currentY + 7.5);
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text("MONTHLY TRANSACTION SUMS", 44, currentY + 5);
+
+      doc.setTextColor(180, 20, 20);
+      doc.text(totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 217, currentY + 5, { align: "right" });
+
+      doc.setTextColor(0, 100, 0);
+      doc.text(totalCredits.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 249, currentY + 5, { align: "right" });
+
+      doc.setTextColor(0, 30, 80);
+      doc.text(closingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 283, currentY + 5, { align: "right" });
+
+      currentY += 14;
+    }
+
+    // Signatures blocks
+    if (currentY > pageHeightLimit - 15) {
+      doc.addPage();
+      pageNumber++;
+      drawPageHeader(pageNumber);
+      currentY = 50;
+    } else {
+      currentY = Math.max(currentY, 155);
+    }
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.25);
+    doc.setLineDashPattern([1.5, 1.5], 0);
+    doc.line(15, currentY + 15, 80, currentY + 15);
+    doc.line(220, currentY + 15, 280, currentY + 15);
+    doc.setLineDashPattern([], 0);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Prepared & Accounted By: Site Incharge", 15, currentY + 20);
+    doc.text("Approved By Owner: Saddam Hussain", 280, currentY + 20, { align: "right" });
+
+    const totalPagesCount = pageNumber;
+    for (let p = 1; p <= totalPagesCount; p++) {
+      doc.setPage(p);
+      drawFooter(p, totalPagesCount);
+    }
+
+    doc.save(`SN_ENTERPRISE_Expense_Report_${targetMonth}.pdf`);
+  };
+
   return (
     <div className="text-[11px] font-sans antialiased">
       {/* Dynamic Summary Cards with beautiful motion */}
@@ -409,6 +706,25 @@ export const Expenses: React.FC = () => {
             <Printer size={12} />
             <span>Print Sheet</span>
           </button>
+
+          <div className="flex items-center space-x-1 border border-[#8c9ba8] bg-white p-0.5 rounded shadow-sm text-[10px]">
+            <span className="text-[9.5px] text-gray-500 font-bold px-1 select-none">Month Report:</span>
+            <input 
+              type="month" 
+              value={exportMonth} 
+              onChange={(e) => setExportMonth(e.target.value)}
+              className="bg-transparent outline-none text-[10px] font-semibold w-24 h-[18px] border-r border-[#8c9ba8] pr-1 font-mono"
+            />
+            <button 
+              onClick={() => exportToPDF(exportMonth)}
+              disabled={!exportMonth}
+              className="flex items-center space-x-0.5 font-bold text-red-700 hover:bg-red-50 px-1.5 py-0.5 rounded transition disabled:opacity-50 cursor-pointer"
+              title="Export specific month's expenses ledger as a beautiful corporate PDF file"
+            >
+              <FileText size={11} className="text-red-600" />
+              <span>Export PDF</span>
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -667,17 +983,23 @@ export const Expenses: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            <AnimatePresence initial={false}>
+            <AnimatePresence>
               {filteredLedger.map((item, index) => {
                 const isCredit = item.crBalance > 0;
                 
                 return (
                   <motion.tr 
                     key={item.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
+                    layout="position"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ 
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 38,
+                      opacity: { duration: 0.15 }
+                    }}
                     className={`divide-x divide-black border-b border-black text-[10.5px] group hover:bg-[#f8fafc]/50 transition ${
                       isCredit ? 'bg-[#c6efce]/80 text-[#006100] font-semibold' : 'bg-white'
                     }`}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -11,7 +11,9 @@ interface AppState {
   advances: Advance[];
   workerPayments: WorkerPayment[];
   approvals: Approval[];
+  paymentSheetApprovals: PaymentSheetApproval[];
   expensesLedger: ExpenseEntry[];
+  messBookings: MessBooking[];
 }
 
 interface AppContextType extends AppState {
@@ -43,9 +45,15 @@ interface AppContextType extends AppState {
   addApproval: (approval: Omit<Approval, 'id' | 'status'>) => void;
   updateApproval: (id: string, approval: Partial<Approval>) => void;
   deleteApproval: (id: string) => void;
+  addPaymentSheetApproval: (approval: Omit<PaymentSheetApproval, 'id' | 'status'>) => void;
+  updatePaymentSheetApproval: (id: string, approval: Partial<PaymentSheetApproval>) => void;
+  deletePaymentSheetApproval: (id: string) => void;
   addExpenseEntry: (expense: Omit<ExpenseEntry, 'id'>) => void;
   updateExpenseEntry: (id: string, expense: Partial<ExpenseEntry>) => void;
   deleteExpenseEntry: (id: string) => void;
+  addMessBooking: (booking: Omit<MessBooking, 'id'>) => void;
+  updateMessBooking: (id: string, booking: Partial<MessBooking>) => void;
+  deleteMessBooking: (id: string) => void;
 }
 
 const initialState: AppState = {
@@ -74,6 +82,7 @@ const initialState: AppState = {
   ],
   workerPayments: [],
   approvals: [],
+  paymentSheetApprovals: [],
   expensesLedger: [
     { id: "el1", date: "2026-01-01", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 5000 },
     { id: "el2", date: "2026-01-01", description: "Travel Advance to Tripmaza", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 5000, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
@@ -86,6 +95,7 @@ const initialState: AppState = {
     { id: "el9", date: "2026-01-06", description: "Transfer to Nasrin Banu", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 5000, bank: "", crBalance: 0 },
     { id: "el10", date: "2026-01-06", description: "Advance to Faruq Alam", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 10000, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 }
   ],
+  messBookings: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -118,14 +128,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     advances: [],
     workerPayments: [],
     approvals: [],
+    paymentSheetApprovals: [],
     expensesLedger: [],
+    messBookings: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, elRes] = await Promise.all([
+        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
           fetch('/api/billings').then(r => r.json()),
@@ -134,7 +146,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/advances').then(r => r.json()),
           fetch('/api/worker-payments').then(r => r.json()),
           fetch('/api/approvals').then(r => r.json()).catch(() => []),
-          fetch('/api/expenses_ledger').then(r => r.json()).catch(() => [])
+          fetch('/api/payment-sheet-approvals').then(r => r.json()).catch(() => []),
+          fetch('/api/expenses_ledger').then(r => r.json()).catch(() => []),
+          fetch('/api/mess-bookings').then(r => r.json()).catch(() => [])
         ]);
 
         setState({
@@ -146,7 +160,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           advances: aRes,
           workerPayments: wpRes,
           approvals: apRes,
-          expensesLedger: elRes
+          paymentSheetApprovals: psaRes,
+          expensesLedger: elRes,
+          messBookings: mbRes
         });
 
         // Sync with IndexedDB
@@ -158,7 +174,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('advances', aRes);
         await saveAllToStore('workerPayments', wpRes);
         await saveAllToStore('approvals', apRes);
+        await saveAllToStore('paymentSheetApprovals', psaRes).catch(() => {});
         await saveAllToStore('expensesLedger', elRes).catch(() => {});
+        await saveAllToStore('messBookings', mbRes).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -170,11 +188,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const advances = await getAllFromStore('advances');
           const workerPayments = await getAllFromStore('workerPayments');
           const approvals = await getAllFromStore('approvals');
+          const paymentSheetApprovals = await getAllFromStore('paymentSheetApprovals').catch(() => []);
           const expensesLedger = await getAllFromStore('expensesLedger').catch(() => []);
+          const messBookings = await getAllFromStore('messBookings').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
-                            workerPayments.length === 0 && approvals.length === 0 && expensesLedger.length === 0;
+                            workerPayments.length === 0 && approvals.length === 0 && paymentSheetApprovals.length === 0 &&
+                            expensesLedger.length === 0 && messBookings.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -188,7 +209,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               advances,
               workerPayments,
               approvals,
-              expensesLedger
+              paymentSheetApprovals,
+              expensesLedger,
+              messBookings
             });
           }
         } catch (e) {
@@ -224,6 +247,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await saveAllToStore('kharchis', backupState.kharchis || []);
       await saveAllToStore('advances', backupState.advances || []);
       await saveAllToStore('workerPayments', backupState.workerPayments || []);
+      await saveAllToStore('approvals', backupState.approvals || []);
+      await saveAllToStore('paymentSheetApprovals', backupState.paymentSheetApprovals || []);
 
       setState(backupState);
       return true;
@@ -579,6 +604,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addPaymentSheetApproval = async (approval: Omit<PaymentSheetApproval, 'id' | 'status'>) => {
+    const newApproval: PaymentSheetApproval = { ...approval, id: generateId(), status: 'Pending' };
+    setState(s => ({ ...s, paymentSheetApprovals: [...s.paymentSheetApprovals, newApproval] }));
+    try {
+      await fetch('/api/payment-sheet-approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newApproval)
+      });
+      await saveAllToStore('paymentSheetApprovals', [...state.paymentSheetApprovals, newApproval]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updatePaymentSheetApproval = async (id: string, approval: Partial<PaymentSheetApproval>) => {
+    setState(s => ({ ...s, paymentSheetApprovals: s.paymentSheetApprovals.map(app => app.id === id ? { ...app, ...approval } : app) }));
+    try {
+      const existing = state.paymentSheetApprovals.find(app => app.id === id);
+      if (existing) {
+        const merged = { ...existing, ...approval };
+        await fetch(`/api/payment-sheet-approvals/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: merged.status })
+        });
+        await saveAllToStore('paymentSheetApprovals', state.paymentSheetApprovals.map(app => app.id === id ? merged : app));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deletePaymentSheetApproval = async (id: string) => {
+    setState(s => ({ ...s, paymentSheetApprovals: s.paymentSheetApprovals.filter(app => app.id !== id) }));
+    try {
+      await fetch(`/api/payment-sheet-approvals/${id}`, { method: 'DELETE' });
+      await saveAllToStore('paymentSheetApprovals', state.paymentSheetApprovals.filter(app => app.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const addExpenseEntry = async (expense: Omit<ExpenseEntry, 'id'>) => {
     const newExpense: ExpenseEntry = { ...expense, id: generateId() };
     setState(s => ({ ...s, expensesLedger: [...s.expensesLedger, newExpense] }));
@@ -625,6 +693,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addMessBooking = async (booking: Omit<MessBooking, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newBooking = { ...booking, id };
+    setState(s => {
+      const updated = [...s.messBookings, newBooking];
+      saveAllToStore('messBookings', updated).catch(console.error);
+      return { ...s, messBookings: updated };
+    });
+    try {
+      await fetch('/api/mess-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newBooking)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateMessBooking = async (id: string, booking: Partial<MessBooking>) => {
+    setState(s => {
+      const updated = s.messBookings.map(mb => mb.id === id ? { ...mb, ...booking } : mb);
+      saveAllToStore('messBookings', updated).catch(console.error);
+      return { ...s, messBookings: updated };
+    });
+    try {
+      const existing = state.messBookings.find(mb => mb.id === id);
+      if (existing) {
+        const updatedObj = { ...existing, ...booking };
+        await fetch(`/api/mess-bookings/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteMessBooking = async (id: string) => {
+    setState(s => {
+      const updated = s.messBookings.filter(mb => mb.id !== id);
+      saveAllToStore('messBookings', updated).catch(console.error);
+      return { ...s, messBookings: updated };
+    });
+    try {
+      await fetch(`/api/mess-bookings/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -656,9 +777,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addApproval,
       updateApproval,
       deleteApproval,
+      addPaymentSheetApproval,
+      updatePaymentSheetApproval,
+      deletePaymentSheetApproval,
       addExpenseEntry,
       updateExpenseEntry,
-      deleteExpenseEntry
+      deleteExpenseEntry,
+      addMessBooking,
+      updateMessBooking,
+      deleteMessBooking
     }}>
       {children}
     </AppContext.Provider>

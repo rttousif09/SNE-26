@@ -19,6 +19,7 @@ import { WorkerPayment } from './pages/WorkerPayment';
 import { Approvals } from './pages/Approvals';
 import { Expenses } from './pages/Expenses';
 import { ExpensesSummary } from './pages/ExpensesSummary';
+import { Mess } from './pages/Mess';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 
 function AppContent({ user, onLogout }: { user: { username: string; name: string } | null; onLogout: () => void }) {
@@ -41,6 +42,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'worker-payment': return <WorkerPayment />;
       case 'approvals': return <Approvals />;
       case 'expenses': return <Expenses />;
+      case 'mess': return <Mess />;
       case 'expenses-summary': return <ExpensesSummary />;
       default: return <Dashboard />;
     }
@@ -58,6 +60,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'worker-payment': return 'Workers Payment';
       case 'approvals': return 'Approvals Workflow';
       case 'expenses': return 'Expenses Ledger';
+      case 'mess': return 'Mess Management';
       case 'expenses-summary': return 'Expenses Summary Dashboard';
       default: return 'Overview';
     }

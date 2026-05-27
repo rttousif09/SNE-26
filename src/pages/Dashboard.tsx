@@ -133,6 +133,76 @@ export const Dashboard: React.FC = () => {
             </table>
           </div>
         </div>
+
+        <div>
+          <SectionHeader title="Project Health (Collection Efficiency)" />
+          <div className="px-2 space-y-3">
+            {projects.map(p => {
+              const billed = billings.filter(b => b.projectId === p.id).reduce((sum, b) => sum + b.amount, 0);
+              const received = clientPayments.filter(cp => cp.projectId === p.id).reduce((sum, cp) => sum + cp.amountReceived, 0);
+              const ratio = billed > 0 ? (received / billed) * 100 : 0;
+              
+              // Determine status text & color matching classical SAP style
+              let statusText = "No Billings";
+              let colorClass = "bg-gray-400"; // Neutral color if no bills
+              let textClass = "text-gray-500";
+              if (billed > 0) {
+                if (ratio >= 85) {
+                  statusText = "Excellent Recovery";
+                  colorClass = "bg-emerald-600";
+                  textClass = "text-emerald-750 font-bold";
+                } else if (ratio >= 50) {
+                  statusText = "Moderate Recovery";
+                  colorClass = "bg-amber-500";
+                  textClass = "text-amber-605 font-bold";
+                } else {
+                  statusText = "Critical Outstanding";
+                  colorClass = "bg-red-650";
+                  textClass = "text-red-700 font-bold";
+                }
+              }
+
+              return (
+                <div key={p.id} className="border border-[#8c9ba8] bg-white p-2.5 space-y-2 shadow-sm">
+                  <div className="flex justify-between items-center font-bold text-gray-800">
+                    <span className="text-[11px] uppercase tracking-wide">{p.name}</span>
+                    <span className={`text-[9.5px] font-semibold font-mono ${textClass} border border-current px-1 rounded-sm bg-gray-50`}>
+                      {statusText} {billed > 0 ? `(${ratio.toFixed(1)}%)` : ''}
+                    </span>
+                  </div>
+                  
+                  {/* Detailed statistics */}
+                  <div className="flex justify-between text-[9px] text-gray-600 font-mono">
+                    <span>Received: <strong className="text-gray-900 font-semibold">₹{received.toLocaleString('en-IN')}</strong></span>
+                    <span>Billed Ledger: <strong className="text-gray-900 font-semibold">₹{billed.toLocaleString('en-IN')}</strong></span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full h-3 border border-gray-400 bg-gray-100 flex overflow-hidden">
+                    <div 
+                      className={`h-full ${colorClass} transition-all duration-500`} 
+                      style={{ width: `${billed > 0 ? Math.min(ratio, 100) : 0}%` }}
+                    />
+                  </div>
+                  
+                  {/* Outstanding Debt display */}
+                  {billed > received && (
+                    <div className="text-[9px] text-red-700 flex justify-between items-center bg-red-50 px-1 py-0.5 border border-red-200">
+                      <span>Outstanding Debt:</span>
+                      <span className="font-mono font-bold">₹{(billed - received).toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                  {billed > 0 && received >= billed && (
+                    <div className="text-[9px] text-emerald-800 flex justify-between items-center font-medium bg-emerald-50 px-1 py-0.5 border border-emerald-200">
+                      <span>100% Billing Cleared</span>
+                      <span>✓ Paid</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2 } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Billing: React.FC = () => {
@@ -22,7 +22,10 @@ export const Billing: React.FC = () => {
     retention: '',
     retentionPercent: '',
     gst: '',
-    gstPercent: ''
+    gstPercent: '',
+    hardCopyFile: '',
+    hardCopyFileName: '',
+    hardCopyFileType: ''
   });
 
   const getPercentStr = (val: number, total: number) => {
@@ -50,7 +53,10 @@ export const Billing: React.FC = () => {
       retention: retVal.toString(),
       retentionPercent: getPercentStr(retVal, billAmt),
       gst: gstVal.toString(),
-      gstPercent: getPercentStr(gstVal, billAmt)
+      gstPercent: getPercentStr(gstVal, billAmt),
+      hardCopyFile: bill.hardCopyFile || '',
+      hardCopyFileName: bill.hardCopyFileName || '',
+      hardCopyFileType: bill.hardCopyFileType || ''
     });
     setEditingId(bill.id);
     setIsAdding(true);
@@ -72,7 +78,10 @@ export const Billing: React.FC = () => {
       retention: '',
       retentionPercent: '',
       gst: '',
-      gstPercent: ''
+      gstPercent: '',
+      hardCopyFile: '',
+      hardCopyFileName: '',
+      hardCopyFileType: ''
     });
   };
 
@@ -151,6 +160,77 @@ export const Billing: React.FC = () => {
     }));
   };
 
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDraggingFile(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      setFormData(prev => ({
+        ...prev,
+        hardCopyFile: base64String,
+        hardCopyFileName: file.name,
+        hardCopyFileType: file.type
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      setFormData(prev => ({
+        ...prev,
+        hardCopyFile: base64String,
+        hardCopyFileName: file.name,
+        hardCopyFileType: file.type
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeFile = () => {
+    setFormData(prev => ({
+      ...prev,
+      hardCopyFile: '',
+      hardCopyFileName: '',
+      hardCopyFileType: ''
+    }));
+  };
+
+  const downloadFile = (fileDataStr: string, fileName: string, fileType: string) => {
+    try {
+      const link = document.createElement('a');
+      link.href = fileDataStr;
+      link.download = fileName || 'download';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error("Error downloading file", e);
+      alert("Failed to download file.");
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const billingData = {
@@ -158,7 +238,10 @@ export const Billing: React.FC = () => {
       amount: Number(formData.amount),
       tds: Number(formData.tds || 0),
       retention: Number(formData.retention || 0),
-      gst: Number(formData.gst || 0)
+      gst: Number(formData.gst || 0),
+      hardCopyFile: formData.hardCopyFile || undefined,
+      hardCopyFileName: formData.hardCopyFileName || undefined,
+      hardCopyFileType: formData.hardCopyFileType || undefined
     };
     if (editingId) {
       updateBilling(editingId, billingData);
@@ -385,6 +468,63 @@ export const Billing: React.FC = () => {
               <label className="w-32">Bill Certify Date:</label>
               <input required type="date" className="sap-input flex-1" value={formData.certifyDate} onChange={e => setFormData({...formData, certifyDate: e.target.value})} />
             </div>
+            
+            <div className="col-span-2 border border-dashed border-gray-300 rounded-sm p-3 bg-gray-50 flex flex-col mt-2">
+              <span className="font-semibold text-gray-700 mb-1 text-[11px]">Upload Bill Hard Copy (Optional):</span>
+              {!formData.hardCopyFile ? (
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`w-full py-4 border-2 border-dashed rounded-sm flex flex-col items-center justify-center cursor-pointer transition-all ${
+                    isDraggingFile
+                      ? 'border-[#0056b3] bg-blue-50/50'
+                      : 'border-gray-200 hover:border-gray-400'
+                  }`}
+                  onClick={() => document.getElementById('hard-copy-upload')?.click()}
+                >
+                  <Upload size={18} className="text-gray-400 mb-1" />
+                  <p className="text-gray-600 font-medium text-center">Drag and drop hard copy here, or <span className="text-[#0056b3] underline">browse file</span></p>
+                  <p className="text-gray-400 text-[9px] mt-0.5 text-center">Supports PDF, JPEG, PNG (Max 10MB)</p>
+                  <input
+                    id="hard-copy-upload"
+                    type="file"
+                    className="hidden"
+                    accept="application/pdf,image/png,image/jpeg,image/jpg"
+                    onChange={handleFileChange}
+                  />
+                </div>
+              ) : (
+                <div className="w-full bg-white border border-[#ffebad] rounded-sm p-2 flex items-center justify-between">
+                  <div className="flex items-center space-x-2 truncate">
+                    <Paperclip size={13} className="text-[#b58900]" />
+                    <div className="flex flex-col truncate">
+                      <span className="font-semibold text-gray-700 text-[10px] truncate" title={formData.hardCopyFileName}>{formData.hardCopyFileName}</span>
+                      <span className="text-[9px] text-[#28a745] font-semibold">Attached & Ready</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => downloadFile(formData.hardCopyFile, formData.hardCopyFileName || 'uploaded-bill', formData.hardCopyFileType || 'application/octet-stream')}
+                      className="p-1 text-[#0056b3] hover:bg-blue-50 rounded-sm cursor-pointer"
+                      title="Download uploaded file to verify"
+                    >
+                      <Download size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removeFile}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded-sm cursor-pointer"
+                      title="Remove uploaded copy"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="col-span-2 flex justify-end pt-2 space-x-2">
               <button type="submit" className="sap-btn flex items-center space-x-1">
                 <Save size={12} className="text-[#0056b3]"/>
@@ -415,6 +555,7 @@ export const Billing: React.FC = () => {
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Retention (-)</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">GST (+)</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-semibold bg-green-50">Net Amount</th>
+            <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Hard Copy</th>
             {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>}
           </tr>
         </thead>
@@ -448,6 +589,22 @@ export const Billing: React.FC = () => {
                 <td className="border border-[#8c9ba8] px-2 py-1 text-right font-semibold bg-green-50/50 text-[#0056b3]">
                   {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(netAmount)}
                 </td>
+                <td className="border border-[#8c9ba8] px-2 py-1 text-center font-medium">
+                  {bill.hardCopyFile ? (
+                    <button
+                      onClick={() => downloadFile(bill.hardCopyFile!, bill.hardCopyFileName || 'bill-copy', bill.hardCopyFileType || 'application/octet-stream')}
+                      className="text-[#0056b3] hover:text-[#003d80] inline-flex items-center space-x-1 cursor-pointer bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded-xs"
+                      title={`Download copy: ${bill.hardCopyFileName}`}
+                    >
+                      <Download size={10} />
+                      <span className="text-[9px] font-normal truncate max-w-[70px]" title={bill.hardCopyFileName}>
+                        {bill.hardCopyFileName}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="text-gray-400 font-normal italic">None</span>
+                  )}
+                </td>
                 {!isReadOnly && (
                   <td className="border border-[#8c9ba8] px-2 py-1 text-center">
                     <button onClick={() => handleEdit(bill)} className="text-blue-600 hover:text-blue-800" title="Edit">
@@ -463,7 +620,7 @@ export const Billing: React.FC = () => {
           })}
           {billings.length === 0 && (
             <tr>
-              <td colSpan={isReadOnly ? 11 : 12} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No bills found.</td>
+              <td colSpan={isReadOnly ? 12 : 13} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No bills found.</td>
             </tr>
           )}
         </tbody>

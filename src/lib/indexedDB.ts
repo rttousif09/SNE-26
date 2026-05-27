@@ -1,8 +1,8 @@
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval } from '../types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, PaymentSheetApproval } from '../types';
 
 const DB_NAME = 'ERM_Offline_DB';
-const DB_VERSION = 2;
-const STORES = ['projects', 'workers', 'billings', 'clientPayments', 'kharchis', 'advances', 'workerPayments', 'approvals', 'expensesLedger'];
+const DB_VERSION = 4;
+const STORES = ['projects', 'workers', 'billings', 'clientPayments', 'kharchis', 'advances', 'workerPayments', 'approvals', 'paymentSheetApprovals', 'expensesLedger', 'messBookings'];
 
 export const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {

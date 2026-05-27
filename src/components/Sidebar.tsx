@@ -21,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
     { id: 'worker-payment', label: 'Workers Payment', icon: Folder },
     { id: 'approvals', label: 'Approvals Workflow', icon: Folder },
     { id: 'expenses', label: 'Expenses Ledger', icon: Folder },
+    { id: 'mess', label: 'Mess Management', icon: Folder },
     { id: 'expenses-summary', label: 'Expenses Summary Dashboard', icon: Server },
   ];
 

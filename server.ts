@@ -49,6 +49,9 @@ function initDbSchema() {
       tds REAL DEFAULT 0,
       retention REAL DEFAULT 0,
       gst REAL DEFAULT 0,
+      hardCopyFile TEXT,
+      hardCopyFileName TEXT,
+      hardCopyFileType TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -95,6 +98,8 @@ function initDbSchema() {
       advanceDeduction REAL NOT NULL,
       netPayment REAL NOT NULL,
       date TEXT NOT NULL,
+      level TEXT,
+      supplyAmount REAL DEFAULT 0,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
       FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE
     );
@@ -121,6 +126,17 @@ function initDbSchema() {
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS payment_sheet_approvals (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      month TEXT NOT NULL,
+      totalAmount REAL NOT NULL,
+      remarks TEXT,
+      date TEXT NOT NULL,
+      status TEXT DEFAULT 'Pending',
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS expenses_ledger (
       id TEXT PRIMARY KEY,
       date TEXT NOT NULL,
@@ -139,6 +155,23 @@ function initDbSchema() {
       crBalance REAL DEFAULT 0,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS mess_bookings (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      fromDate TEXT NOT NULL,
+      toDate TEXT NOT NULL,
+      workerCount INTEGER NOT NULL,
+      ratePerWeek REAL NOT NULL,
+      totalComputed REAL NOT NULL,
+      amountPaid REAL NOT NULL,
+      amountDue REAL NOT NULL,
+      paidTo TEXT NOT NULL,
+      paymentDate TEXT NOT NULL,
+      remarks TEXT,
+      postedExpenseId TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate existing databases to make sure they have the new columns
@@ -150,6 +183,22 @@ function initDbSchema() {
   } catch (e) {}
   try {
     db.exec("ALTER TABLE billings ADD COLUMN gst REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN hardCopyFile TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN hardCopyFileName TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN hardCopyFileType TEXT");
+  } catch (e) {}
+
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN level TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN supplyAmount REAL DEFAULT 0");
   } catch (e) {}
 
   // Insert initial seed data if table is completely empty
@@ -375,10 +424,10 @@ async function startServer() {
 
   app.post("/api/billings", (req, res) => {
     try {
-      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst } = req.body;
+      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, hardCopyFile, hardCopyFileName, hardCopyFileType } = req.body;
       db.prepare(`
-        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, hardCopyFile, hardCopyFileName, hardCopyFileType)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         srNo || null,
@@ -390,7 +439,10 @@ async function startServer() {
         certifyDate,
         parseFloat(tds || 0),
         parseFloat(retention || 0),
-        parseFloat(gst || 0)
+        parseFloat(gst || 0),
+        hardCopyFile || null,
+        hardCopyFileName || null,
+        hardCopyFileType || null
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -401,10 +453,10 @@ async function startServer() {
   app.put("/api/billings/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst } = req.body;
+      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, hardCopyFile, hardCopyFileName, hardCopyFileType } = req.body;
       db.prepare(`
         UPDATE billings
-        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?
+        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?
         WHERE id = ?
       `).run(
         srNo || null,
@@ -417,6 +469,9 @@ async function startServer() {
         parseFloat(tds || 0),
         parseFloat(retention || 0),
         parseFloat(gst || 0),
+        hardCopyFile || null,
+        hardCopyFileName || null,
+        hardCopyFileType || null,
         id
       );
       res.json(req.body);
@@ -600,11 +655,24 @@ async function startServer() {
 
   app.post("/api/worker-payments", (req, res) => {
     try {
-      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date } = req.body;
+      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount } = req.body;
       db.prepare(`
-        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, projectId, workerId, month, parseFloat(workAmount), parseFloat(messDeduction), parseFloat(kharchiDeduction), parseFloat(advanceDeduction), parseFloat(netPayment), date);
+        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        projectId,
+        workerId,
+        month,
+        parseFloat(workAmount || 0),
+        parseFloat(messDeduction || 0),
+        parseFloat(kharchiDeduction || 0),
+        parseFloat(advanceDeduction || 0),
+        parseFloat(netPayment || 0),
+        date,
+        level || null,
+        parseFloat(supplyAmount || 0)
+      );
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -614,12 +682,25 @@ async function startServer() {
   app.put("/api/worker-payments/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date } = req.body;
+      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount } = req.body;
       db.prepare(`
         UPDATE worker_payments
-        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?
+        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, supplyAmount = ?
         WHERE id = ?
-      `).run(projectId, workerId, month, parseFloat(workAmount), parseFloat(messDeduction), parseFloat(kharchiDeduction), parseFloat(advanceDeduction), parseFloat(netPayment), date, id);
+      `).run(
+        projectId,
+        workerId,
+        month,
+        parseFloat(workAmount || 0),
+        parseFloat(messDeduction || 0),
+        parseFloat(kharchiDeduction || 0),
+        parseFloat(advanceDeduction || 0),
+        parseFloat(netPayment || 0),
+        date,
+        level || null,
+        parseFloat(supplyAmount || 0),
+        id
+      );
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -707,6 +788,54 @@ async function startServer() {
     }
   });
 
+  // 8.5.5. Payment Sheet Approvals
+  app.get("/api/payment-sheet-approvals", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM payment_sheet_approvals").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/payment-sheet-approvals", (req, res) => {
+    try {
+      const { id, projectId, month, totalAmount, remarks, date, status } = req.body;
+      db.prepare(`
+        INSERT INTO payment_sheet_approvals (id, projectId, month, totalAmount, remarks, date, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, projectId, month, parseFloat(totalAmount), remarks || "", date, status || "Pending");
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/payment-sheet-approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      db.prepare(`
+        UPDATE payment_sheet_approvals
+        SET status = ?
+        WHERE id = ?
+      `).run(status, id);
+      res.json({ id, status });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/payment-sheet-approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM payment_sheet_approvals WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // 8.6 Expenses Ledger (Owner and Managing Director expenses summary)
   app.get("/api/expenses_ledger", (req, res) => {
     try {
@@ -777,6 +906,72 @@ async function startServer() {
     }
   });
 
+  // 8.7 Mess Bookings API
+  app.get("/api/mess-bookings", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM mess_bookings").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/mess-bookings", (req, res) => {
+    try {
+      const {
+        id, projectId, fromDate, toDate, workerCount, ratePerWeek,
+        totalComputed, amountPaid, amountDue, paidTo, paymentDate, remarks, postedExpenseId
+      } = req.body;
+      db.prepare(`
+        INSERT INTO mess_bookings (
+          id, projectId, fromDate, toDate, workerCount, ratePerWeek,
+          totalComputed, amountPaid, amountDue, paidTo, paymentDate, remarks, postedExpenseId
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, projectId, fromDate, toDate, parseInt(workerCount, 10), parseFloat(ratePerWeek),
+        parseFloat(totalComputed), parseFloat(amountPaid), parseFloat(amountDue),
+        paidTo || "", paymentDate, remarks || "", postedExpenseId || null
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/mess-bookings/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        projectId, fromDate, toDate, workerCount, ratePerWeek,
+        totalComputed, amountPaid, amountDue, paidTo, paymentDate, remarks, postedExpenseId
+      } = req.body;
+      db.prepare(`
+        UPDATE mess_bookings
+        SET projectId = ?, fromDate = ?, toDate = ?, workerCount = ?, ratePerWeek = ?,
+            totalComputed = ?, amountPaid = ?, amountDue = ?, paidTo = ?, paymentDate = ?,
+            remarks = ?, postedExpenseId = ?
+        WHERE id = ?
+      `).run(
+        projectId, fromDate, toDate, parseInt(workerCount, 10), parseFloat(ratePerWeek),
+        parseFloat(totalComputed), parseFloat(amountPaid), parseFloat(amountDue),
+        paidTo || "", paymentDate, remarks || "", postedExpenseId || null, id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/mess-bookings/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM mess_bookings WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // 9. Full Backup Export/Import APIs
   app.get("/api/backup/export", (req, res) => {
     try {
@@ -789,37 +984,42 @@ async function startServer() {
       const workerPayments = db.prepare("SELECT * FROM worker_payments").all();
       const attendance = db.prepare("SELECT * FROM attendance").all();
       const approvals = db.prepare("SELECT * FROM approvals").all();
+      const paymentSheetApprovals = db.prepare("SELECT * FROM payment_sheet_approvals").all();
       const expensesLedger = db.prepare("SELECT * FROM expenses_ledger").all();
-
-      res.json({
-        projects,
-        workers,
-        billings,
-        clientPayments: clientPayments.map((row: any) => ({
-          id: row.id,
-          projectId: row.projectId,
-          amountReceived: row.amountReceived,
-          date: row.date,
-          remarks: row.remarks,
-          status: row.status
-        })),
-        kharchis,
-        advances,
-        workerPayments,
-        attendance,
-        approvals,
-        expensesLedger
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+      const messBookings = db.prepare("SELECT * FROM mess_bookings").all();
+ 
+       res.json({
+         projects,
+         workers,
+         billings,
+         clientPayments: clientPayments.map((row: any) => ({
+           id: row.id,
+           projectId: row.projectId,
+           amountReceived: row.amountReceived,
+           date: row.date,
+           remarks: row.remarks,
+           status: row.status
+         })),
+          kharchis,
+          advances,
+          workerPayments,
+          attendance,
+          approvals,
+          paymentSheetApprovals,
+          expensesLedger,
+          messBookings
+       });
+     } catch (err: any) {
+       res.status(500).json({ error: err.message });
+     }
+   });
 
   app.post("/api/backup/import", (req, res) => {
     const backup = req.body;
     const transaction = db.transaction(() => {
       // Clear all data
       db.prepare("DELETE FROM approvals").run();
+      db.prepare("DELETE FROM payment_sheet_approvals").run();
       db.prepare("DELETE FROM worker_payments").run();
       db.prepare("DELETE FROM advances").run();
       db.prepare("DELETE FROM kharchis").run();
@@ -829,6 +1029,7 @@ async function startServer() {
       db.prepare("DELETE FROM attendance").run();
       db.prepare("DELETE FROM projects").run();
       db.prepare("DELETE FROM expenses_ledger").run();
+      db.prepare("DELETE FROM mess_bookings").run();
 
       // Insert fresh data
       if (backup.projects && Array.isArray(backup.projects)) {
@@ -905,11 +1106,11 @@ async function startServer() {
 
       if (backup.workerPayments && Array.isArray(backup.workerPayments)) {
         const insert = db.prepare(`
-          INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const wp of backup.workerPayments) {
-          insert.run(wp.id, wp.projectId, wp.workerId, wp.month, parseFloat(wp.workAmount), parseFloat(wp.messDeduction), parseFloat(wp.kharchiDeduction), parseFloat(wp.advanceDeduction), parseFloat(wp.netPayment), wp.date);
+          insert.run(wp.id, wp.projectId, wp.workerId, wp.month, parseFloat(wp.workAmount), parseFloat(wp.messDeduction), parseFloat(wp.kharchiDeduction), parseFloat(wp.advanceDeduction), parseFloat(wp.netPayment), wp.date, wp.level || null, parseFloat(wp.supplyAmount || 0));
         }
       }
 
@@ -930,6 +1131,16 @@ async function startServer() {
         `);
         for (const app of backup.approvals) {
           insert.run(app.id, app.workerId, app.projectId, parseFloat(app.amount), app.remarks || "", app.date, app.status || "Pending");
+        }
+      }
+
+      if (backup.paymentSheetApprovals && Array.isArray(backup.paymentSheetApprovals)) {
+        const insert = db.prepare(`
+          INSERT INTO payment_sheet_approvals (id, projectId, month, totalAmount, remarks, date, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const psa of backup.paymentSheetApprovals) {
+          insert.run(psa.id, psa.projectId, psa.month, parseFloat(psa.totalAmount), psa.remarks || "", psa.date, psa.status || "Pending");
         }
       }
 
@@ -957,6 +1168,32 @@ async function startServer() {
             parseFloat(el.others || 0),
             el.bank || null,
             parseFloat(el.crBalance || 0)
+          );
+        }
+      }
+
+      if (backup.messBookings && Array.isArray(backup.messBookings)) {
+        const insert = db.prepare(`
+          INSERT INTO mess_bookings (
+            id, projectId, fromDate, toDate, workerCount, ratePerWeek,
+            totalComputed, amountPaid, amountDue, paidTo, paymentDate, remarks, postedExpenseId
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const mb of backup.messBookings) {
+          insert.run(
+            mb.id,
+            mb.projectId,
+            mb.fromDate,
+            mb.toDate,
+            parseInt(mb.workerCount, 10),
+            parseFloat(mb.ratePerWeek),
+            parseFloat(mb.totalComputed),
+            parseFloat(mb.amountPaid),
+            parseFloat(mb.amountDue),
+            mb.paidTo || "",
+            mb.paymentDate,
+            mb.remarks || "",
+            mb.postedExpenseId || null
           );
         }
       }

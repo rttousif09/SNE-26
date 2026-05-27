@@ -30,6 +30,9 @@ export interface Billing {
   tds?: number;
   retention?: number;
   gst?: number;
+  hardCopyFile?: string;
+  hardCopyFileName?: string;
+  hardCopyFileType?: string;
 }
 
 export interface ClientPayment {
@@ -70,6 +73,8 @@ export interface WorkerPayment {
   advanceDeduction: number;
   netPayment: number;
   date: string;
+  level?: string;
+  supplyAmount?: number;
 }
 
 export interface Approval {
@@ -77,6 +82,16 @@ export interface Approval {
   workerId: string;
   projectId: string;
   amount: number;
+  remarks: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+}
+
+export interface PaymentSheetApproval {
+  id: string;
+  projectId: string;
+  month: string; // YYYY-MM
+  totalAmount: number;
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
@@ -99,4 +114,21 @@ export interface ExpenseEntry {
   bank?: string;
   crBalance: number;
 }
+
+export interface MessBooking {
+  id: string;
+  projectId: string;
+  fromDate: string; // YYYY-MM-DD
+  toDate: string; // YYYY-MM-DD
+  workerCount: number;
+  ratePerWeek: number;
+  totalComputed: number;
+  amountPaid: number;
+  amountDue: number;
+  paidTo: string;
+  paymentDate: string; // YYYY-MM-DD
+  remarks?: string;
+  postedExpenseId?: string;
+}
+
 
