@@ -120,6 +120,25 @@ function initDbSchema() {
       FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS expenses_ledger (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      description TEXT NOT NULL,
+      projectId TEXT,
+      kharchi REAL DEFAULT 0,
+      mess REAL DEFAULT 0,
+      workerAdvance REAL DEFAULT 0,
+      tiffin REAL DEFAULT 0,
+      travel REAL DEFAULT 0,
+      machineryMaterial REAL DEFAULT 0,
+      workerPayment REAL DEFAULT 0,
+      stationery REAL DEFAULT 0,
+      others REAL DEFAULT 0,
+      bank TEXT,
+      crBalance REAL DEFAULT 0,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE SET NULL
+    );
   `);
 
   // Migrate existing databases to make sure they have the new columns
@@ -183,6 +202,49 @@ function initDbSchema() {
       INSERT INTO advances (id, projectId, workerId, amount, paidBy, remarks, date)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run("a1", "p1", "w1", 5000, "Admin Team", "Medical emergency emergency", "2025-02-15");
+  }
+
+  // Seed initial expenses_ledger data if empty
+  const countExpenses = db.prepare("SELECT COUNT(*) as count FROM expenses_ledger").get() as { count: number };
+  if (countExpenses.count === 0) {
+    console.log("Seeding initial expenses_ledger records...");
+    const seedLedger = [
+      { id: "el1", date: "2026-01-01", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 5000 },
+      { id: "el2", date: "2026-01-01", description: "Travel Advance to Tripmaza", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 5000, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
+      { id: "el3", date: "2026-01-01", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 15000 },
+      { id: "el4", date: "2026-01-01", description: "Mess", projectId: "p1", kharchi: 0, mess: 8000, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
+      { id: "el5", date: "2026-01-01", description: "Mess", projectId: "p1", kharchi: 0, mess: 7000, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
+      { id: "el6", date: "2026-01-04", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 1500 },
+      { id: "el7", date: "2026-01-04", description: "Travel Allowance to Sakir Alam", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 1500, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
+      { id: "el8", date: "2026-01-06", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 50000 },
+      { id: "el9", date: "2026-01-06", description: "Transfer to Nasrin Banu", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 5000, bank: "", crBalance: 0 },
+      { id: "el10", date: "2026-01-06", description: "Advance to Faruq Alam", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 10000, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 }
+    ];
+    
+    const insertEl = db.prepare(`
+      INSERT INTO expenses_ledger (id, date, description, projectId, kharchi, mess, workerAdvance, tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    for (const item of seedLedger) {
+      insertEl.run(
+        item.id,
+        item.date,
+        item.description,
+        item.projectId || null,
+        item.kharchi,
+        item.mess,
+        item.workerAdvance,
+        item.tiffin,
+        item.travel,
+        item.machineryMaterial,
+        item.workerPayment,
+        item.stationery,
+        item.others,
+        item.bank || null,
+        item.crBalance
+      );
+    }
   }
 }
 
@@ -634,6 +696,76 @@ async function startServer() {
     }
   });
 
+  // 8.6 Expenses Ledger (Owner and Managing Director expenses summary)
+  app.get("/api/expenses_ledger", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM expenses_ledger").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/expenses_ledger", (req, res) => {
+    try {
+      const {
+        id, date, description, projectId, kharchi, mess, workerAdvance,
+        tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance
+      } = req.body;
+      db.prepare(`
+        INSERT INTO expenses_ledger (
+          id, date, description, projectId, kharchi, mess, workerAdvance,
+          tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, date, description, projectId || null,
+        parseFloat(kharchi || 0), parseFloat(mess || 0), parseFloat(workerAdvance || 0),
+        parseFloat(tiffin || 0), parseFloat(travel || 0), parseFloat(machineryMaterial || 0),
+        parseFloat(workerPayment || 0), parseFloat(stationery || 0), parseFloat(others || 0),
+        bank || null, parseFloat(crBalance || 0)
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/expenses_ledger/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        date, description, projectId, kharchi, mess, workerAdvance,
+        tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance
+      } = req.body;
+      db.prepare(`
+        UPDATE expenses_ledger
+        SET date = ?, description = ?, projectId = ?, kharchi = ?, mess = ?, workerAdvance = ?,
+            tiffin = ?, travel = ?, machineryMaterial = ?, workerPayment = ?, stationery = ?, others = ?,
+            bank = ?, crBalance = ?
+        WHERE id = ?
+      `).run(
+        date, description, projectId || null,
+        parseFloat(kharchi || 0), parseFloat(mess || 0), parseFloat(workerAdvance || 0),
+        parseFloat(tiffin || 0), parseFloat(travel || 0), parseFloat(machineryMaterial || 0),
+        parseFloat(workerPayment || 0), parseFloat(stationery || 0), parseFloat(others || 0),
+        bank || null, parseFloat(crBalance || 0), id
+      );
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/expenses_ledger/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM expenses_ledger WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // 9. Full Backup Export/Import APIs
   app.get("/api/backup/export", (req, res) => {
     try {
@@ -646,6 +778,7 @@ async function startServer() {
       const workerPayments = db.prepare("SELECT * FROM worker_payments").all();
       const attendance = db.prepare("SELECT * FROM attendance").all();
       const approvals = db.prepare("SELECT * FROM approvals").all();
+      const expensesLedger = db.prepare("SELECT * FROM expenses_ledger").all();
 
       res.json({
         projects,
@@ -663,7 +796,8 @@ async function startServer() {
         advances,
         workerPayments,
         attendance,
-        approvals
+        approvals,
+        expensesLedger
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -683,6 +817,7 @@ async function startServer() {
       db.prepare("DELETE FROM workers").run();
       db.prepare("DELETE FROM attendance").run();
       db.prepare("DELETE FROM projects").run();
+      db.prepare("DELETE FROM expenses_ledger").run();
 
       // Insert fresh data
       if (backup.projects && Array.isArray(backup.projects)) {
@@ -784,6 +919,34 @@ async function startServer() {
         `);
         for (const app of backup.approvals) {
           insert.run(app.id, app.workerId, app.projectId, parseFloat(app.amount), app.remarks || "", app.date, app.status || "Pending");
+        }
+      }
+
+      if (backup.expensesLedger && Array.isArray(backup.expensesLedger)) {
+        const insert = db.prepare(`
+          INSERT INTO expenses_ledger (
+            id, date, description, projectId, kharchi, mess, workerAdvance,
+            tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const el of backup.expensesLedger) {
+          insert.run(
+            el.id,
+            el.date,
+            el.description,
+            el.projectId || null,
+            parseFloat(el.kharchi || 0),
+            parseFloat(el.mess || 0),
+            parseFloat(el.workerAdvance || 0),
+            parseFloat(el.tiffin || 0),
+            parseFloat(el.travel || 0),
+            parseFloat(el.machineryMaterial || 0),
+            parseFloat(el.workerPayment || 0),
+            parseFloat(el.stationery || 0),
+            parseFloat(el.others || 0),
+            el.bank || null,
+            parseFloat(el.crBalance || 0)
+          );
         }
       }
     });

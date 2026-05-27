@@ -2,11 +2,17 @@ import React from 'react';
 import { useAppContext } from '../store';
 
 export const Dashboard: React.FC = () => {
-  const { projects, workers, billings, clientPayments } = useAppContext();
+  const { projects, workers, billings, clientPayments, expensesLedger } = useAppContext();
 
   const totalBudget = projects.reduce((sum, p) => sum + p.budget, 0);
   const totalBilled = billings.reduce((sum, b) => sum + b.amount, 0);
   const totalReceived = clientPayments.reduce((sum, cp) => sum + cp.amountReceived, 0);
+
+  const totalCredit = expensesLedger.reduce((sum, el) => sum + el.crBalance, 0);
+  const totalSpent = expensesLedger.reduce((sum, el) => {
+    return sum + (el.kharchi || 0) + (el.mess || 0) + (el.workerAdvance || 0) + (el.tiffin || 0) + (el.travel || 0) + (el.machineryMaterial || 0) + (el.workerPayment || 0) + (el.stationery || 0) + (el.others || 0);
+  }, 0);
+  const availableLedgerBalance = totalCredit - totalSpent;
 
   const SectionHeader = ({ title }: { title: string }) => (
     <div className="sap-header px-2 py-1 font-semibold text-[#000000] text-[11px] mb-2 flex justify-between border border-[#8c9ba8]">
@@ -59,6 +65,13 @@ export const Dashboard: React.FC = () => {
             <BarChart label="Total Budget Allocated" used={totalBudget * 0.6} total={totalBudget} colorClass="bg-[#a4d49d]" />
             <BarChart label="Total Billed Amount" used={totalBilled} total={totalBudget} colorClass="bg-[#a4d49d]" />
             <BarChart label="Total Received Amount" used={totalReceived} total={totalBilled} colorClass="bg-[#a4d49d]" />
+            
+            <div className="mt-2 pt-2 border-t border-dashed border-gray-300">
+              <KeyValue label="Available Cash Reserves (Current)" value={<strong className="text-emerald-700 text-[11px] font-mono">₹{availableLedgerBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>} />
+              <KeyValue label="Total Received Credit (Owner)" value={<span className="font-mono text-green-700">₹{totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>} />
+              <KeyValue label="Total Internal Spent (Expenses)" value={<span className="font-mono text-red-600">₹{totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>} />
+            </div>
+
             <div className="mt-2">
               <a href="#" className="text-blue-600 underline">More Information</a>
             </div>

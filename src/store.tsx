@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -11,6 +11,7 @@ interface AppState {
   advances: Advance[];
   workerPayments: WorkerPayment[];
   approvals: Approval[];
+  expensesLedger: ExpenseEntry[];
 }
 
 interface AppContextType extends AppState {
@@ -42,6 +43,9 @@ interface AppContextType extends AppState {
   addApproval: (approval: Omit<Approval, 'id' | 'status'>) => void;
   updateApproval: (id: string, approval: Partial<Approval>) => void;
   deleteApproval: (id: string) => void;
+  addExpenseEntry: (expense: Omit<ExpenseEntry, 'id'>) => void;
+  updateExpenseEntry: (id: string, expense: Partial<ExpenseEntry>) => void;
+  deleteExpenseEntry: (id: string) => void;
 }
 
 const initialState: AppState = {
@@ -69,6 +73,7 @@ const initialState: AppState = {
   ],
   workerPayments: [],
   approvals: [],
+  expensesLedger: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -101,13 +106,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     advances: [],
     workerPayments: [],
     approvals: [],
+    expensesLedger: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes] = await Promise.all([
+        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, elRes] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
           fetch('/api/billings').then(r => r.json()),
@@ -115,7 +121,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/kharchis').then(r => r.json()),
           fetch('/api/advances').then(r => r.json()),
           fetch('/api/worker-payments').then(r => r.json()),
-          fetch('/api/approvals').then(r => r.json()).catch(() => [])
+          fetch('/api/approvals').then(r => r.json()).catch(() => []),
+          fetch('/api/expenses_ledger').then(r => r.json()).catch(() => [])
         ]);
 
         setState({
@@ -126,7 +133,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           kharchis: kRes,
           advances: aRes,
           workerPayments: wpRes,
-          approvals: apRes
+          approvals: apRes,
+          expensesLedger: elRes
         });
 
         // Sync with IndexedDB
@@ -138,6 +146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('advances', aRes);
         await saveAllToStore('workerPayments', wpRes);
         await saveAllToStore('approvals', apRes);
+        await saveAllToStore('expensesLedger', elRes).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -149,10 +158,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const advances = await getAllFromStore('advances');
           const workerPayments = await getAllFromStore('workerPayments');
           const approvals = await getAllFromStore('approvals');
+          const expensesLedger = await getAllFromStore('expensesLedger').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
-                            workerPayments.length === 0 && approvals.length === 0;
+                            workerPayments.length === 0 && approvals.length === 0 && expensesLedger.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -165,7 +175,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               kharchis,
               advances,
               workerPayments,
-              approvals
+              approvals,
+              expensesLedger
             });
           }
         } catch (e) {
@@ -556,6 +567,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addExpenseEntry = async (expense: Omit<ExpenseEntry, 'id'>) => {
+    const newExpense: ExpenseEntry = { ...expense, id: generateId() };
+    setState(s => ({ ...s, expensesLedger: [...s.expensesLedger, newExpense] }));
+    try {
+      await fetch('/api/expenses_ledger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newExpense)
+      });
+      await saveAllToStore('expensesLedger', [...state.expensesLedger, newExpense]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateExpenseEntry = async (id: string, expense: Partial<ExpenseEntry>) => {
+    setState(s => ({
+      ...s,
+      expensesLedger: s.expensesLedger.map(el => el.id === id ? { ...el, ...expense } : el)
+    }));
+    try {
+      const existing = state.expensesLedger.find(el => el.id === id);
+      if (existing) {
+        const merged = { ...existing, ...expense };
+        await fetch(`/api/expenses_ledger/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+        await saveAllToStore('expensesLedger', state.expensesLedger.map(el => el.id === id ? merged : el));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteExpenseEntry = async (id: string) => {
+    setState(s => ({ ...s, expensesLedger: s.expensesLedger.filter(el => el.id !== id) }));
+    try {
+      await fetch(`/api/expenses_ledger/${id}`, { method: 'DELETE' });
+      await saveAllToStore('expensesLedger', state.expensesLedger.filter(el => el.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -586,7 +643,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteWorkerPayment,
       addApproval,
       updateApproval,
-      deleteApproval
+      deleteApproval,
+      addExpenseEntry,
+      updateExpenseEntry,
+      deleteExpenseEntry
     }}>
       {children}
     </AppContext.Provider>

@@ -17,6 +17,7 @@ import { Kharchi } from './pages/Kharchi';
 import { Advance } from './pages/Advance';
 import { WorkerPayment } from './pages/WorkerPayment';
 import { Approvals } from './pages/Approvals';
+import { Expenses } from './pages/Expenses';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 
 function AppContent({ user, onLogout }: { user: { username: string; name: string } | null; onLogout: () => void }) {
@@ -38,6 +39,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'advance': return <Advance />;
       case 'worker-payment': return <WorkerPayment />;
       case 'approvals': return <Approvals />;
+      case 'expenses': return <Expenses />;
       default: return <Dashboard />;
     }
   };
@@ -53,6 +55,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'advance': return 'Advance';
       case 'worker-payment': return 'Workers Payment';
       case 'approvals': return 'Approvals Workflow';
+      case 'expenses': return 'Expenses Ledger';
       default: return 'Overview';
     }
   };

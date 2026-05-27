@@ -81,3 +81,22 @@ export interface Approval {
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
 }
+
+export interface ExpenseEntry {
+  id: string;
+  date: string;
+  description: string;
+  projectId?: string;
+  kharchi: number;
+  mess: number;
+  workerAdvance: number;
+  tiffin: number;
+  travel: number;
+  machineryMaterial: number;
+  workerPayment: number;
+  stationery: number;
+  others: number;
+  bank?: string;
+  crBalance: number;
+}
+
