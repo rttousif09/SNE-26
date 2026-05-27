@@ -156,22 +156,33 @@ function initDbSchema() {
   const countRow = db.prepare("SELECT COUNT(*) as count FROM projects").get() as { count: number };
   if (countRow.count === 0) {
     console.log("Seeding initial database content because DB is empty...");
-    const baseProject = {
-      id: "p1",
-      name: "SDA Complex",
-      startDate: "2025-01-10",
-      completionDate: "2025-12-31",
-      address: "Phase 1, Downtown",
-      budget: 15000000
-    };
-    db.prepare(`
+    const baseProjects = [
+      {
+        id: "p1",
+        name: "S3 Eco City",
+        startDate: "2026-01-01",
+        completionDate: "2027-01-01",
+        address: "Plot 4, Sector 18",
+        budget: 15000000
+      },
+      {
+        id: "p2",
+        name: "EPR Mulund",
+        startDate: "2026-01-01",
+        completionDate: "2027-06-30",
+        address: "LBS Road, Mulund West",
+        budget: 85000000
+      }
+    ];
+    const insertProj = db.prepare(`
       INSERT INTO projects (id, name, startDate, completionDate, address, budget)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(baseProject.id, baseProject.name, baseProject.startDate, baseProject.completionDate, baseProject.address, baseProject.budget);
+    `);
+    baseProjects.forEach(p => insertProj.run(p.id, p.name, p.startDate, p.completionDate, p.address, p.budget));
 
     const baseWorkers = [
-      { id: "w1", serialNo: "1", workerId: "W-001", name: "Ramesh Kumar", projectId: "p1", designation: "Mason", joiningDate: "2025-01-12", exitDate: "" },
-      { id: "w2", serialNo: "2", workerId: "W-002", name: "Suresh Singh", projectId: "p1", designation: "Labor", joiningDate: "2025-01-12", exitDate: "" }
+      { id: "w1", serialNo: "1", workerId: "W-001", name: "Ramesh Kumar", projectId: "p1", designation: "Supervisor", joiningDate: "2026-01-12", exitDate: "" },
+      { id: "w2", serialNo: "2", workerId: "W-002", name: "Suresh Singh", projectId: "p1", designation: "Mason", joiningDate: "2026-01-12", exitDate: "" }
     ];
     const insertWorker = db.prepare(`
       INSERT INTO workers (id, serialNo, workerId, name, projectId, designation, joiningDate, exitDate)
@@ -182,26 +193,26 @@ function initDbSchema() {
     db.prepare(`
       INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run("b1", "1", "p1", "BILL-001", "Foundation Work", 250000, "2025-02", "2025-02-28", 5000, 12500, 45000);
+    `).run("b1", "1", "p1", "BILL-001", "Foundation Work", 250000, "2026-02", "2026-02-28", 5000, 12500, 45000);
 
     db.prepare(`
       INSERT INTO client_payments (id, projectId, amountReceived, date, remarks, status)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run("cp1", "p1", 200000, "2025-03-05", "First installment received", "Received");
+    `).run("cp1", "p1", 200000, "2026-03-05", "First installment received", "Received");
 
     db.prepare(`
       INSERT INTO kharchis (id, projectId, workerId, date, amount)
       VALUES (?, ?, ?, ?, ?)
-    `).run("k1", "p1", "w2", "2025-02-02", 500);
+    `).run("k1", "p1", "w2", "2026-02-02", 500);
     db.prepare(`
       INSERT INTO kharchis (id, projectId, workerId, date, amount)
       VALUES (?, ?, ?, ?, ?)
-    `).run("k2", "p1", "w2", "2025-02-09", 500);
+    `).run("k2", "p1", "w2", "2026-02-09", 500);
 
     db.prepare(`
       INSERT INTO advances (id, projectId, workerId, amount, paidBy, remarks, date)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("a1", "p1", "w1", 5000, "Admin Team", "Medical emergency emergency", "2025-02-15");
+    `).run("a1", "p1", "w1", 5000, "Admin Team", "Medical emergency emergency", "2026-02-15");
   }
 
   // Seed initial expenses_ledger data if empty
@@ -212,7 +223,7 @@ function initDbSchema() {
       { id: "el1", date: "2026-01-01", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 5000 },
       { id: "el2", date: "2026-01-01", description: "Travel Advance to Tripmaza", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 5000, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
       { id: "el3", date: "2026-01-01", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 15000 },
-      { id: "el4", date: "2026-01-01", description: "Mess", projectId: "p1", kharchi: 0, mess: 8000, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
+      { id: "el4", date: "2026-01-01", description: "Mess", projectId: "p2", kharchi: 0, mess: 8000, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
       { id: "el5", date: "2026-01-01", description: "Mess", projectId: "p1", kharchi: 0, mess: 7000, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
       { id: "el6", date: "2026-01-04", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 1500 },
       { id: "el7", date: "2026-01-04", description: "Travel Allowance to Sakir Alam", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 1500, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
