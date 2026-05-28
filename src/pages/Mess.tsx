@@ -673,7 +673,7 @@ export const Mess: React.FC = () => {
                           </td>
                           <td className={`border border-[#8c9ba8] p-1 font-mono font-bold ${hasDue ? 'text-red-600 bg-red-50/50' : 'text-gray-400'}`}>
                             <div className="flex items-center justify-end space-x-1">
-                              {hasDue && <AlertTriangle size={11} className="text-red-600 fill-red-100" title="Amount Due Pending!" />}
+                              {hasDue && <span title="Amount Due Pending!"><AlertTriangle size={11} className="text-red-600 fill-red-100" /></span>}
                               <span>₹{b.amountDue}</span>
                             </div>
                           </td>

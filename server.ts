@@ -3,8 +3,25 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+let aiClient: GoogleGenAI | null = null;
+function getAiClient() {
+  if (!aiClient) {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY environment variable is required");
+    }
+    aiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: { 'User-Agent': 'aistudio-build' }
+      }
+    });
+  }
+  return aiClient;
+}
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const DB_FILE = process.env.DATABASE_FILE || "database.sqlite";
@@ -19,6 +36,7 @@ function initDbSchema() {
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      clientName TEXT,
       startDate TEXT NOT NULL,
       completionDate TEXT,
       address TEXT NOT NULL,
@@ -99,7 +117,13 @@ function initDbSchema() {
       netPayment REAL NOT NULL,
       date TEXT NOT NULL,
       level TEXT,
+      workCategory TEXT DEFAULT 'Monthly work',
+      workDays REAL,
+      ratePerDay REAL,
+      overtimeHours REAL,
+      allowance REAL,
       supplyAmount REAL DEFAULT 0,
+      supplyDetails TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
       FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE
     );
@@ -182,6 +206,10 @@ function initDbSchema() {
     db.exec("ALTER TABLE billings ADD COLUMN retention REAL DEFAULT 0");
   } catch (e) {}
   try {
+    db.exec("ALTER TABLE projects ADD COLUMN clientName TEXT");
+  } catch (e) {}
+
+  try {
     db.exec("ALTER TABLE billings ADD COLUMN gst REAL DEFAULT 0");
   } catch (e) {}
   try {
@@ -199,6 +227,24 @@ function initDbSchema() {
   } catch (e) {}
   try {
     db.exec("ALTER TABLE worker_payments ADD COLUMN supplyAmount REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN supplyDetails TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN workCategory TEXT DEFAULT 'Monthly work'");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN workDays REAL");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN ratePerDay REAL");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN overtimeHours REAL");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN allowance REAL");
   } catch (e) {}
 
   // Insert initial seed data if table is completely empty
@@ -224,10 +270,10 @@ function initDbSchema() {
       }
     ];
     const insertProj = db.prepare(`
-      INSERT INTO projects (id, name, startDate, completionDate, address, budget)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    baseProjects.forEach(p => insertProj.run(p.id, p.name, p.startDate, p.completionDate, p.address, p.budget));
+    baseProjects.forEach(p => insertProj.run(p.id, p.name, null, p.startDate, p.completionDate, p.address, p.budget));
 
     const baseWorkers = [
       { id: "w1", serialNo: "1", workerId: "W-001", name: "Ramesh Kumar", projectId: "p1", designation: "Supervisor", joiningDate: "2026-01-12", exitDate: "" },
@@ -313,6 +359,26 @@ initDbSchema();
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: "50mb" }));
+  
+  // Custom API Route for Industry News
+  app.get("/api/external-data/news", async (req, res) => {
+    try {
+      const ai = getAiClient();
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: "What are today's latest industry news or regulatory updates relevant to the construction business and real estate? Keep the summary concise but informative.",
+        config: {
+          tools: [{ googleSearch: {} }],
+        },
+      });
+      
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      res.json({ text: response.text, groundingChunks: chunks || [] });
+    } catch (err: any) {
+      console.error("Gemini API Error:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch news." });
+    }
+  });
 
   // API Routes
 
@@ -328,12 +394,12 @@ async function startServer() {
 
   app.post("/api/projects", (req, res) => {
     try {
-      const { id, name, startDate, completionDate, address, budget } = req.body;
+      const { id, name, clientName, startDate, completionDate, address, budget } = req.body;
       db.prepare(`
-        INSERT INTO projects (id, name, startDate, completionDate, address, budget)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, name, startDate, completionDate || null, address, parseFloat(budget));
-      res.status(201).json({ id, name, startDate, completionDate, address, budget });
+        INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, name, clientName || null, startDate, completionDate || null, address, parseFloat(budget));
+      res.status(201).json({ id, name, clientName, startDate, completionDate, address, budget });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -342,13 +408,13 @@ async function startServer() {
   app.put("/api/projects/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { name, startDate, completionDate, address, budget } = req.body;
+      const { name, clientName, startDate, completionDate, address, budget } = req.body;
       db.prepare(`
         UPDATE projects
-        SET name = ?, startDate = ?, completionDate = ?, address = ?, budget = ?
+        SET name = ?, clientName = ?, startDate = ?, completionDate = ?, address = ?, budget = ?
         WHERE id = ?
-      `).run(name, startDate, completionDate || null, address, parseFloat(budget), id);
-      res.json({ id, name, startDate, completionDate, address, budget });
+      `).run(name, clientName || null, startDate, completionDate || null, address, parseFloat(budget), id);
+      res.json({ id, name, clientName, startDate, completionDate, address, budget });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -655,10 +721,10 @@ async function startServer() {
 
   app.post("/api/worker-payments", (req, res) => {
     try {
-      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount } = req.body;
+      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails } = req.body;
       db.prepare(`
-        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         projectId,
@@ -671,7 +737,13 @@ async function startServer() {
         parseFloat(netPayment || 0),
         date,
         level || null,
-        parseFloat(supplyAmount || 0)
+        workCategory || 'Monthly work',
+        workDays ? parseFloat(workDays) : null,
+        ratePerDay ? parseFloat(ratePerDay) : null,
+        overtimeHours ? parseFloat(overtimeHours) : null,
+        allowance ? parseFloat(allowance) : null,
+        parseFloat(supplyAmount || 0),
+        supplyDetails || null
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -682,10 +754,10 @@ async function startServer() {
   app.put("/api/worker-payments/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount } = req.body;
+      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails } = req.body;
       db.prepare(`
         UPDATE worker_payments
-        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, supplyAmount = ?
+        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, workCategory = ?, workDays = ?, ratePerDay = ?, overtimeHours = ?, allowance = ?, supplyAmount = ?, supplyDetails = ?
         WHERE id = ?
       `).run(
         projectId,
@@ -698,7 +770,13 @@ async function startServer() {
         parseFloat(netPayment || 0),
         date,
         level || null,
+        workCategory || 'Monthly work',
+        workDays ? parseFloat(workDays) : null,
+        ratePerDay ? parseFloat(ratePerDay) : null,
+        overtimeHours ? parseFloat(overtimeHours) : null,
+        allowance ? parseFloat(allowance) : null,
         parseFloat(supplyAmount || 0),
+        supplyDetails || null,
         id
       );
       res.json(req.body);
@@ -1034,11 +1112,11 @@ async function startServer() {
       // Insert fresh data
       if (backup.projects && Array.isArray(backup.projects)) {
         const insert = db.prepare(`
-          INSERT INTO projects (id, name, startDate, completionDate, address, budget)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
         for (const p of backup.projects) {
-          insert.run(p.id, p.name, p.startDate, p.completionDate || null, p.address, parseFloat(p.budget));
+          insert.run(p.id, p.name, p.clientName || null, p.startDate, p.completionDate || null, p.address, parseFloat(p.budget));
         }
       }
 
@@ -1106,11 +1184,11 @@ async function startServer() {
 
       if (backup.workerPayments && Array.isArray(backup.workerPayments)) {
         const insert = db.prepare(`
-          INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, supplyAmount)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const wp of backup.workerPayments) {
-          insert.run(wp.id, wp.projectId, wp.workerId, wp.month, parseFloat(wp.workAmount), parseFloat(wp.messDeduction), parseFloat(wp.kharchiDeduction), parseFloat(wp.advanceDeduction), parseFloat(wp.netPayment), wp.date, wp.level || null, parseFloat(wp.supplyAmount || 0));
+          insert.run(wp.id, wp.projectId, wp.workerId, wp.month, parseFloat(wp.workAmount), parseFloat(wp.messDeduction), parseFloat(wp.kharchiDeduction), parseFloat(wp.advanceDeduction), parseFloat(wp.netPayment), wp.date, wp.level || null, wp.workCategory || 'Monthly work', wp.workDays ? parseFloat(wp.workDays) : null, wp.ratePerDay ? parseFloat(wp.ratePerDay) : null, wp.overtimeHours ? parseFloat(wp.overtimeHours) : null, wp.allowance ? parseFloat(wp.allowance) : null, parseFloat(wp.supplyAmount || 0), wp.supplyDetails || null);
         }
       }
 

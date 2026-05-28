@@ -1,6 +1,7 @@
 export interface Project {
   id: string;
   name: string;
+  clientName?: string;
   startDate: string;
   completionDate?: string;
   address: string;
@@ -62,6 +63,14 @@ export interface Advance {
   date: string;
 }
 
+export interface SupplyDetail {
+  id: string;
+  description: string;
+  hours: number;
+  rate: number;
+  total: number;
+}
+
 export interface WorkerPayment {
   id: string;
   projectId: string;
@@ -74,7 +83,13 @@ export interface WorkerPayment {
   netPayment: number;
   date: string;
   level?: string;
+  workCategory?: string;
+  workDays?: number;
+  ratePerDay?: number;
+  overtimeHours?: number;
+  allowance?: number;
   supplyAmount?: number;
+  supplyDetails?: string; // JSON string of SupplyDetail[]
 }
 
 export interface Approval {

@@ -823,7 +823,7 @@ export const Expenses: React.FC = () => {
                   type="date"
                   required 
                   value={formData.date}
-                  onChange={(e) => setFormData(e.target.value)}
+                  onChange={(e) => setFormData({...formData, date: e.target.value})}
                   className="w-full border border-gray-300 p-1 bg-white outline-none"
                 />
               </div>

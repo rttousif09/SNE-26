@@ -10,7 +10,7 @@ export const Projects: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    name: '', startDate: '', completionDate: '', address: '', budget: ''
+    name: '', clientName: '', startDate: '', completionDate: '', address: '', budget: ''
   });
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -26,6 +26,7 @@ export const Projects: React.FC = () => {
   const handleEdit = (project: any) => {
     setFormData({
       name: project.name,
+      clientName: project.clientName || '',
       startDate: project.startDate,
       completionDate: project.completionDate || '',
       address: project.address,
@@ -38,18 +39,18 @@ export const Projects: React.FC = () => {
   const handleCancel = () => {
     setIsAdding(false);
     setEditingId(null);
-    setFormData({ name: '', startDate: '', completionDate: '', address: '', budget: '' });
+    setFormData({ name: '', clientName: '', startDate: '', completionDate: '', address: '', budget: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) {
       updateProject(editingId, {
-        name: formData.name, startDate: formData.startDate, completionDate: formData.completionDate, address: formData.address, budget: Number(formData.budget)
+        name: formData.name, clientName: formData.clientName, startDate: formData.startDate, completionDate: formData.completionDate, address: formData.address, budget: Number(formData.budget)
       });
     } else {
       addProject({
-        name: formData.name, startDate: formData.startDate, completionDate: formData.completionDate, address: formData.address, budget: Number(formData.budget)
+        name: formData.name, clientName: formData.clientName, startDate: formData.startDate, completionDate: formData.completionDate, address: formData.address, budget: Number(formData.budget)
       });
     }
     handleCancel();
@@ -99,6 +100,10 @@ export const Projects: React.FC = () => {
               <input required type="text" className="sap-input flex-1" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
             </div>
             <div className="flex items-center">
+              <label className="w-32">Client Name:</label>
+              <input type="text" className="sap-input flex-1" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} />
+            </div>
+            <div className="flex items-center">
               <label className="w-32">Start Date:</label>
               <input required type="date" className="sap-input flex-1" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
             </div>
@@ -135,6 +140,7 @@ export const Projects: React.FC = () => {
           <tr>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-8"></th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project Name</th>
+            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Client Name</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Start Date</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Completion Date</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Address</th>
@@ -146,7 +152,8 @@ export const Projects: React.FC = () => {
           {filteredProjects.map((project, idx) => (
             <tr key={project.id} className="hover:bg-[#e6f2ff] cursor-default">
               <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] w-8">{idx + 1}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1">{project.name}</td>
+              <td className="border border-[#8c9ba8] px-2 py-1 font-semibold">{project.name}</td>
+              <td className="border border-[#8c9ba8] px-2 py-1">{project.clientName || '-'}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.startDate}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.completionDate || '-'}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.address}</td>

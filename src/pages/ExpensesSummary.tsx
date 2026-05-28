@@ -136,7 +136,7 @@ export const ExpensesSummary: React.FC = () => {
     }
   };
 
-  const itemVariants = {
+  const itemVariants: any = {
     hidden: { opacity: 0, y: 15 },
     show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }
   };
@@ -505,10 +505,10 @@ export const ExpensesSummary: React.FC = () => {
 
                   <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
                     {stats.spentTransactions
-                      .filter(t => !selectedFilterCategory || t[selectedFilterCategory as keyof ExpenseEntry] > 0)
+                      .filter(t => !selectedFilterCategory || Number(t[selectedFilterCategory as keyof ExpenseEntry]) > 0)
                       .map((t) => {
                         const categoryValues = Object.keys(categoryMeta)
-                          .filter(metaKey => t[metaKey as keyof ExpenseEntry] > 0)
+                          .filter(metaKey => Number(t[metaKey as keyof ExpenseEntry]) > 0)
                           .map(metaKey => {
                             const val = t[metaKey as keyof ExpenseEntry] as number;
                             return { label: categoryMeta[metaKey].label, value: val };
@@ -535,7 +535,7 @@ export const ExpensesSummary: React.FC = () => {
                             </div>
                             <div className="text-right">
                               <span className="font-bold text-red-650 text-[#ce2a2a] font-mono block">
-                                - ₹{t.totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                - ₹{((t.kharchi || 0) + (t.mess || 0) + (t.workerAdvance || 0) + (t.tiffin || 0) + (t.travel || 0) + (t.machineryMaterial || 0) + (t.workerPayment || 0) + (t.stationery || 0) + (t.others || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </span>
                             </div>
                           </div>

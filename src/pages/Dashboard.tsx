@@ -1,8 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../store';
+import Markdown from 'react-markdown';
 
 export const Dashboard: React.FC = () => {
   const { projects, workers, billings, clientPayments, expensesLedger } = useAppContext();
+  
+  const [newsData, setNewsData] = useState<{text: string, groundingChunks: any[]} | null>(null);
+  const [isLoadingNews, setIsLoadingNews] = useState(false);
+  const [newsError, setNewsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsLoadingNews(true);
+    fetch("/api/external-data/news")
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          setNewsError(data.error);
+        } else {
+          setNewsData(data);
+        }
+      })
+      .catch(err => {
+        setNewsError("Failed to load industry news.");
+      })
+      .finally(() => setIsLoadingNews(false));
+  }, []);
 
   const totalBudget = projects.reduce((sum, p) => sum + p.budget, 0);
   const totalBilled = billings.reduce((sum, b) => sum + b.amount, 0);
@@ -86,6 +108,38 @@ export const Dashboard: React.FC = () => {
             <div className="mt-2">
               <a href="#" className="text-blue-600 underline">More Information</a>
             </div>
+          </div>
+        </div>
+
+        <div>
+          <SectionHeader title="Industry News & Regulatory Updates" />
+          <div className="px-2">
+            {isLoadingNews ? (
+              <div className="flex items-center space-x-2 text-gray-500 py-2">
+                <span className="w-4 h-4 border-2 border-gray-400 border-t-white rounded-full animate-spin"></span>
+                <span>Fetching latest construction news...</span>
+              </div>
+            ) : newsError ? (
+              <div className="text-red-600 py-2">{newsError}</div>
+            ) : newsData ? (
+              <div className="bg-white border border-[#8c9ba8] p-3 shadow-sm markdown-body text-[11px] prose-sm">
+                <Markdown>{newsData.text}</Markdown>
+                {newsData.groundingChunks?.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
+                    <strong className="text-gray-700">Sources:</strong>
+                    <ul className="list-disc pl-4 mt-1 space-y-1">
+                      {newsData.groundingChunks.filter(c => c.web?.uri && c.web?.title).map((chunk, idx) => (
+                         <li key={idx}>
+                           <a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">
+                             {chunk.web.title}
+                           </a>
+                         </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
