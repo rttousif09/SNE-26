@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import Markdown from 'react-markdown';
 
@@ -65,10 +66,17 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="text-[11px] flex space-x-4">
+    <motion.div 
+      initial="hidden"
+      animate="show"
+      variants={{
+        show: { transition: { staggerChildren: 0.1 } }
+      }}
+      className="text-[11px] flex space-x-4"
+    >
       {/* Left Column */}
       <div className="flex-1 space-y-4">
-        <div>
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="General Information" />
           <div className="px-2">
             <KeyValue label="Operational Status" value={<><span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1"></span>All services started</>} />
@@ -79,9 +87,9 @@ export const Dashboard: React.FC = () => {
             <KeyValue label="Platform" value="SUSE Linux Enterprise Server 15" />
             <KeyValue label="Hardware Manufacturer" value="Hewlett-Packard" />
           </div>
-        </div>
+        </motion.div>
 
-        <div>
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Financial Overview (INR)" />
           <div className="px-2">
             <BarChart label="Total Budget Allocated" used={totalBudget * 0.6} total={totalBudget} colorClass="bg-[#a4d49d]" />
@@ -98,9 +106,9 @@ export const Dashboard: React.FC = () => {
               <a href="#" className="text-blue-600 underline">More Information</a>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div>
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Resource Allocation" />
           <div className="px-2">
             <BarChart label="Workers Deployed / Total Capacity" used={workers.length} total={100} colorClass="bg-[#a4d49d]" />
@@ -109,9 +117,9 @@ export const Dashboard: React.FC = () => {
               <a href="#" className="text-blue-600 underline">More Information</a>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div>
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Industry News & Regulatory Updates" />
           <div className="px-2">
             {isLoadingNews ? (
@@ -141,12 +149,12 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : null}
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Right Column */}
       <div className="flex-1 space-y-4">
-        <div>
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Current Alerts and Messages" />
           <div className="px-2 space-y-1">
             <div className="flex items-center text-red-600"><span className="w-3 h-3 bg-red-600 text-white text-[8px] flex items-center justify-center font-bold mr-2 rounded-sm">!</span> 2 alerts with HIGH priority</div>
@@ -162,9 +170,9 @@ export const Dashboard: React.FC = () => {
               <a href="#" className="text-blue-600 underline">Show traces</a>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div>
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Site Distribution" />
           <div className="px-2">
             <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
@@ -176,19 +184,19 @@ export const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {projects.map(p => (
-                  <tr key={p.id} className="hover:bg-[#e6f2ff] cursor-default">
+                {projects.map((p, idx) => (
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={p.id} className="hover:bg-[#e6f2ff] cursor-default">
                     <td className="border border-[#8c9ba8] px-2 py-1">{p.name}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right">{workers.filter(w => w.projectId === p.id).length}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right">{p.budget.toLocaleString()}</td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
 
-        <div>
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Project Health (Collection Efficiency)" />
           <div className="px-2 space-y-3">
             {projects.map(p => {
@@ -256,8 +264,8 @@ export const Dashboard: React.FC = () => {
               );
             })}
           </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };

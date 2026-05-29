@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { Save, Edit, X, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -129,10 +130,10 @@ export const Kharchi: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredKharchis.map((kharchi) => {
+            {filteredKharchis.map((kharchi, idx) => {
               const worker = getWorkerDetails(kharchi.workerId);
               return (
-                <tr key={kharchi.id} className="hover:bg-[#e6f2ff] cursor-default">
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: idx * 0.03 || 0 }} key={kharchi.id} className="hover:bg-[#e6f2ff] cursor-default">
                   <td className="border border-[#8c9ba8] px-2 py-1">{worker.srNo}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1">{worker.idNo}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1">{worker.name}</td>
@@ -150,13 +151,13 @@ export const Kharchi: React.FC = () => {
                       </button>
                     </td>
                   )}
-                </tr>
+                </motion.tr>
               );
             })}
             {filteredKharchis.length === 0 && (
-              <tr>
+              <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                 <td colSpan={isReadOnly ? 5 : 6} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No kharchi records found for this project.</td>
-              </tr>
+              </motion.tr>
             )}
           </tbody>
         </table>

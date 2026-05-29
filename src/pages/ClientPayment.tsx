@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, RefreshCw, AlertCircle, ArrowUpRight, ArrowDownRight, Landmark, Printer, FileSpreadsheet, Download } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -337,10 +338,29 @@ export const ClientPayment: React.FC = () => {
         </div>
       </div>
 
+      <AnimatePresence>
       {isAdding && (
-        <div className="sap-panel p-2">
-          <div className="font-semibold mb-2 border-b border-[#8c9ba8] pb-1 text-[#0056b3]">
-            {editingId ? 'Edit Payment Details' : 'New Payment Received'}
+        <>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
+          onClick={handleCancel}
+        />
+        <motion.div 
+          initial={{ opacity: 0, height: 0, y: -10 }}
+          animate={{ opacity: 1, height: 'auto', y: 0 }}
+          exit={{ opacity: 0, height: 0, scale: 0.95 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          className="sap-panel relative z-50 p-4 mb-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+        >
+          <div className="font-extrabold mb-3 border-b border-[#0056b3]/30 pb-1.5 text-[#0056b3] uppercase tracking-wider text-xs flex justify-between items-center">
+            <span>{editingId ? 'Edit Payment Details' : 'New Payment Received'}</span>
+            <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
+              <X size={12} />
+            </button>
           </div>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-x-4 gap-y-2 max-w-2xl">
             <div className="flex items-center">
@@ -376,16 +396,16 @@ export const ClientPayment: React.FC = () => {
                 <Save size={12} className="text-[#0056b3]"/>
                 <span>{editingId ? 'Update' : 'Save'}</span>
               </button>
-              {editingId && (
-                <button type="button" onClick={handleCancel} className="sap-btn flex items-center space-x-1">
-                  <X size={12} className="text-red-600"/>
-                  <span>Cancel</span>
-                </button>
-              )}
+              <button type="button" onClick={handleCancel} className="sap-btn flex items-center space-x-1">
+                <X size={12} className="text-red-600"/>
+                <span>Cancel</span>
+              </button>
             </div>
           </form>
-        </div>
+        </motion.div>
+        </>
       )}
+      </AnimatePresence>
 
       {/* Corporate Ledger KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-gray-50 p-2 border border-[#8c9ba8]">
@@ -545,7 +565,7 @@ export const ClientPayment: React.FC = () => {
                 const balAbsolute = Math.abs(currentBalance);
 
                 return (
-                  <tr key={summary.id} className="hover:bg-[#e6f2ff] cursor-default text-[11px] divide-x divide-gray-200 border-b border-gray-150">
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={summary.id} className="hover:bg-[#e6f2ff] cursor-default text-[11px] divide-x divide-gray-200 border-b border-gray-150">
                     <td className="excel-row-num">{idx + 3}</td>
                     <td className="border border-[#bcc5cf] px-2 py-1.5 font-semibold text-[#002f6c]">{summary.name}</td>
                     <td className="border border-[#bcc5cf] px-2 py-1.5 text-right font-mono">
@@ -584,18 +604,18 @@ export const ClientPayment: React.FC = () => {
                         )}
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               })}
               {filteredProjectSummary.length === 0 && (
-                <tr>
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td className="excel-row-num">3</td>
                   <td colSpan={7} className="border border-[#bcc5cf] px-2 py-4 text-center text-gray-500 font-medium">No active site details found for the current selection.</td>
-                </tr>
+                </motion.tr>
               )}
               {/* Double Line Excel Sum totals row */}
               {filteredProjectSummary.length > 0 && (
-                <tr className="bg-gray-100 font-bold border-t-2 border-b-2 border-double border-gray-600 divide-x divide-gray-300 select-none">
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-bold border-t-2 border-b-2 border-double border-gray-600 divide-x divide-gray-300 select-none">
                   <td className="excel-row-num">∑</td>
                   <td className="px-2 py-1.5 text-left font-bold text-gray-800 uppercase tracking-wider select-none font-sans">AGGREGATE SUM</td>
                   <td className="px-2 py-1.5 text-right font-mono font-bold">
@@ -619,7 +639,7 @@ export const ClientPayment: React.FC = () => {
                       {(adjustmentMode === 'net' ? displayTotals.netBalance : displayTotals.grossBalance) <= 0 ? '(ADV)' : '(DUE)'}
                     </span>
                   </td>
-                </tr>
+                </motion.tr>
               )}
             </tbody>
           </table>
@@ -672,7 +692,7 @@ export const ClientPayment: React.FC = () => {
             </thead>
             <tbody>
               {filteredClientPayments.map((payment, idx) => (
-                <tr key={payment.id} className="hover:bg-[#e6f2ff] cursor-default text-[11px] divide-x divide-gray-200 border-b border-gray-150">
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={payment.id} className="hover:bg-[#e6f2ff] cursor-default text-[11px] divide-x divide-gray-200 border-b border-gray-150">
                   <td className="excel-row-num">{idx + 3}</td>
                   <td className="border border-[#bcc5cf] px-2 py-1 font-mono">{payment.date}</td>
                   <td className="border border-[#bcc5cf] px-2 py-1 font-semibold text-[#002f6c] truncate max-w-28" title={getProjectName(payment.projectId)}>
@@ -702,23 +722,23 @@ export const ClientPayment: React.FC = () => {
                       </button>
                     </td>
                   )}
-                </tr>
+                </motion.tr>
               ))}
               {filteredClientPayments.length === 0 && (
-                <tr>
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td className="excel-row-num">3</td>
                   <td colSpan={isReadOnly ? 5 : 6} className="border border-[#bcc5cf] px-2 py-4 text-center text-gray-500">No payment history found for selection.</td>
-                </tr>
+                </motion.tr>
               )}
               {filteredClientPayments.length > 0 && (
-                <tr className="bg-gray-100 font-bold border-t-2 border-b-2 border-double border-gray-600 divide-x divide-gray-300 select-none">
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-bold border-t-2 border-b-2 border-double border-gray-600 divide-x divide-gray-300 select-none">
                   <td className="excel-row-num">∑</td>
                   <td colSpan={4} className="px-2 py-1.5 text-left font-bold text-gray-800 uppercase font-sans">TOTAL SUM OF CREDITS</td>
                   <td className="px-2 py-1.5 text-right text-green-800 font-mono font-bold">
                     {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayTotals.received)}
                   </td>
                   <td className="border border-[#bcc5cf] px-2 py-1 text-center print:hidden"></td>
-                </tr>
+                </motion.tr>
               )}
             </tbody>
           </table>

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, Search, Printer, FileSpreadsheet, Briefcase, User, Calendar, CreditCard, DollarSign, ArrowRight } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { motion, AnimatePresence } from 'motion/react';
 
 export const Workers: React.FC = () => {
   const { 
@@ -67,6 +68,14 @@ export const Workers: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check if workerId already exists
+    const existingWorker = workers.find(w => w.workerId === formData.workerId);
+    if (existingWorker && existingWorker.id !== editingId) {
+      alert(`Worker ID "${formData.workerId}" is already registered to ${existingWorker.name}! Please use a unique ID.`);
+      return;
+    }
+    
     if (editingId) {
       updateWorker(editingId, { ...formData });
     } else {
@@ -363,10 +372,29 @@ export const Workers: React.FC = () => {
           </div>
 
           {/* Add / Edit Worker Form */}
+          <AnimatePresence>
           {isAdding && (
-            <div className="sap-panel p-3 mb-4 shadow-sm border border-[#0056b3]/40 bg-[#f7f9fc]">
-              <div className="font-extrabold mb-3 border-b border-[#0056b3]/30 pb-1.5 text-[#0056b3] uppercase tracking-wider text-xs">
-                {editingId ? 'Edit Selected Worker' : 'Register New Worker'}
+            <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
+              onClick={handleCancel}
+            />
+            <motion.div 
+              initial={{ opacity: 0, height: 0, y: -10 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="sap-panel relative z-50 p-4 mb-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+            >
+              <div className="font-extrabold mb-3 border-b border-[#0056b3]/30 pb-1.5 text-[#0056b3] uppercase tracking-wider text-xs flex justify-between items-center">
+                <span>{editingId ? 'Edit Selected Worker' : 'Register New Worker'}</span>
+                <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
+                  <X size={12} />
+                </button>
               </div>
               <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
                 <div className="flex items-center">
@@ -411,8 +439,10 @@ export const Workers: React.FC = () => {
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
+            </>
           )}
+          </AnimatePresence>
 
           {/* Master Spreadsheet Table */}
           <table className="w-full border-collapse border border-[#8c9ba8] bg-white shadow-sm">
@@ -430,45 +460,61 @@ export const Workers: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredWorkers.map((worker) => (
-                <tr key={worker.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150">
-                  <td className="border border-[#bcc5cf] px-2 py-1.5 text-center font-mono text-gray-500 font-semibold">{worker.serialNo}</td>
-                  <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono text-blue-900 font-bold">{worker.workerId}</td>
-                  <td className="border border-[#bcc5cf] px-3 py-1.5 font-bold text-gray-800">{worker.name}</td>
-                  <td className="border border-[#bcc5cf] px-3 py-1.5 text-gray-700">{getProjectName(worker.projectId)}</td>
-                  <td className="border border-[#bcc5cf] px-3 py-1.5 font-sans"><span className="text-xs bg-slate-100 border border-slate-300 px-1.5 py-0.2 rounded-sm font-semibold">{worker.designation}</span></td>
-                  <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono">{worker.joiningDate}</td>
-                  <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono">{worker.exitDate || <span className="text-gray-400 italic">Active</span>}</td>
-                  <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
-                    <button
-                      onClick={() => {
-                        setSelectedWorkerId(worker.id);
-                        setActiveView('ledger');
-                      }}
-                      className="text-[#0056b3] bg-blue-50 border border-blue-200 hover:bg-[#002f6c] hover:text-white transition px-2 py-0.5 rounded flex items-center mx-auto text-[9.5px] font-bold"
-                    >
-                      <span>Ledger Account</span>
-                      <ArrowRight size={10} className="ml-1" />
-                    </button>
-                  </td>
-                  {!isReadOnly && (
-                    <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
-                      <div className="flex items-center justify-center space-x-2">
-                        <button onClick={() => handleEdit(worker)} className="text-blue-600 hover:text-blue-800 p-0.5 border border-transparent hover:border-blue-300 rounded" title="Edit Profile Details">
-                          <Edit size={12} />
-                        </button>
-                        <button onClick={() => setDeleteId(worker.id)} className="text-red-600 hover:text-red-800 p-0.5 border border-transparent hover:border-red-300 rounded" title="Delete Worker Registration">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+              {Object.entries(
+                filteredWorkers.reduce((acc, worker) => {
+                  const pId = worker.projectId || 'unassigned';
+                  if (!acc[pId]) acc[pId] = [];
+                  acc[pId].push(worker);
+                  return acc;
+                }, {} as Record<string, typeof filteredWorkers>)
+              ).map(([pId, projectWorkers]) => (
+                <React.Fragment key={pId}>
+                  <tr className="bg-[#cbd4df] font-bold border-t border-b border-[#8c9ba8]">
+                    <td colSpan={isReadOnly ? 8 : 9} className="px-3 py-1.5 border border-[#bcc5cf] text-[#002f6c] uppercase tracking-wider text-[10.5px]">
+                      🏗️ {pId === 'unassigned' ? 'Unassigned Site / General Working Setup' : getProjectName(pId)} ({projectWorkers.length} Worker{projectWorkers.length !== 1 && 's'})
                     </td>
-                  )}
-                </tr>
+                  </tr>
+                  {projectWorkers.map((worker, idx) => (
+                    <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={worker.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150">
+                      <td className="border border-[#bcc5cf] px-2 py-1.5 text-center font-mono text-gray-500 font-semibold">{worker.serialNo}</td>
+                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono text-blue-900 font-bold">{worker.workerId}</td>
+                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-bold text-gray-800">{worker.name}</td>
+                      <td className="border border-[#bcc5cf] px-3 py-1.5 text-gray-700">{getProjectName(worker.projectId)}</td>
+                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-sans"><span className="text-xs bg-slate-100 border border-slate-300 px-1.5 py-0.2 rounded-sm font-semibold">{worker.designation}</span></td>
+                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono">{worker.joiningDate}</td>
+                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono">{worker.exitDate || <span className="text-gray-400 italic">Active</span>}</td>
+                      <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
+                        <button
+                          onClick={() => {
+                            setSelectedWorkerId(worker.id);
+                            setActiveView('ledger');
+                          }}
+                          className="text-[#0056b3] bg-blue-50 border border-blue-200 hover:bg-[#002f6c] hover:text-white transition px-2 py-0.5 rounded flex items-center mx-auto text-[9.5px] font-bold"
+                        >
+                          <span>Ledger Account</span>
+                          <ArrowRight size={10} className="ml-1" />
+                        </button>
+                      </td>
+                      {!isReadOnly && (
+                        <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
+                          <div className="flex items-center justify-center space-x-2">
+                            <button onClick={() => handleEdit(worker)} className="text-blue-600 hover:text-blue-800 p-0.5 border border-transparent hover:border-blue-300 rounded" title="Edit Profile Details">
+                              <Edit size={12} />
+                            </button>
+                            <button onClick={() => setDeleteId(worker.id)} className="text-red-600 hover:text-red-800 p-0.5 border border-transparent hover:border-red-300 rounded" title="Delete Worker Registration">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </motion.tr>
+                  ))}
+                </React.Fragment>
               ))}
               {filteredWorkers.length === 0 && (
-                <tr>
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isReadOnly ? 8 : 9} className="border border-[#8c9ba8] px-3 py-8 text-center text-gray-500 font-semibold italic bg-amber-50/10">No workers registered matching search query terms.</td>
-                </tr>
+                </motion.tr>
               )}
             </tbody>
           </table>
@@ -757,7 +803,7 @@ export const Workers: React.FC = () => {
                         {workerLedgerData.rollingChronologicalLedger.map((row, idx) => {
                           const isPositiveBal = row.runningBalance >= 0;
                           return (
-                            <tr key={idx} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
+                            <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={idx} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
                               <td className="excel-row-num">{row.rowId}</td>
                               <td className="border border-[#bcc5cf] px-2 py-1 font-mono text-gray-700">{row.date}</td>
                               <td className="border border-[#bcc5cf] px-2 py-1 font-bold">
@@ -790,18 +836,18 @@ export const Workers: React.FC = () => {
                                   <span>{currencyFormat(row.runningBalance)}</span>
                                 </div>
                               </td>
-                            </tr>
+                            </motion.tr>
                           );
                         })}
                         {workerLedgerData.rollingChronologicalLedger.length === 0 && (
-                          <tr>
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                             <td className="excel-row-num">3</td>
                             <td colSpan={8} className="border border-[#bcc5cf] px-3 py-6 text-center text-gray-400 italic">No account transactions registered yet. This worker ledger is currently empty.</td>
-                          </tr>
+                          </motion.tr>
                         )}
                         {/* Double outline bottom Aggregate totals */}
                         {workerLedgerData.rollingChronologicalLedger.length > 0 && (
-                          <tr className="bg-[#f8fafc] font-bold border-t-2 border-b-2 border-double border-gray-500 divide-x divide-gray-200 select-none text-[10.5px]">
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-[#f8fafc] font-bold border-t-2 border-b-2 border-double border-gray-500 divide-x divide-gray-200 select-none text-[10.5px]">
                             <td className="excel-row-num">∑</td>
                             <td className="px-2 py-1.5 text-left text-gray-700 uppercase font-bold tracking-wide">AGGREGATE FORMULA TOTALS</td>
                             <td colSpan={3} className="text-center font-normal italic text-gray-400 text-[9px]">(Work credits, mess bills, and cash pay clearances aggregated)</td>
@@ -811,7 +857,7 @@ export const Workers: React.FC = () => {
                             <td className={`px-2 py-1.5 text-right font-mono font-black border-l border-[#bcc5cf] ${workerLedgerData.overallBalanceStatus >= 0 ? 'text-[#107c41] bg-emerald-50/15' : 'text-orange-700 bg-amber-50/10'}`}>
                               {currencyFormat(workerLedgerData.overallBalanceStatus)}
                             </td>
-                          </tr>
+                          </motion.tr>
                         )}
                       </tbody>
                     </table>
@@ -833,9 +879,9 @@ export const Workers: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {workerLedgerData.wPayments.map((pay, i) => (
-                          <tr key={pay.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
-                            <td className="excel-row-num">{i + 3}</td>
+                        {workerLedgerData.wPayments.map((pay, idx) => (
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: idx * 0.03 || 0 }} key={pay.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
+                            <td className="excel-row-num">{idx + 3}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-bold text-cyan-900 font-mono">{pay.month}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-mono">{pay.date}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-semibold text-gray-750">{getProjectName(pay.projectId)}</td>
@@ -844,16 +890,16 @@ export const Workers: React.FC = () => {
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-right font-mono text-red-500">{currencyFormat(pay.kharchiDeduction)}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-right font-mono text-red-500">{currencyFormat(pay.advanceDeduction)}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-right font-mono text-emerald-800 font-extrabold bg-[#eefcf4]">{currencyFormat(pay.netPayment)}</td>
-                          </tr>
+                          </motion.tr>
                         ))}
                         {workerLedgerData.wPayments.length === 0 && (
-                          <tr>
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                             <td className="excel-row-num">3</td>
                             <td colSpan={8} className="border border-[#bcc5cf] px-3 py-6 text-center text-gray-400 italic">No monthly payroll sheets recorded for this worker.</td>
-                          </tr>
+                          </motion.tr>
                         )}
                         {workerLedgerData.wPayments.length > 0 && (
-                          <tr className="bg-gray-100 font-bold border-t border-b border-[#bcc5cf] text-[10.5px]">
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-bold border-t border-b border-[#bcc5cf] text-[10.5px]">
                             <td className="excel-row-num">∑</td>
                             <td className="px-2 py-1.5 text-left text-gray-800 font-bold uppercase">PAYMENTS ACCUMULATION</td>
                             <td colSpan={2}></td>
@@ -862,7 +908,7 @@ export const Workers: React.FC = () => {
                             <td className="px-2 py-1.5 text-right font-mono text-red-650">{currencyFormat(workerLedgerData.wPayments.reduce((s, wp)=> s + (wp.kharchiDeduction || 0), 0))}</td>
                             <td className="px-2 py-1.5 text-right font-mono text-red-650">{currencyFormat(workerLedgerData.wPayments.reduce((s, wp)=> s + (wp.advanceDeduction || 0), 0))}</td>
                             <td className="px-2 py-1.5 text-right font-mono text-green-800 bg-[#eefcf4]">{currencyFormat(workerLedgerData.totalNetPaycheckSettlements)}</td>
-                          </tr>
+                          </motion.tr>
                         )}
                       </tbody>
                     </table>
@@ -881,27 +927,27 @@ export const Workers: React.FC = () => {
                       </thead>
                       <tbody>
                         {workerLedgerData.wKharchis.map((kharchi, i) => (
-                          <tr key={kharchi.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={kharchi.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
                             <td className="excel-row-num">{i + 3}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-mono text-gray-700">{kharchi.date}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-semibold text-gray-800">{getProjectName(kharchi.projectId)}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-gray-400 italic">Pocket kharchi allowance distribution</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-right font-mono font-bold text-red-650">{currencyFormat(kharchi.amount)}</td>
-                          </tr>
+                          </motion.tr>
                         ))}
                         {workerLedgerData.wKharchis.length === 0 && (
-                          <tr>
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                             <td className="excel-row-num">3</td>
                             <td colSpan={4} className="border border-[#bcc5cf] px-3 py-6 text-center text-gray-400 italic">No pocket money (kharchi) entries registered for this worker in the database logs.</td>
-                          </tr>
+                          </motion.tr>
                         )}
                         {workerLedgerData.wKharchis.length > 0 && (
-                          <tr className="bg-gray-100 font-bold border-t border-b border-[#bcc5cf] text-[10.5px]">
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-bold border-t border-b border-[#bcc5cf] text-[10.5px]">
                             <td className="excel-row-num">∑</td>
                             <td className="px-2 py-1.5 text-left text-gray-800 font-bold uppercase">CUMULATIVE KHARCHI PUSHED</td>
                             <td colSpan={2}></td>
                             <td className="px-2 py-1.5 text-right font-mono text-red-700">{currencyFormat(workerLedgerData.totalKharchiCashReceived)}</td>
-                          </tr>
+                          </motion.tr>
                         )}
                       </tbody>
                     </table>
@@ -921,28 +967,28 @@ export const Workers: React.FC = () => {
                       </thead>
                       <tbody>
                         {workerLedgerData.wAdvances.map((adv, i) => (
-                          <tr key={adv.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={adv.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]">
                             <td className="excel-row-num">{i + 3}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-mono text-gray-700">{adv.date}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-semibold text-gray-800">{getProjectName(adv.projectId)}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-bold text-[#002f6c]">{adv.paidBy}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-gray-500 max-w-72 truncate" title={adv.remarks}>{adv.remarks || '—'}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-right font-mono font-bold text-red-700 bg-red-50/5">{currencyFormat(adv.amount)}</td>
-                          </tr>
+                          </motion.tr>
                         ))}
                         {workerLedgerData.wAdvances.length === 0 && (
-                          <tr>
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                             <td className="excel-row-num">3</td>
                             <td colSpan={5} className="border border-[#bcc5cf] px-3 py-6 text-center text-gray-400 italic">No advance personal loans recorded for this worker.</td>
-                          </tr>
+                          </motion.tr>
                         )}
                         {workerLedgerData.wAdvances.length > 0 && (
-                          <tr className="bg-gray-100 font-bold border-t border-b border-[#bcc5cf] text-[10.5px]">
+                          <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-bold border-t border-b border-[#bcc5cf] text-[10.5px]">
                             <td className="excel-row-num">∑</td>
                             <td className="px-2 py-1.5 text-left text-gray-800 font-bold uppercase">TOTAL ADVANCES DISBURSED</td>
                             <td colSpan={3}></td>
                             <td className="px-2 py-1.5 text-right font-mono text-red-700">{currencyFormat(workerLedgerData.totalAdvancesLoanReceived)}</td>
-                          </tr>
+                          </motion.tr>
                         )}
                       </tbody>
                     </table>

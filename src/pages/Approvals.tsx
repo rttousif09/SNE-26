@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck } from 'lucide-react';
 
@@ -285,10 +286,29 @@ export const Approvals: React.FC = () => {
             </div>
           </div>
 
+          <AnimatePresence>
           {isAdding && !isOwner && (
-            <div className="sap-panel p-2.5 max-w-lg border-l-4 border-l-[#0056b3]">
-              <div className="font-bold mb-3 pb-1 border-b border-[#8c9ba8] text-[#0056b3] uppercase tracking-wider text-[10px]">
-                Submit New Worker Advance Request (Owner Approval Required)
+            <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
+              onClick={handleCancel}
+            />
+            <motion.div 
+              initial={{ opacity: 0, height: 0, y: -10 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="sap-panel relative z-50 p-4 mb-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+            >
+              <div className="font-extrabold mb-3 pb-1 border-b border-[#8c9ba8] text-[#0056b3] uppercase tracking-wider text-[10px] flex justify-between items-center">
+                <span>Submit New Worker Advance Request (Owner Approval Required)</span>
+                <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
+                  <X size={12} />
+                </button>
               </div>
               <form onSubmit={handleSubmit} className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
@@ -368,8 +388,10 @@ export const Approvals: React.FC = () => {
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
+            </>
           )}
+          </AnimatePresence>
 
           <table className="w-full border-collapse border border-[#8c9ba8] bg-white text-[11px]">
             <thead className="sap-header bg-[#eef2f6]">
@@ -396,7 +418,7 @@ export const Approvals: React.FC = () => {
                   statusBadge = 'bg-yellow-100 text-yellow-800 border-yellow-300';
                 }
                 return (
-                  <tr key={app.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={app.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getWorkerName(app.workerId)}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans">{getProjectName(app.projectId)}</td>
@@ -443,15 +465,15 @@ export const Approvals: React.FC = () => {
                         </button>
                       </td>
                     )}
-                  </tr>
+                  </motion.tr>
                 );
               })}
               {approvals.length === 0 && (
-                <tr>
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isOwner ? 8 : 8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No worker advance requests have been generated.
                   </td>
-                </tr>
+                </motion.tr>
               )}
             </tbody>
           </table>
@@ -495,7 +517,7 @@ export const Approvals: React.FC = () => {
                   statusBadge = 'bg-yellow-100 text-yellow-800 border-yellow-300';
                 }
                 return (
-                  <tr key={sheet.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={sheet.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getProjectName(sheet.projectId)}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono font-bold">{sheet.month}</td>
@@ -546,15 +568,15 @@ export const Approvals: React.FC = () => {
                         )}
                       </td>
                     )}
-                  </tr>
+                  </motion.tr>
                 );
               })}
               {paymentSheetApprovals.length === 0 && (
-                <tr>
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isOwner ? 8 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No worker monthly payment sheets have been submitted for approval yet.
                   </td>
-                </tr>
+                </motion.tr>
               )}
             </tbody>
           </table>

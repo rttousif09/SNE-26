@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -347,10 +348,29 @@ export const Billing: React.FC = () => {
         </div>
       </div>
 
+      <AnimatePresence>
       {isAdding && (
-        <div className="sap-panel p-2 mb-4">
-          <div className="font-semibold mb-2 border-b border-[#8c9ba8] pb-1 text-[#0056b3]">
-            {editingId ? 'Edit Bill Details' : 'New Bill Details'}
+        <>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
+          onClick={handleCancel}
+        />
+        <motion.div 
+          initial={{ opacity: 0, height: 0, y: -10 }}
+          animate={{ opacity: 1, height: 'auto', y: 0 }}
+          exit={{ opacity: 0, height: 0, scale: 0.95 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          className="sap-panel relative z-50 p-4 mb-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+        >
+          <div className="font-extrabold mb-3 border-b border-[#0056b3]/30 pb-1.5 text-[#0056b3] uppercase tracking-wider text-xs flex justify-between items-center">
+            <span>{editingId ? 'Edit Bill Details' : 'New Bill Details'}</span>
+            <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
+              <X size={12} />
+            </button>
           </div>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-x-4 gap-y-2 max-w-2xl">
             <div className="flex items-center">
@@ -530,16 +550,16 @@ export const Billing: React.FC = () => {
                 <Save size={12} className="text-[#0056b3]"/>
                 <span>{editingId ? 'Update' : 'Save'}</span>
               </button>
-              {editingId && (
-                <button type="button" onClick={handleCancel} className="sap-btn flex items-center space-x-1">
-                  <X size={12} className="text-red-600"/>
-                  <span>Cancel</span>
-                </button>
-              )}
+              <button type="button" onClick={handleCancel} className="sap-btn flex items-center space-x-1">
+                <X size={12} className="text-red-600"/>
+                <span>Cancel</span>
+              </button>
             </div>
           </form>
-        </div>
+        </motion.div>
+        </>
       )}
+      </AnimatePresence>
 
       <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
         <thead className="sap-header">
@@ -560,14 +580,14 @@ export const Billing: React.FC = () => {
           </tr>
         </thead>
         <tbody>
-          {billings.map((bill) => {
+          {billings.map((bill, idx) => {
             const tdsVal = bill.tds ?? 0;
             const retVal = bill.retention ?? 0;
             const gstVal = bill.gst ?? 0;
             const netAmount = bill.amount - tdsVal - retVal + gstVal;
 
             return (
-              <tr key={bill.id} className="hover:bg-[#e6f2ff] cursor-default">
+              <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={bill.id} className="hover:bg-[#e6f2ff] cursor-default">
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.srNo}</td>
                 <td className="border border-[#8c9ba8] px-2 py-1">{getProjectName(bill.projectId)}</td>
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.billNo}</td>
@@ -615,13 +635,13 @@ export const Billing: React.FC = () => {
                     </button>
                   </td>
                 )}
-              </tr>
+              </motion.tr>
             );
           })}
           {billings.length === 0 && (
-            <tr>
+            <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
               <td colSpan={isReadOnly ? 12 : 13} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No bills found.</td>
-            </tr>
+            </motion.tr>
           )}
         </tbody>
       </table>

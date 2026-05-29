@@ -601,7 +601,7 @@ export const ExpensesSummary: React.FC = () => {
                     {processedLedger.map((row, idx) => {
                       const isCredit = (row.crBalance || 0) > 0;
                       return (
-                        <tr 
+                        <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} 
                           key={row.id} 
                           className={`divide-x divide-gray-250 border-b border-gray-300 ${
                             isCredit ? 'bg-[#c6efce]/40 font-semibold text-emerald-950' : 'hover:bg-gray-50'
@@ -649,7 +649,7 @@ export const ExpensesSummary: React.FC = () => {
                           <td className="border border-gray-300 p-1 text-right font-mono font-bold text-blue-900 bg-blue-50/10 w-24">
                             ₹{Number(row.avlBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
-                        </tr>
+                        </motion.tr>
                       );
                     })}
                   </tbody>
@@ -692,7 +692,7 @@ export const ExpensesSummary: React.FC = () => {
               {processedLedger.map((row, idx) => {
                 const isCredit = (row.crBalance || 0) > 0;
                 return (
-                  <tr 
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} 
                     key={row.id} 
                     className={`divide-x divide-gray-350 border-b border-gray-400 ${
                       isCredit ? 'bg-[#c6efce]/45 text-emerald-950 font-bold' : 'hover:bg-gray-50'
@@ -740,7 +740,7 @@ export const ExpensesSummary: React.FC = () => {
                     <td className="border border-gray-400 p-1 text-right font-mono font-bold text-[#002f6c] bg-blue-50/20 w-24">
                       ₹{Number(row.avlBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               })}
             </tbody>

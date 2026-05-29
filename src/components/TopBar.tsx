@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown } from 'lucide-react';
+import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 
 interface TopBarProps {
@@ -118,6 +118,7 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout }) => {
         <div className="flex items-center space-x-1 border-r border-[#8c9ba8] pr-1 mr-1">
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowLeft size={14} className="text-green-700" /></button>
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowRight size={14} className="text-green-700" /></button>
+          <button title="Print view" onClick={() => window.print()} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Printer size={14} className="text-gray-700" /></button>
         </div>
         <div className="flex items-center space-x-1">
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Play size={14} className="text-green-600" /></button>

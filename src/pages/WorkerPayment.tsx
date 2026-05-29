@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -645,10 +646,10 @@ export const WorkerPayment: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPayments.map((payment) => {
+              {filteredPayments.map((payment, idx) => {
                 const worker = getWorkerDetails(payment.workerId);
                 return (
-                  <tr key={payment.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={payment.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.srNo || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.idNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{worker.name}</td>
@@ -674,13 +675,13 @@ export const WorkerPayment: React.FC = () => {
                         </div>
                       </td>
                     )}
-                  </tr>
+                  </motion.tr>
                 );
               })}
               
               {/* Total Aggregate Sum Row (Excel structure matching) */}
               {filteredPayments.length > 0 && (
-                <tr className="bg-gray-100 font-mono font-bold text-gray-900 border-t-2 border-[#8c9ba8]">
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-mono font-bold text-gray-900 border-t-2 border-[#8c9ba8]">
                   <td colSpan={5} className="border border-[#8c9ba8] px-2 py-1 text-right font-sans uppercase text-[10px]">
                     Total Month Summary:
                   </td>
@@ -703,15 +704,15 @@ export const WorkerPayment: React.FC = () => {
                     ₹{totals.net.toLocaleString('en-IN')}
                   </td>
                   {!isLocked && <td className="border border-[#8c9ba8] px-2 py-1"></td>}
-                </tr>
+                </motion.tr>
               )}
 
               {filteredPayments.length === 0 && (
-                <tr>
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isLocked ? 11 : 12} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No payment records found for {selectedMonth} in this project. Use controls above to record new wage ledgers.
                   </td>
-                </tr>
+                </motion.tr>
               )}
             </tbody>
           </table>
@@ -804,7 +805,7 @@ export const WorkerPayment: React.FC = () => {
                   </thead>
                   <tbody>
                     {formData.supplyDetails.map((detail, idx) => (
-                      <tr key={detail.id} className="hover:bg-gray-50 group border-b">
+                      <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={detail.id} className="hover:bg-gray-50 group border-b">
                         <td className="px-3 py-2 font-semibold text-gray-800">{detail.description}</td>
                         <td className="px-3 py-2 text-right font-mono">{detail.hours}</td>
                         <td className="px-3 py-2 text-right font-mono text-green-700">₹{detail.rate.toLocaleString('en-IN')}</td>
@@ -819,14 +820,14 @@ export const WorkerPayment: React.FC = () => {
                             <Trash2 size={12} />
                           </button>
                         </td>
-                      </tr>
+                      </motion.tr>
                     ))}
                     {formData.supplyDetails.length === 0 && (
-                      <tr>
+                      <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                         <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">
                           No supply work entries added yet.
                         </td>
-                      </tr>
+                      </motion.tr>
                     )}
                   </tbody>
                   {formData.supplyDetails.length > 0 && (
@@ -900,10 +901,10 @@ export const WorkerPayment: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPayments.map((payment) => {
+                  {filteredPayments.map((payment, idx) => {
                     const worker = getWorkerDetails(payment.workerId);
                     return (
-                      <tr key={payment.id} className="hover:bg-gray-50 border-b print:border-gray-800 font-mono">
+                      <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={payment.id} className="hover:bg-gray-50 border-b print:border-gray-800 font-mono">
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-gray-700 font-bold text-center">{worker.srNo || '-'}</td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-gray-700 font-bold">{worker.idNo}</td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 font-sans font-semibold text-gray-900">{worker.name}</td>
@@ -917,15 +918,15 @@ export const WorkerPayment: React.FC = () => {
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right font-bold text-green-900">
                           ₹{payment.netPayment.toLocaleString('en-IN')}
                         </td>
-                      </tr>
+                      </motion.tr>
                     );
                   })}
                   {filteredPayments.length === 0 && (
-                    <tr>
+                    <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                       <td colSpan={11} className="border border-gray-300 print:border-gray-800 px-2 py-6 text-center text-gray-500 italic">
                         No payment records found for {selectedMonth}.
                       </td>
-                    </tr>
+                    </motion.tr>
                   )}
                 </tbody>
                 {filteredPayments.length > 0 && (
@@ -1006,7 +1007,7 @@ export const WorkerPayment: React.FC = () => {
                 </thead>
                 <tbody>
                   {allSupplyWorksInfo.map((work, idx) => (
-                    <tr key={`${work.paymentId}-${work.id}`} className="hover:bg-gray-50">
+                    <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={`${work.paymentId}-${work.id}`} className="hover:bg-gray-50">
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1 text-center font-mono text-gray-500">{idx + 1}</td>
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1 font-semibold">{work.workerName}</td>
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1">{work.description}</td>
@@ -1015,14 +1016,14 @@ export const WorkerPayment: React.FC = () => {
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1 text-right font-bold text-gray-900">
                         ₹{work.total.toLocaleString('en-IN')}
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
                   {allSupplyWorksInfo.length === 0 && (
-                    <tr>
+                    <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                       <td colSpan={6} className="border border-gray-300 px-2 py-6 text-center text-gray-500 italic">
                         No supply work records found in {selectedMonth}.
                       </td>
-                    </tr>
+                    </motion.tr>
                   )}
                 </tbody>
                 {allSupplyWorksInfo.length > 0 && (

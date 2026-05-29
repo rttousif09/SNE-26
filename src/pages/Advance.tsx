@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { Save, Edit, X, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -155,10 +156,10 @@ export const Advance: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredAdvances.map((advance) => {
+              {filteredAdvances.map((advance, idx) => {
                 const worker = getWorkerDetails(advance.workerId);
                 return (
-                  <tr key={advance.id} className="hover:bg-[#e6f2ff] cursor-default">
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={advance.id} className="hover:bg-[#e6f2ff] cursor-default">
                     <td className="border border-[#8c9ba8] px-2 py-1">{worker.srNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{worker.idNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{worker.name}</td>
@@ -178,13 +179,13 @@ export const Advance: React.FC = () => {
                         </button>
                       </td>
                     )}
-                  </tr>
+                  </motion.tr>
                 );
               })}
               {filteredAdvances.length === 0 && (
-                <tr>
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isReadOnly ? 7 : 8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No advance records found for this project.</td>
-                </tr>
+                </motion.tr>
               )}
             </tbody>
           </table>

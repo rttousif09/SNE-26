@@ -363,6 +363,10 @@ async function startServer() {
   // Custom API Route for Industry News
   app.get("/api/external-data/news", async (req, res) => {
     try {
+      if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "YOUR_API_KEY") {
+        return res.json({ text: "Please configure a valid GEMINI_API_KEY to see live industry news.", groundingChunks: [] });
+      }
+      
       const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
@@ -375,8 +379,11 @@ async function startServer() {
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       res.json({ text: response.text, groundingChunks: chunks || [] });
     } catch (err: any) {
-      console.error("Gemini API Error:", err);
-      res.status(500).json({ error: err.message || "Failed to fetch news." });
+      // Instead of failing loudly, we provide a graceful fallback so the UI handles it nicely.
+      res.json({ 
+        text: "Could not load news at this time. Please check your API key and try again.", 
+        groundingChunks: [] 
+      });
     }
   });
 

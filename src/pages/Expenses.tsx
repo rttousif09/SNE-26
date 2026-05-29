@@ -91,7 +91,7 @@ export const Expenses: React.FC = () => {
     setIsAdding(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent, shouldExit: boolean = true) => {
     e.preventDefault();
     if (!formData.description) return;
     const isCredit = transactionType === 'credit';
@@ -130,7 +130,19 @@ export const Expenses: React.FC = () => {
       addExpenseEntry(payload);
     }
     
-    handleCancel();
+    if (shouldExit) {
+      handleCancel();
+    } else {
+      setFormData({
+        date: new Date().toISOString().split('T')[0],
+        description: '',
+        projectId: '',
+        category: 'kharchi',
+        amount: '',
+        bank: ''
+      });
+      setTransactionType('spent');
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -774,12 +786,22 @@ export const Expenses: React.FC = () => {
       {/* Transaction recording form with elegant layout animations */}
       <AnimatePresence>
         {isAdding && !isReadOnly && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="sap-panel p-3 mb-4 overflow-hidden shadow-md print:hidden bg-[#fbfcfd]"
-          >
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
+              onClick={handleCancel}
+            />
+            <motion.div 
+              initial={{ opacity: 0, height: 0, y: -10 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="sap-panel relative z-50 p-4 mb-4 overflow-hidden shadow-[0_10px_40px_rgb(0,0,0,0.2)] print:hidden bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+            >
             <div className="font-bold border-b border-[#8c9ba8] pb-1.5 mb-3 text-[#0056b3] uppercase tracking-wider text-[11px] flex justify-between items-center">
               <span>{editingId ? 'Edit Ledger Record' : 'Record New Fund Flow / spent expense'}</span>
               <button onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
@@ -928,16 +950,29 @@ export const Expenses: React.FC = () => {
                   <X size={12} />
                   <span>Cancel</span>
                 </button>
+
+                {!editingId && (
+                  <button 
+                    type="button" 
+                    onClick={(e) => handleSave(e as any, false)}
+                    className="sap-btn bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Save size={12} className="text-blue-600"/>
+                    <span>Record & Continue</span>
+                  </button>
+                )}
+
                 <button 
                   type="submit" 
                   className="sap-btn flex items-center space-x-1 cursor-pointer"
                 >
                   <Save size={12} className="text-green-600"/>
-                  <span>{editingId ? 'Update Record' : 'Record to Ledger'}</span>
+                  <span>{editingId ? 'Update & Exit Record' : 'Record & Exit'}</span>
                 </button>
               </div>
             </form>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -1128,11 +1163,11 @@ export const Expenses: React.FC = () => {
               })}
             </AnimatePresence>
             {filteredLedger.length === 0 && (
-              <tr>
+              <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                 <td colSpan={isReadOnly ? 16 : 17} className="border border-black py-10 text-center text-gray-500 font-semibold italic bg-amber-50/10">
                   No fund flow transactions matched selected options.
                 </td>
-              </tr>
+              </motion.tr>
             )}
           </tbody>
         </table>
