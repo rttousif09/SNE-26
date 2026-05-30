@@ -69,16 +69,16 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
 
   return (
     <div className="flex flex-col h-screen bg-[var(--color-sap-bg)] text-[11px] font-sans overflow-hidden">
-      <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.1 }}>
+      <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.1 }} className="print:hidden">
         <TopBar user={user} onLogout={onLogout} />
       </motion.div>
       <div className="flex flex-1 overflow-hidden">
-        <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.2 }} className="flex h-full">
+        <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.2 }} className="flex h-full print:hidden">
           <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} />
         </motion.div>
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Editor Tabs */}
-          <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.3 }} className="flex items-end bg-[#eef2f6] pt-1 px-1 border-b border-[#8c9ba8]">
+          <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.3 }} className="flex items-end bg-[#eef2f6] pt-1 px-1 border-b border-[#8c9ba8] print:hidden">
             <div className="flex items-center bg-white border border-[#8c9ba8] border-b-transparent px-3 py-1 rounded-t-sm space-x-2 relative top-[1px] z-10">
               <Server size={12} className="text-[#0056b3]" />
               <span className="font-semibold text-[11px]">ERP_PRD - {getTabName()}</span>
@@ -105,7 +105,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           </motion.div>
 
           {/* Bottom Panel */}
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.5 }}>
+          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.5 }} className="print:hidden">
           <div className={`${isBottomMinimized ? 'h-[23px]' : 'h-32'} border-t border-[#8c9ba8] bg-white flex flex-col transition-all duration-150`}>
             <div className="flex items-end justify-between bg-[#eef2f6] px-1 border-b border-[#8c9ba8] select-none h-[22px]">
               <div className="flex items-end">
@@ -258,7 +258,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         </div>
       </div>
       {/* Status Bar */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="h-5 bg-[#d9e4f1] border-t border-[#8c9ba8] flex items-center px-2 text-[10px] text-gray-800 justify-between">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="h-5 bg-[#d9e4f1] border-t border-[#8c9ba8] flex items-center px-2 text-[10px] text-gray-800 justify-between print:hidden">
         <span>System: ERP_PRD Host: erp.local Instance: 00 Connected User: {user ? user.username : 'SYSTEM'}</span>
         <span className="text-gray-500 text-[9px] font-mono select-none">Client: SN ENTERPRISE</span>
       </motion.div>

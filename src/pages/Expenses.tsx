@@ -786,21 +786,21 @@ export const Expenses: React.FC = () => {
       {/* Transaction recording form with elegant layout animations */}
       <AnimatePresence>
         {isAdding && !isReadOnly && (
-          <>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
+              className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm"
               onClick={handleCancel}
             />
             <motion.div 
-              initial={{ opacity: 0, height: 0, y: -10 }}
-              animate={{ opacity: 1, height: 'auto', y: 0 }}
-              exit={{ opacity: 0, height: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="sap-panel relative z-50 p-4 mb-4 overflow-hidden shadow-[0_10px_40px_rgb(0,0,0,0.2)] print:hidden bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+              className="sap-panel relative z-10 w-full max-w-max max-h-[95vh] overflow-y-auto p-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] print:hidden bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
             >
             <div className="font-bold border-b border-[#8c9ba8] pb-1.5 mb-3 text-[#0056b3] uppercase tracking-wider text-[11px] flex justify-between items-center">
               <span>{editingId ? 'Edit Ledger Record' : 'Record New Fund Flow / spent expense'}</span>
@@ -972,7 +972,7 @@ export const Expenses: React.FC = () => {
               </div>
             </form>
           </motion.div>
-          </>
+          </div>
         )}
       </AnimatePresence>
 

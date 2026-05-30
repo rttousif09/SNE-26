@@ -648,8 +648,15 @@ export const WorkerPayment: React.FC = () => {
             <tbody>
               {filteredPayments.map((payment, idx) => {
                 const worker = getWorkerDetails(payment.workerId);
+                const isPending = currentApproval?.status === 'Pending';
                 return (
-                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={payment.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
+                  <motion.tr 
+                    initial={{ opacity: 0, y: 10 }} 
+                    animate={isPending ? { opacity: 1, y: 0, backgroundColor: ['#ffffff', '#fff8e1', '#ffffff'] } : { opacity: 1, y: 0, backgroundColor: '#ffffff' }} 
+                    transition={isPending ? { backgroundColor: { repeat: Infinity, duration: 2.5, ease: "easeInOut" }, default: { duration: 0.2 } } : { duration: 0.2 }} 
+                    key={payment.id} 
+                    className="hover:bg-[#e6f2ff] cursor-default font-mono"
+                  >
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.srNo || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.idNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{worker.name}</td>

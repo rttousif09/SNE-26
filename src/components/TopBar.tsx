@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer } from 'lucide-react';
+import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 
 interface TopBarProps {
@@ -10,6 +10,27 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({ user, onLogout }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const isDark = localStorage.getItem('sap-dark-mode') === 'true';
+    if (isDark) {
+      setDarkMode(true);
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    if (newDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('sap-dark-mode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('sap-dark-mode', 'false');
+    }
+  };
 
   // Close dropdown if clicked outside
   useEffect(() => {
@@ -119,6 +140,9 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout }) => {
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowLeft size={14} className="text-green-700" /></button>
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowRight size={14} className="text-green-700" /></button>
           <button title="Print view" onClick={() => window.print()} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Printer size={14} className="text-gray-700" /></button>
+          <button title="Toggle Dark Mode" onClick={toggleDarkMode} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm">
+            {darkMode ? <Sun size={14} className="text-amber-500" /> : <Moon size={14} className="text-gray-700" />}
+          </button>
         </div>
         <div className="flex items-center space-x-1">
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Play size={14} className="text-green-600" /></button>

@@ -287,23 +287,23 @@ export const Approvals: React.FC = () => {
           </div>
 
           <AnimatePresence>
-          {isAdding && !isOwner && (
-            <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
-              onClick={handleCancel}
-            />
-            <motion.div 
-              initial={{ opacity: 0, height: 0, y: -10 }}
-              animate={{ opacity: 1, height: 'auto', y: 0 }}
-              exit={{ opacity: 0, height: 0, scale: 0.95 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="sap-panel relative z-50 p-4 mb-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
-            >
+      {isAdding && !isOwner && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm"
+          onClick={handleCancel}
+        />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          className="sap-panel relative z-10 w-full max-w-max max-h-[95vh] overflow-y-auto p-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+        >
               <div className="font-extrabold mb-3 pb-1 border-b border-[#8c9ba8] text-[#0056b3] uppercase tracking-wider text-[10px] flex justify-between items-center">
                 <span>Submit New Worker Advance Request (Owner Approval Required)</span>
                 <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
@@ -389,7 +389,7 @@ export const Approvals: React.FC = () => {
                 </div>
               </form>
             </motion.div>
-            </>
+            </div>
           )}
           </AnimatePresence>
 

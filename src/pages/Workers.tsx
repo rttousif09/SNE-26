@@ -29,6 +29,7 @@ export const Workers: React.FC = () => {
     serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: ''
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilterProject, setSelectedFilterProject] = useState<string>('all');
 
   // Ledger Tab States
   const [ledgerSearch, setLedgerSearch] = useState('');
@@ -37,6 +38,8 @@ export const Workers: React.FC = () => {
 
   // Directory filter
   const filteredWorkers = workers.filter(worker => {
+    if (selectedFilterProject !== 'all' && worker.projectId !== selectedFilterProject) return false;
+    
     const query = searchQuery.trim().toLowerCase();
     if (!query) return true;
     return (
@@ -58,6 +61,38 @@ export const Workers: React.FC = () => {
     setEditingId(worker.id);
     setIsAdding(true);
     setActiveView('directory');
+  };
+
+  const generateNextWorkerId = () => {
+    const sneIds = workers
+      .map(w => w.workerId)
+      .filter(id => id.startsWith('SNE'))
+      .map(id => parseInt(id.replace('SNE', ''), 10))
+      .filter(num => !isNaN(num));
+
+    let nextNum = 1;
+    if (sneIds.length > 0) {
+      nextNum = Math.max(...sneIds) + 1;
+    }
+    
+    return `SNE${nextNum.toString().padStart(3, '0')}`;
+  };
+
+  const handleAddNewWorkerClick = () => {
+    if (isAdding) {
+      handleCancel();
+    } else {
+      setIsAdding(true);
+      setFormData({ 
+        serialNo: '', 
+        workerId: generateNextWorkerId(), 
+        name: '', 
+        projectId: '', 
+        designation: '', 
+        joiningDate: new Date().toISOString().split('T')[0], 
+        exitDate: '' 
+      });
+    }
   };
 
   const handleCancel = () => {
@@ -331,7 +366,7 @@ export const Workers: React.FC = () => {
           {/* Action and Search Panel */}
           <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1.5">
             {!isReadOnly ? (
-              <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+              <button onClick={handleAddNewWorkerClick} className="sap-btn flex items-center space-x-1">
                 {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
                 <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
               </button>
@@ -339,6 +374,19 @@ export const Workers: React.FC = () => {
               <div className="font-semibold text-gray-700 px-1 py-0.5">Workers Directory (Read Only)</div>
             )}
             <div className="flex items-center space-x-1.5 pr-1">
+              <span className="font-semibold text-gray-700">Project:</span>
+              <select
+                className="sap-input w-40 text-[11px]"
+                value={selectedFilterProject}
+                onChange={e => setSelectedFilterProject(e.target.value)}
+              >
+                <option value="all">All Projects</option>
+                <option value="unassigned">Unassigned / General</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <div className="w-px h-4 bg-gray-300 mx-1"></div>
               <Search size={12} className="text-gray-600" />
               <span className="font-semibold text-gray-700">Filter Search:</span>
               <input
@@ -374,21 +422,21 @@ export const Workers: React.FC = () => {
           {/* Add / Edit Worker Form */}
           <AnimatePresence>
           {isAdding && (
-            <>
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-sm"
+              className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm"
               onClick={handleCancel}
             />
             <motion.div 
-              initial={{ opacity: 0, height: 0, y: -10 }}
-              animate={{ opacity: 1, height: 'auto', y: 0 }}
-              exit={{ opacity: 0, height: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="sap-panel relative z-50 p-4 mb-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+              className="sap-panel relative z-10 w-full max-w-max max-h-[95vh] overflow-y-auto p-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
             >
               <div className="font-extrabold mb-3 border-b border-[#0056b3]/30 pb-1.5 text-[#0056b3] uppercase tracking-wider text-xs flex justify-between items-center">
                 <span>{editingId ? 'Edit Selected Worker' : 'Register New Worker'}</span>
@@ -440,7 +488,7 @@ export const Workers: React.FC = () => {
                 </div>
               </form>
             </motion.div>
-            </>
+            </div>
           )}
           </AnimatePresence>
 
@@ -460,6 +508,7 @@ export const Workers: React.FC = () => {
               </tr>
             </thead>
             <tbody>
+              <AnimatePresence mode="popLayout">
               {Object.entries(
                 filteredWorkers.reduce((acc, worker) => {
                   const pId = worker.projectId || 'unassigned';
@@ -467,15 +516,29 @@ export const Workers: React.FC = () => {
                   acc[pId].push(worker);
                   return acc;
                 }, {} as Record<string, typeof filteredWorkers>)
-              ).map(([pId, projectWorkers]) => (
-                <React.Fragment key={pId}>
-                  <tr className="bg-[#cbd4df] font-bold border-t border-b border-[#8c9ba8]">
+              ).flatMap(([pId, projectWorkers]) => [
+                  <motion.tr 
+                    layout="position"
+                    initial={{ opacity: 0, x: -20 }} 
+                    animate={{ opacity: 1, x: 0 }} 
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                    key={`header-${pId}`}
+                    className="bg-[#cbd4df] font-bold border-t border-b border-[#8c9ba8]">
                     <td colSpan={isReadOnly ? 8 : 9} className="px-3 py-1.5 border border-[#bcc5cf] text-[#002f6c] uppercase tracking-wider text-[10.5px]">
                       🏗️ {pId === 'unassigned' ? 'Unassigned Site / General Working Setup' : getProjectName(pId)} ({projectWorkers.length} Worker{projectWorkers.length !== 1 && 's'})
                     </td>
-                  </tr>
-                  {projectWorkers.map((worker, idx) => (
-                    <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={worker.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150">
+                  </motion.tr>,
+                  ...projectWorkers.map((worker, idx) => (
+                    <motion.tr 
+                      layout="position"
+                      initial={{ opacity: 0, x: -20 }} 
+                      animate={{ opacity: 1, x: 0 }} 
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }} 
+                      key={worker.id} 
+                      className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150"
+                    >
                       <td className="border border-[#bcc5cf] px-2 py-1.5 text-center font-mono text-gray-500 font-semibold">{worker.serialNo}</td>
                       <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono text-blue-900 font-bold">{worker.workerId}</td>
                       <td className="border border-[#bcc5cf] px-3 py-1.5 font-bold text-gray-800">{worker.name}</td>
@@ -508,14 +571,14 @@ export const Workers: React.FC = () => {
                         </td>
                       )}
                     </motion.tr>
-                  ))}
-                </React.Fragment>
-              ))}
+                  ))
+                ])}
               {filteredWorkers.length === 0 && (
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isReadOnly ? 8 : 9} className="border border-[#8c9ba8] px-3 py-8 text-center text-gray-500 font-semibold italic bg-amber-50/10">No workers registered matching search query terms.</td>
                 </motion.tr>
               )}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>
