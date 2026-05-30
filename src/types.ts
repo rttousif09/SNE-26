@@ -112,6 +112,19 @@ export interface PaymentSheetApproval {
   status: 'Pending' | 'Approved' | 'Rejected';
 }
 
+export interface DailyLabourReport {
+  id: string;
+  date: string;
+  projectId: string;
+  carpenter: number;
+  fitter: number;
+  helper: number;
+  mason: number;
+  rigger: number;
+  staff: number;
+  remarks?: string;
+}
+
 export interface ExpenseEntry {
   id: string;
   date: string;

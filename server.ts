@@ -196,6 +196,20 @@ function initDbSchema() {
       postedExpenseId TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS dlrs (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      carpenter INTEGER DEFAULT 0,
+      fitter INTEGER DEFAULT 0,
+      helper INTEGER DEFAULT 0,
+      mason INTEGER DEFAULT 0,
+      rigger INTEGER DEFAULT 0,
+      staff INTEGER DEFAULT 0,
+      remarks TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate existing databases to make sure they have the new columns
@@ -1057,6 +1071,63 @@ async function startServer() {
     }
   });
 
+  // --------------
+  // DLR (Daily Labour Report) endpoints
+  // --------------
+  app.get("/api/dlrs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM dlrs").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/dlrs", (req, res) => {
+    try {
+      const { id, date, projectId, carpenter, fitter, helper, mason, rigger, staff, remarks } = req.body;
+      db.prepare(`
+        INSERT INTO dlrs (
+          id, date, projectId, carpenter, fitter, helper, mason, rigger, staff, remarks
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, date, projectId, parseInt(carpenter || 0), parseInt(fitter || 0), parseInt(helper || 0),
+        parseInt(mason || 0), parseInt(rigger || 0), parseInt(staff || 0), remarks || ""
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/dlrs/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { date, projectId, carpenter, fitter, helper, mason, rigger, staff, remarks } = req.body;
+      db.prepare(`
+        UPDATE dlrs
+        SET date = ?, projectId = ?, carpenter = ?, fitter = ?, helper = ?, mason = ?, rigger = ?, staff = ?, remarks = ?
+        WHERE id = ?
+      `).run(
+        date, projectId, parseInt(carpenter || 0), parseInt(fitter || 0), parseInt(helper || 0),
+        parseInt(mason || 0), parseInt(rigger || 0), parseInt(staff || 0), remarks || "", id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/dlrs/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM dlrs WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // 9. Full Backup Export/Import APIs
   app.get("/api/backup/export", (req, res) => {
     try {
@@ -1072,6 +1143,10 @@ async function startServer() {
       const paymentSheetApprovals = db.prepare("SELECT * FROM payment_sheet_approvals").all();
       const expensesLedger = db.prepare("SELECT * FROM expenses_ledger").all();
       const messBookings = db.prepare("SELECT * FROM mess_bookings").all();
+      let dlrs = [];
+      try {
+        dlrs = db.prepare("SELECT * FROM dlrs").all();
+      } catch(e) {}
  
        res.json({
          projects,
@@ -1092,7 +1167,8 @@ async function startServer() {
           approvals,
           paymentSheetApprovals,
           expensesLedger,
-          messBookings
+          messBookings,
+          dlrs
        });
      } catch (err: any) {
        res.status(500).json({ error: err.message });
@@ -1279,6 +1355,20 @@ async function startServer() {
             mb.paymentDate,
             mb.remarks || "",
             mb.postedExpenseId || null
+          );
+        }
+      }
+
+      if (backup.dlrs && Array.isArray(backup.dlrs)) {
+        const insert = db.prepare(`
+          INSERT INTO dlrs (
+            id, date, projectId, carpenter, fitter, helper, mason, rigger, staff, remarks
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const d of backup.dlrs) {
+          insert.run(
+            d.id, d.date, d.projectId, parseInt(d.carpenter || 0), parseInt(d.fitter || 0), parseInt(d.helper || 0),
+            parseInt(d.mason || 0), parseInt(d.rigger || 0), parseInt(d.staff || 0), d.remarks || ""
           );
         }
       }

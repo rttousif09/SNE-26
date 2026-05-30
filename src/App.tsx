@@ -20,6 +20,7 @@ import { Approvals } from './pages/Approvals';
 import { Expenses } from './pages/Expenses';
 import { ExpensesSummary } from './pages/ExpensesSummary';
 import { Mess } from './pages/Mess';
+import { DLR } from './pages/DLR';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -44,6 +45,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'approvals': return <Approvals />;
       case 'expenses': return <Expenses />;
       case 'mess': return <Mess />;
+      case 'dlr': return <DLR />;
       case 'expenses-summary': return <ExpensesSummary />;
       default: return <Dashboard />;
     }
@@ -62,6 +64,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'approvals': return 'Approvals Workflow';
       case 'expenses': return 'Expenses Ledger';
       case 'mess': return 'Mess Management';
+      case 'dlr': return 'Daily Labour Report (DLR)';
       case 'expenses-summary': return 'Expenses Summary Dashboard';
       default: return 'Overview';
     }

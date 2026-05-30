@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -14,6 +14,7 @@ interface AppState {
   paymentSheetApprovals: PaymentSheetApproval[];
   expensesLedger: ExpenseEntry[];
   messBookings: MessBooking[];
+  dlrs: DailyLabourReport[];
 }
 
 interface AppContextType extends AppState {
@@ -54,6 +55,9 @@ interface AppContextType extends AppState {
   addMessBooking: (booking: Omit<MessBooking, 'id'>) => void;
   updateMessBooking: (id: string, booking: Partial<MessBooking>) => void;
   deleteMessBooking: (id: string) => void;
+  addDLR: (dlr: Omit<DailyLabourReport, 'id'>) => void;
+  updateDLR: (id: string, dlr: Partial<DailyLabourReport>) => void;
+  deleteDLR: (id: string) => void;
 }
 
 const initialState: AppState = {
@@ -96,6 +100,7 @@ const initialState: AppState = {
     { id: "el10", date: "2026-01-06", description: "Advance to Faruq Alam", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 10000, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 }
   ],
   messBookings: [],
+  dlrs: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -131,13 +136,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     paymentSheetApprovals: [],
     expensesLedger: [],
     messBookings: [],
+    dlrs: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes] = await Promise.all([
+        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
           fetch('/api/billings').then(r => r.json()),
@@ -148,7 +154,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/approvals').then(r => r.json()).catch(() => []),
           fetch('/api/payment-sheet-approvals').then(r => r.json()).catch(() => []),
           fetch('/api/expenses_ledger').then(r => r.json()).catch(() => []),
-          fetch('/api/mess-bookings').then(r => r.json()).catch(() => [])
+          fetch('/api/mess-bookings').then(r => r.json()).catch(() => []),
+          fetch('/api/dlrs').then(r => r.json()).catch(() => [])
         ]);
 
         setState({
@@ -162,7 +169,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           approvals: apRes,
           paymentSheetApprovals: psaRes,
           expensesLedger: elRes,
-          messBookings: mbRes
+          messBookings: mbRes,
+          dlrs: dlrRes || []
         });
 
         // Sync with IndexedDB
@@ -177,6 +185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('paymentSheetApprovals', psaRes).catch(() => {});
         await saveAllToStore('expensesLedger', elRes).catch(() => {});
         await saveAllToStore('messBookings', mbRes).catch(() => {});
+        if(dlrRes) await saveAllToStore('dlrs', dlrRes).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -191,11 +200,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const paymentSheetApprovals = await getAllFromStore('paymentSheetApprovals').catch(() => []);
           const expensesLedger = await getAllFromStore('expensesLedger').catch(() => []);
           const messBookings = await getAllFromStore('messBookings').catch(() => []);
+          const dlrs = await getAllFromStore('dlrs').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
                             workerPayments.length === 0 && approvals.length === 0 && paymentSheetApprovals.length === 0 &&
-                            expensesLedger.length === 0 && messBookings.length === 0;
+                            expensesLedger.length === 0 && messBookings.length === 0 && dlrs.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -211,7 +221,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               approvals,
               paymentSheetApprovals,
               expensesLedger,
-              messBookings
+              messBookings,
+              dlrs
             });
           }
         } catch (e) {
@@ -746,6 +757,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addDLR = async (dlr: Omit<DailyLabourReport, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newDlr = { ...dlr, id };
+    setState(s => {
+      const updated = [...s.dlrs, newDlr];
+      saveAllToStore('dlrs', updated).catch(console.error);
+      return { ...s, dlrs: updated };
+    });
+    try {
+      await fetch('/api/dlrs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDlr)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateDLR = async (id: string, dlr: Partial<DailyLabourReport>) => {
+    setState(s => {
+      const updated = s.dlrs.map(d => d.id === id ? { ...d, ...dlr } : d);
+      saveAllToStore('dlrs', updated).catch(console.error);
+      return { ...s, dlrs: updated };
+    });
+    try {
+      const existing = state.dlrs.find(d => d.id === id);
+      if (existing) {
+        const updatedObj = { ...existing, ...dlr };
+        await fetch(`/api/dlrs/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteDLR = async (id: string) => {
+    setState(s => {
+      const updated = s.dlrs.filter(d => d.id !== id);
+      saveAllToStore('dlrs', updated).catch(console.error);
+      return { ...s, dlrs: updated };
+    });
+    try {
+      await fetch(`/api/dlrs/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -785,7 +849,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteExpenseEntry,
       addMessBooking,
       updateMessBooking,
-      deleteMessBooking
+      deleteMessBooking,
+      addDLR,
+      updateDLR,
+      deleteDLR
     }}>
       {children}
     </AppContext.Provider>
