@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -11,6 +11,7 @@ interface AppState {
   advances: Advance[];
   workerPayments: WorkerPayment[];
   approvals: Approval[];
+  kharchiApprovals: KharchiApproval[];
   paymentSheetApprovals: PaymentSheetApproval[];
   expensesLedger: ExpenseEntry[];
   messBookings: MessBooking[];
@@ -46,6 +47,9 @@ interface AppContextType extends AppState {
   addApproval: (approval: Omit<Approval, 'id' | 'status'>) => void;
   updateApproval: (id: string, approval: Partial<Approval>) => void;
   deleteApproval: (id: string) => void;
+  addKharchiApproval: (approval: Omit<KharchiApproval, 'id' | 'status'>) => void;
+  updateKharchiApproval: (id: string, approval: Partial<KharchiApproval>) => void;
+  deleteKharchiApproval: (id: string) => void;
   addPaymentSheetApproval: (approval: Omit<PaymentSheetApproval, 'id' | 'status'>) => void;
   updatePaymentSheetApproval: (id: string, approval: Partial<PaymentSheetApproval>) => void;
   deletePaymentSheetApproval: (id: string) => void;
@@ -86,6 +90,7 @@ const initialState: AppState = {
   ],
   workerPayments: [],
   approvals: [],
+  kharchiApprovals: [],
   paymentSheetApprovals: [],
   expensesLedger: [
     { id: "el1", date: "2026-01-01", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 5000 },
@@ -133,6 +138,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     advances: [],
     workerPayments: [],
     approvals: [],
+    kharchiApprovals: [],
     paymentSheetApprovals: [],
     expensesLedger: [],
     messBookings: [],
@@ -143,7 +149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes] = await Promise.all([
+        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
           fetch('/api/billings').then(r => r.json()),
@@ -155,7 +161,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/payment-sheet-approvals').then(r => r.json()).catch(() => []),
           fetch('/api/expenses_ledger').then(r => r.json()).catch(() => []),
           fetch('/api/mess-bookings').then(r => r.json()).catch(() => []),
-          fetch('/api/dlrs').then(r => r.json()).catch(() => [])
+          fetch('/api/dlrs').then(r => r.json()).catch(() => []),
+          fetch('/api/kharchi-approvals').then(r => r.json()).catch(() => [])
         ]);
 
         setState({
@@ -167,6 +174,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           advances: aRes,
           workerPayments: wpRes,
           approvals: apRes,
+          kharchiApprovals: kaRes || [],
           paymentSheetApprovals: psaRes,
           expensesLedger: elRes,
           messBookings: mbRes,
@@ -182,6 +190,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('advances', aRes);
         await saveAllToStore('workerPayments', wpRes);
         await saveAllToStore('approvals', apRes);
+        await saveAllToStore('kharchiApprovals', kaRes || []).catch(() => {});
         await saveAllToStore('paymentSheetApprovals', psaRes).catch(() => {});
         await saveAllToStore('expensesLedger', elRes).catch(() => {});
         await saveAllToStore('messBookings', mbRes).catch(() => {});
@@ -198,6 +207,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const workerPayments = await getAllFromStore('workerPayments');
           const approvals = await getAllFromStore('approvals');
           const paymentSheetApprovals = await getAllFromStore('paymentSheetApprovals').catch(() => []);
+          const kharchiApprovals = await getAllFromStore('kharchiApprovals').catch(() => []);
           const expensesLedger = await getAllFromStore('expensesLedger').catch(() => []);
           const messBookings = await getAllFromStore('messBookings').catch(() => []);
           const dlrs = await getAllFromStore('dlrs').catch(() => []);
@@ -205,6 +215,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
                             workerPayments.length === 0 && approvals.length === 0 && paymentSheetApprovals.length === 0 &&
+                            kharchiApprovals.length === 0 &&
                             expensesLedger.length === 0 && messBookings.length === 0 && dlrs.length === 0;
 
           if (isDbEmpty) {
@@ -219,6 +230,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               advances,
               workerPayments,
               approvals,
+              kharchiApprovals,
               paymentSheetApprovals,
               expensesLedger,
               messBookings,
@@ -615,6 +627,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addKharchiApproval = async (approval: Omit<KharchiApproval, 'id' | 'status'>) => {
+    const newApproval: KharchiApproval = { ...approval, id: generateId(), status: 'Pending' };
+    setState(s => ({ ...s, kharchiApprovals: [...s.kharchiApprovals, newApproval] }));
+    try {
+      await fetch('/api/kharchi-approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newApproval)
+      });
+      await saveAllToStore('kharchiApprovals', [...state.kharchiApprovals, newApproval]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateKharchiApproval = async (id: string, approval: Partial<KharchiApproval>) => {
+    setState(s => ({ ...s, kharchiApprovals: s.kharchiApprovals.map(app => app.id === id ? { ...app, ...approval } : app) }));
+    try {
+      const existing = state.kharchiApprovals.find(app => app.id === id);
+      if (existing) {
+        const merged = { ...existing, ...approval };
+        await fetch(`/api/kharchi-approvals/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: merged.status })
+        });
+        await saveAllToStore('kharchiApprovals', state.kharchiApprovals.map(app => app.id === id ? merged : app));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteKharchiApproval = async (id: string) => {
+    setState(s => ({ ...s, kharchiApprovals: s.kharchiApprovals.filter(app => app.id !== id) }));
+    try {
+      await fetch(`/api/kharchi-approvals/${id}`, { method: 'DELETE' });
+      await saveAllToStore('kharchiApprovals', state.kharchiApprovals.filter(app => app.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const addPaymentSheetApproval = async (approval: Omit<PaymentSheetApproval, 'id' | 'status'>) => {
     const newApproval: PaymentSheetApproval = { ...approval, id: generateId(), status: 'Pending' };
     setState(s => ({ ...s, paymentSheetApprovals: [...s.paymentSheetApprovals, newApproval] }));
@@ -841,6 +896,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addApproval,
       updateApproval,
       deleteApproval,
+      addKharchiApproval,
+      updateKharchiApproval,
+      deleteKharchiApproval,
       addPaymentSheetApproval,
       updatePaymentSheetApproval,
       deletePaymentSheetApproval,

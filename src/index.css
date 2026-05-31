@@ -159,6 +159,24 @@ body {
 .excel-grid td {
   border: 1px solid var(--grid-td-border);
 }
+
+/* Base sap-table styling */
+.sap-table {
+  border-collapse: collapse;
+  outline: 1px solid var(--color-sap-border-val);
+}
+.sap-table th {
+  background-color: var(--grid-th-bg);
+  border: 1px solid var(--color-sap-border-val);
+  padding: 4px 6px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: left;
+}
+.sap-table td {
+  border: 1px solid var(--grid-td-border);
+  padding: 4px 6px;
+}
 .excel-row-num {
   background-color: var(--grid-th-bg);
   border: 1px solid var(--color-sap-border-val) !important;
@@ -207,6 +225,10 @@ body {
 
 .dark .bg-\[\#0056b3\] { background-color: #3f7bbf !important; }
 .dark .text-\[\#002f6c\] { color: #80b5ed !important; }
+
+.print-signature-section {
+  display: none;
+}
 
 /* Print Overrides for professional landscapes and PDF conversion */
 @media print {
@@ -270,6 +292,62 @@ body {
     border: 1px solid #555555 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  
+  /* Specific DLR Table / sap-table print queries */
+  .sap-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 20px !important;
+    font-size: 11px !important;
+  }
+  .sap-table th, 
+  .sap-table td {
+    border: 1px solid #444 !important;
+    padding: 6px 4px !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+  }
+  .sap-table th {
+    background-color: #e4ebf3 !important;
+    color: #000 !important;
+    font-weight: 600 !important;
+  }
+  .sap-table .text-right {
+    text-align: right !important;
+  }
+  .sap-table .text-center {
+    text-align: center !important;
+  }
+  .sap-table tr.bg-yellow-50 {
+    display: none !important; /* hide add form row */
+  }
+
+  .print-signature-section {
+    display: flex !important;
+    justify-content: flex-end;
+    margin-top: 30px;
+    padding-top: 50px;
+    page-break-inside: avoid;
+  }
+  
+  .print-signature-box {
+    text-align: center;
+    border-top: 1px solid #000;
+    min-width: 200px;
+    padding-top: 5px;
+  }
+  
+  .print-signature-title {
+    font-weight: bold;
+    font-size: 13px;
+    color: #000;
+  }
+  
+  .print-signature-date {
+    font-size: 11px;
+    margin-top: 4px;
+    font-style: italic;
   }
   
   tr {

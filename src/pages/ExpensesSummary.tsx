@@ -748,6 +748,12 @@ export const ExpensesSummary: React.FC = () => {
         </div>
 
         {/* Dynamic Footer for actual physical printing sheets */}
+        <div className="print-signature-section">
+          <div className="print-signature-box">
+            <div className="print-signature-title">Approved by Director</div>
+            <div className="print-signature-date">Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+          </div>
+        </div>
         <div className="mt-8 border-t border-gray-300 pt-4 flex items-center justify-between text-[8px] text-gray-400 font-mono select-none">
           <span>Printed on: {new Date().toLocaleDateString('en-IN')} at {new Date().toLocaleTimeString('en-IN')}</span>
           <span>SYSTEM AUTO-GENERATED LEDGER REPORT (ERP_PRD)</span>

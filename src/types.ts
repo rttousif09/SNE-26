@@ -102,6 +102,16 @@ export interface Approval {
   status: 'Pending' | 'Approved' | 'Rejected';
 }
 
+export interface KharchiApproval {
+  id: string;
+  projectId: string;
+  month: string; // YYYY-MM
+  totalAmount: number;
+  remarks: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+}
+
 export interface PaymentSheetApproval {
   id: string;
   projectId: string;

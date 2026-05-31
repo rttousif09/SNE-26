@@ -71,6 +71,18 @@ export const DLR: React.FC = () => {
       ];
     });
 
+    tableData.push([
+      'GRAND TOTAL',
+      filteredDLRs.reduce((sum, d) => sum + (d.carpenter || 0), 0),
+      filteredDLRs.reduce((sum, d) => sum + (d.fitter || 0), 0),
+      filteredDLRs.reduce((sum, d) => sum + (d.helper || 0), 0),
+      filteredDLRs.reduce((sum, d) => sum + (d.mason || 0), 0),
+      filteredDLRs.reduce((sum, d) => sum + (d.rigger || 0), 0),
+      filteredDLRs.reduce((sum, d) => sum + (d.staff || 0), 0),
+      filteredDLRs.reduce((sum, d) => sum + (d.carpenter || 0) + (d.fitter || 0) + (d.helper || 0) + (d.mason || 0) + (d.rigger || 0) + (d.staff || 0), 0),
+      ''
+    ]);
+
     autoTable(doc, {
       startY: 30,
       head: [['Project Site', 'Carpenter', 'Fitter', 'Helper', 'Mason', 'Rigger', 'Staff', 'Total', 'Remarks']],
@@ -141,7 +153,7 @@ export const DLR: React.FC = () => {
         <table className="sap-table w-full">
           <thead>
             <tr>
-              <th className="w-10 text-center">Action</th>
+              <th className="w-10 text-center print:hidden">Action</th>
               <th>Site Name</th>
               <th className="text-right">Carpenter</th>
               <th className="text-right">Fitter</th>
@@ -229,8 +241,29 @@ export const DLR: React.FC = () => {
                 </td>
               </tr>
             )}
+            
+            {filteredDLRs.length > 0 && (
+              <tr className="bg-[#f3f4f6] font-bold">
+                <td className="print:hidden"></td>
+                <td className="text-right p-2 text-gray-700">GRAND TOTAL:</td>
+                <td className="text-right p-2 text-[#0056b3]">{filteredDLRs.reduce((sum, d) => sum + (d.carpenter || 0), 0)}</td>
+                <td className="text-right p-2 text-[#0056b3]">{filteredDLRs.reduce((sum, d) => sum + (d.fitter || 0), 0)}</td>
+                <td className="text-right p-2 text-[#0056b3]">{filteredDLRs.reduce((sum, d) => sum + (d.helper || 0), 0)}</td>
+                <td className="text-right p-2 text-[#0056b3]">{filteredDLRs.reduce((sum, d) => sum + (d.mason || 0), 0)}</td>
+                <td className="text-right p-2 text-[#0056b3]">{filteredDLRs.reduce((sum, d) => sum + (d.rigger || 0), 0)}</td>
+                <td className="text-right p-2 text-[#0056b3]">{filteredDLRs.reduce((sum, d) => sum + (d.staff || 0), 0)}</td>
+                <td className="text-right p-2 font-black text-[#0056b3] text-sm">{filteredDLRs.reduce((sum, d) => sum + (d.carpenter || 0) + (d.fitter || 0) + (d.helper || 0) + (d.mason || 0) + (d.rigger || 0) + (d.staff || 0), 0)}</td>
+                <td></td>
+              </tr>
+            )}
           </tbody>
         </table>
+        <div className="print-signature-section">
+          <div className="print-signature-box">
+            <div className="print-signature-title">Approved by Director</div>
+            <div className="print-signature-date">Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+          </div>
+        </div>
       </div>
     </div>
   );

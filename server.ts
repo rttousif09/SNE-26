@@ -150,6 +150,17 @@ function initDbSchema() {
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS kharchi_approvals (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      month TEXT NOT NULL,
+      totalAmount REAL NOT NULL,
+      remarks TEXT,
+      date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS payment_sheet_approvals (
       id TEXT PRIMARY KEY,
       projectId TEXT NOT NULL,
@@ -888,6 +899,53 @@ async function startServer() {
   });
 
   // 8.5.5. Payment Sheet Approvals
+  app.get("/api/kharchi-approvals", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM kharchi_approvals").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/kharchi-approvals", (req, res) => {
+    try {
+      const { id, projectId, month, totalAmount, remarks, date, status } = req.body;
+      db.prepare(`
+        INSERT INTO kharchi_approvals (id, projectId, month, totalAmount, remarks, date, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, projectId, month, parseFloat(totalAmount), remarks || "", date, status || "Pending");
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/kharchi-approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      db.prepare(`
+        UPDATE kharchi_approvals
+        SET status = ?
+        WHERE id = ?
+      `).run(status, id);
+      res.json({ id, status });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/kharchi-approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM kharchi_approvals WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/payment-sheet-approvals", (req, res) => {
     try {
       const rows = db.prepare("SELECT * FROM payment_sheet_approvals").all();

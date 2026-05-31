@@ -964,8 +964,11 @@ export const WorkerPayment: React.FC = () => {
                   </tfoot>
                 )}
               </table>
-              <div className="hidden print:block mt-16 pt-8 border-t border-gray-300 font-bold text-sm text-right px-4">
-                Approved by (Owner Signature)
+              <div className="print-signature-section">
+                <div className="print-signature-box">
+                  <div className="print-signature-title">Approved by Director</div>
+                  <div className="print-signature-date">Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1046,8 +1049,11 @@ export const WorkerPayment: React.FC = () => {
                   </tfoot>
                 )}
               </table>
-              <div className="hidden print:block mt-16 pt-8 border-t border-gray-300 font-bold text-sm text-right px-4">
-                Approved by (Owner Signature)
+              <div className="print-signature-section">
+                <div className="print-signature-box">
+                  <div className="print-signature-title">Approved by Director</div>
+                  <div className="print-signature-date">Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                </div>
               </div>
             </div>
           </div>

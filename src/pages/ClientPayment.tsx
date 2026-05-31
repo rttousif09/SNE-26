@@ -643,6 +643,12 @@ export const ClientPayment: React.FC = () => {
               )}
             </tbody>
           </table>
+          <div className="print-signature-section">
+            <div className="print-signature-box">
+              <div className="print-signature-title">Approved by Director</div>
+              <div className="print-signature-date">Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+            </div>
+          </div>
           <div className="mt-1.5 p-1.5 border border-blue-200 bg-blue-50/45 text-blue-900 rounded-sm flex items-start space-x-1 print:hidden">
             <AlertCircle size={12} className="text-blue-700 mt-0.5 shrink-0" />
             <p className="text-[9.5px]">

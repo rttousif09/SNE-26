@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck } from 'lucide-react';
+import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck, History } from 'lucide-react';
 
 interface AlertNotification {
   id: string;
@@ -16,16 +16,19 @@ export const Approvals: React.FC = () => {
     user, 
     approvals, 
     paymentSheetApprovals = [], 
+    kharchiApprovals = [],
     workers, 
     projects, 
     addApproval, 
     updateApproval, 
     deleteApproval,
     updatePaymentSheetApproval,
-    deletePaymentSheetApproval
+    deletePaymentSheetApproval,
+    updateKharchiApproval,
+    deleteKharchiApproval
   } = useAppContext();
   
-  const [activeTab, setActiveTab] = useState<'advances' | 'paymentSheets'>('advances');
+  const [activeTab, setActiveTab] = useState<'advances' | 'paymentSheets' | 'kharchiSheets' | 'history'>('advances');
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     workerId: '',
@@ -137,6 +140,8 @@ export const Approvals: React.FC = () => {
     }
   }, [approvals, workers, projects]);
 
+  const prevKharchiApprovalsRef = useRef<Record<string, 'Pending' | 'Approved' | 'Rejected'>>({});
+
   // Monitor payment sheets status changes to trigger visual toast pop-ups
   useEffect(() => {
     if (paymentSheetApprovals.length > 0) {
@@ -167,6 +172,36 @@ export const Approvals: React.FC = () => {
       });
     }
   }, [paymentSheetApprovals, projects]);
+
+  useEffect(() => {
+    if (kharchiApprovals.length > 0) {
+      const hasPreviousRecord = Object.keys(prevKharchiApprovalsRef.current).length > 0;
+      
+      kharchiApprovals.forEach(sheet => {
+        const prevStatus = prevKharchiApprovalsRef.current[sheet.id];
+        
+        if (hasPreviousRecord && prevStatus === 'Pending' && (sheet.status === 'Approved' || sheet.status === 'Rejected')) {
+          const pName = getProjectName(sheet.projectId);
+          
+          const newNotif: AlertNotification = {
+            id: `${sheet.id}-${Date.now()}`,
+            workerName: `Kharchi`,
+            projectName: `${pName} (${sheet.month})`,
+            amount: sheet.totalAmount,
+            status: sheet.status
+          };
+          
+          setNotifications(prev => [newNotif, ...prev]);
+          playNotificationSound(sheet.status);
+          
+          setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== newNotif.id));
+          }, 10000);
+        }
+        prevKharchiApprovalsRef.current[sheet.id] = sheet.status;
+      });
+    }
+  }, [kharchiApprovals, projects]);
 
   const handleCancel = () => {
     setIsAdding(false);
@@ -207,9 +242,76 @@ export const Approvals: React.FC = () => {
     updatePaymentSheetApproval(id, { status: 'Rejected' });
   };
 
+  const handleApproveKharchi = (id: string) => {
+    updateKharchiApproval(id, { status: 'Approved' });
+  };
+
+  const handleRejectKharchi = (id: string) => {
+    updateKharchiApproval(id, { status: 'Rejected' });
+  };
+
+  const historyLog = React.useMemo(() => {
+    const logs: any[] = [];
+    
+    approvals.forEach(a => {
+      if (a.status !== 'Pending') {
+        const workerName = workers.find(w => w.id === a.workerId)?.name || 'Unknown';
+        const projectName = getProjectName(a.projectId);
+        logs.push({
+          id: `adv-${a.id}`,
+          type: 'Worker Advance',
+          projectName,
+          details: `Worker: ${workerName}`,
+          amount: a.amount,
+          date: a.date,
+          status: a.status,
+          remarks: a.remarks,
+          actionBy: 'Director (saddamsne)'
+        });
+      }
+    });
+
+    paymentSheetApprovals.forEach(a => {
+      if (a.status !== 'Pending') {
+        const projectName = getProjectName(a.projectId);
+        logs.push({
+          id: `ps-${a.id}`,
+          type: 'Payment Sheet',
+          projectName,
+          details: `Month: ${a.month}`,
+          amount: a.totalAmount,
+          date: a.date,
+          status: a.status,
+          remarks: a.remarks,
+          actionBy: 'Director (saddamsne)'
+        });
+      }
+    });
+
+    kharchiApprovals.forEach(a => {
+      if (a.status !== 'Pending') {
+        const projectName = getProjectName(a.projectId);
+        logs.push({
+          id: `ks-${a.id}`,
+          type: 'Kharchi Sheet',
+          projectName,
+          details: `Month: ${a.month}`,
+          amount: a.totalAmount,
+          date: a.date,
+          status: a.status,
+          remarks: a.remarks,
+          actionBy: 'Director (saddamsne)'
+        });
+      }
+    });
+
+    return logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [approvals, paymentSheetApprovals, kharchiApprovals, workers, projects]);
+
   // Filter pending counts
   const pendingAdvancesCount = approvals.filter(a => a.status === 'Pending').length;
   const pendingSheetsCount = paymentSheetApprovals.filter(s => s.status === 'Pending').length;
+  const pendingKharchiCount = kharchiApprovals.filter(s => s.status === 'Pending').length;
 
   return (
     <div className="text-[11px] space-y-3">
@@ -265,6 +367,35 @@ export const Approvals: React.FC = () => {
               {pendingSheetsCount}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('kharchiSheets')}
+          className={`px-4 py-2 border-t-2 border-x font-semibold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeTab === 'kharchiSheets'
+              ? 'border-t-[#0056b3] border-x-[#8c9ba8] bg-white text-[#0056b3]'
+              : 'border-t-transparent border-x-transparent bg-transparent text-gray-600 hover:text-gray-900 border-l-0'
+          }`}
+        >
+          <FileText size={14} className={activeTab === 'kharchiSheets' ? 'text-[#0056b3]' : 'text-gray-500'} />
+          <span>Kharchi Sheets</span>
+          {pendingKharchiCount > 0 && (
+            <span className="bg-red-650 text-white font-mono text-[9px] px-1 rounded-sm font-bold">
+              {pendingKharchiCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`px-4 py-2 border-t-2 border-x font-semibold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeTab === 'history'
+              ? 'border-t-[#0056b3] border-x-[#8c9ba8] bg-white text-[#0056b3]'
+              : 'border-t-transparent border-x-transparent bg-transparent text-gray-600 hover:text-gray-900 border-l-0'
+          }`}
+        >
+          <History size={14} className={activeTab === 'history' ? 'text-[#0056b3]' : 'text-gray-500'} />
+          <span>Approval History</span>
         </button>
       </div>
 
@@ -575,6 +706,175 @@ export const Approvals: React.FC = () => {
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isOwner ? 8 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No worker monthly payment sheets have been submitted for approval yet.
+                  </td>
+                </motion.tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Tab 3 Content: Kharchi Sheets */}
+      {activeTab === 'kharchiSheets' && (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600 text-[10px] font-semibold font-sans">
+              Review and decision panel for Project Kharchi Sheets
+            </span>
+            <div className="text-gray-500 font-mono text-[10px]">
+              Showing {kharchiApprovals.length} monthly kharchi sheets
+            </div>
+          </div>
+
+          <table className="w-full border-collapse border border-[#8c9ba8] bg-white text-[11px]">
+            <thead className="sap-header bg-[#eef2f6]">
+              <tr>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-8">#</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project Site</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Kharchi Month</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Total Kharchi</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Date Submitted</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
+                {isOwner && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-32">Actions</th>}
+                {!isOwner && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Delete</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {kharchiApprovals.map((sheet, idx) => {
+                let statusBadge = '';
+                if (sheet.status === 'Approved') {
+                  statusBadge = 'bg-green-100 text-green-800 border-green-300';
+                } else if (sheet.status === 'Rejected') {
+                  statusBadge = 'bg-red-100 text-red-800 border-red-300';
+                } else {
+                  statusBadge = 'bg-yellow-100 text-yellow-800 border-yellow-300';
+                }
+                return (
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={sheet.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getProjectName(sheet.projectId)}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-mono font-bold">{sheet.month}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-950">₹{sheet.totalAmount.toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1">{sheet.date}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-600">{sheet.remarks || '-'}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${statusBadge}`}>
+                        {sheet.status || 'Pending'}
+                      </span>
+                    </td>
+                    {isOwner && (
+                      <td className="border border-[#8c9ba8] px-2 py-1 text-center font-sans">
+                        {sheet.status === 'Pending' ? (
+                          <div className="flex items-center justify-center space-x-2">
+                            <button
+                              onClick={() => handleApproveKharchi(sheet.id)}
+                              className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                            >
+                              <Check size={8} />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              onClick={() => handleRejectKharchi(sheet.id)}
+                              className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                            >
+                              <XCircle size={8} />
+                              <span>Reject</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 font-medium text-[10px]">Decided</span>
+                        )}
+                      </td>
+                    )}
+                    {!isOwner && (
+                      <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                        {sheet.status === 'Pending' ? (
+                          <button
+                            onClick={() => deleteKharchiApproval(sheet.id)}
+                            className="text-red-500 hover:text-red-700 cursor-pointer"
+                            title="Delete Request"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        ) : (
+                          <span className="text-gray-400 font-medium">-</span>
+                        )}
+                      </td>
+                    )}
+                  </motion.tr>
+                );
+              })}
+              {kharchiApprovals.length === 0 && (
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                  <td colSpan={isOwner ? 8 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No kharchi sheets have been submitted for approval yet.
+                  </td>
+                </motion.tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Tab 4 Content: Approval History */}
+      {activeTab === 'history' && (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600 text-[10px] font-semibold font-sans">
+              Chronological log of past approvals and rejections
+            </span>
+            <div className="text-gray-500 font-mono text-[10px]">
+              Showing {historyLog.length} historical action(s)
+            </div>
+          </div>
+
+          <table className="w-full border-collapse border border-[#8c9ba8] bg-white text-[11px]">
+            <thead className="sap-header bg-[#eef2f6]">
+              <tr>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-8">#</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Date (Submitted)</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Type</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project Site</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Details</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Amount</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Action By</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {historyLog.map((log, idx) => {
+                let statusBadge = '';
+                if (log.status === 'Approved') {
+                  statusBadge = 'bg-green-100 text-green-800 border-green-300';
+                } else if (log.status === 'Rejected') {
+                  statusBadge = 'bg-red-100 text-red-800 border-red-300';
+                } else {
+                  statusBadge = 'bg-yellow-100 text-yellow-800 border-yellow-300';
+                }
+                return (
+                  <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={log.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1">{log.date}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-bold text-[#0056b3]">{log.type}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{log.projectName}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-mono text-gray-700">{log.details}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-950">₹{log.amount.toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-600">{log.remarks || '-'}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{log.actionBy}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${statusBadge}`}>
+                        {log.status}
+                      </span>
+                    </td>
+                  </motion.tr>
+                );
+              })}
+              {historyLog.length === 0 && (
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                  <td colSpan={9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No approval history available.
                   </td>
                 </motion.tr>
               )}

@@ -46,6 +46,10 @@ export const Workers: React.FC = () => {
       worker.name.toLowerCase().includes(query) ||
       worker.workerId.toLowerCase().includes(query)
     );
+  }).sort((a, b) => {
+    const sA = parseInt(a.serialNo) || 0;
+    const sB = parseInt(b.serialNo) || 0;
+    return sA - sB;
   });
 
   const handleEdit = (worker: any) => {
@@ -78,16 +82,28 @@ export const Workers: React.FC = () => {
     return `SNE${nextNum.toString().padStart(3, '0')}`;
   };
 
+  const generateNextSerialNo = () => {
+    const sNos = workers
+      .map(w => parseInt(w.serialNo, 10))
+      .filter(num => !isNaN(num));
+
+    let nextNum = 1;
+    if (sNos.length > 0) {
+      nextNum = Math.max(...sNos) + 1;
+    }
+    return nextNum.toString();
+  };
+
   const handleAddNewWorkerClick = () => {
     if (isAdding) {
       handleCancel();
     } else {
       setIsAdding(true);
       setFormData({ 
-        serialNo: '', 
+        serialNo: generateNextSerialNo(), 
         workerId: generateNextWorkerId(), 
         name: '', 
-        projectId: '', 
+        projectId: selectedFilterProject !== 'all' ? selectedFilterProject : '', 
         designation: '', 
         joiningDate: new Date().toISOString().split('T')[0], 
         exitDate: '' 
@@ -110,6 +126,13 @@ export const Workers: React.FC = () => {
       alert(`Worker ID "${formData.workerId}" is already registered to ${existingWorker.name}! Please use a unique ID.`);
       return;
     }
+
+    // Check if serialNo already exists
+    const existingSerial = workers.find(w => w.serialNo === formData.serialNo);
+    if (existingSerial && existingSerial.id !== editingId) {
+      alert(`Serial Number "${formData.serialNo}" is already in use by ${existingSerial.name}! Please use a unique Serial Number.`);
+      return;
+    }
     
     if (editingId) {
       updateWorker(editingId, { ...formData });
@@ -128,13 +151,20 @@ export const Workers: React.FC = () => {
 
   // Ledger Filtered Workers for Sidebar Scroll Area
   const filteredLedgerWorkers = useMemo(() => {
+    let list = workers;
     const q = ledgerSearch.toLowerCase().trim();
-    if (!q) return workers;
-    return workers.filter(w => 
-      w.name.toLowerCase().includes(q) || 
-      w.workerId.toLowerCase().includes(q) ||
-      w.designation.toLowerCase().includes(q)
-    );
+    if (q) {
+      list = workers.filter(w => 
+        w.name.toLowerCase().includes(q) || 
+        w.workerId.toLowerCase().includes(q) ||
+        w.designation.toLowerCase().includes(q)
+      );
+    }
+    return [...list].sort((a, b) => {
+      const sA = parseInt(a.serialNo) || 0;
+      const sB = parseInt(b.serialNo) || 0;
+      return sA - sB;
+    });
   }, [workers, ledgerSearch]);
 
   // Handle active worker matching
@@ -466,7 +496,21 @@ export const Workers: React.FC = () => {
                 </div>
                 <div className="flex items-center">
                   <label className="w-28 font-semibold text-gray-700">Designation / Role:</label>
-                  <input required type="text" className="sap-input flex-1 font-sans" placeholder="e.g. Mason, Supervisor" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} />
+                  <select required className="sap-input flex-1 font-sans" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})}>
+                    <option value="">Select Role...</option>
+                    <option value="Carpenter">Carpenter</option>
+                    <option value="Semi Carpenter">Semi Carpenter</option>
+                    <option value="Carpenter Helper">Carpenter Helper</option>
+                    <option value="Fitter">Fitter</option>
+                    <option value="Fitter Helper">Fitter Helper</option>
+                    <option value="Rigger">Rigger</option>
+                    <option value="Mason">Mason</option>
+                    <option value="Foreman">Foreman</option>
+                    <option value="Engineer">Engineer</option>
+                    <option value="Sr. Engineer">Sr. Engineer</option>
+                    <option value="Cook">Cook</option>
+                    <option value="Storeman">Storeman</option>
+                  </select>
                 </div>
                 <div className="flex items-center">
                   <label className="w-28 font-semibold text-gray-700">Joining Date:</label>
@@ -1059,20 +1103,10 @@ export const Workers: React.FC = () => {
                 </div>
 
                 {/* Printable Approvals Section Block (stamp, prepares, signs) */}
-                <div className="hidden print:block mt-16 font-sans">
-                  <div className="grid grid-cols-3 gap-6 text-[10px] text-gray-700">
-                    <div className="border-t border-gray-400 pt-2 text-center">
-                      <span className="block font-bold">PREPARED BY</span>
-                      <span className="block italic text-[8.5px] text-gray-500 mt-1">SN Enterprise Finance Desk</span>
-                    </div>
-                    <div className="border-t border-gray-400 pt-2 text-center">
-                      <span className="block font-bold">AUDITED APPROVED BY</span>
-                      <span className="block italic text-[8.5px] text-gray-500 mt-1">General Audit Registry Comptroller</span>
-                    </div>
-                    <div className="border-t border-gray-400 pt-2 text-center">
-                      <span className="block font-bold">AUTHORIZED WORKER ACCREDITATION</span>
-                      <span className="block italic text-[8px] text-gray-500 mt-1">Sign & Verification Stamp of Acknowledgment</span>
-                    </div>
+                <div className="print-signature-section">
+                  <div className="print-signature-box">
+                    <div className="print-signature-title">Approved by Director</div>
+                    <div className="print-signature-date">Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                   </div>
                 </div>
 

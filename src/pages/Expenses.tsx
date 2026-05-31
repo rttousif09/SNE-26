@@ -1171,6 +1171,12 @@ export const Expenses: React.FC = () => {
             )}
           </tbody>
         </table>
+        <div className="print-signature-section">
+          <div className="print-signature-box">
+            <div className="print-signature-title">Approved by Director</div>
+            <div className="print-signature-date">Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+          </div>
+        </div>
       </div>
 
       {/* Warning/Confirmation Delete Modal */}

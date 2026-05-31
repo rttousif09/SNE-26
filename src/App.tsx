@@ -19,6 +19,7 @@ import { WorkerPayment } from './pages/WorkerPayment';
 import { Approvals } from './pages/Approvals';
 import { Expenses } from './pages/Expenses';
 import { ExpensesSummary } from './pages/ExpensesSummary';
+import { SiteMonthlySummary } from './pages/SiteMonthlySummary';
 import { Mess } from './pages/Mess';
 import { DLR } from './pages/DLR';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
@@ -47,6 +48,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'mess': return <Mess />;
       case 'dlr': return <DLR />;
       case 'expenses-summary': return <ExpensesSummary />;
+      case 'site-monthly-summary': return <SiteMonthlySummary />;
       default: return <Dashboard />;
     }
   };
@@ -66,6 +68,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'mess': return 'Mess Management';
       case 'dlr': return 'Daily Labour Report (DLR)';
       case 'expenses-summary': return 'Expenses Summary Dashboard';
+      case 'site-monthly-summary': return 'Site Monthly Report';
       default: return 'Overview';
     }
   };
