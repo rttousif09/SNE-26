@@ -146,6 +146,7 @@ function initDbSchema() {
       remarks TEXT,
       date TEXT NOT NULL,
       status TEXT DEFAULT 'Pending',
+      approvalNotes TEXT,
       FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
@@ -158,6 +159,7 @@ function initDbSchema() {
       remarks TEXT,
       date TEXT NOT NULL,
       status TEXT NOT NULL,
+      approvalNotes TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -169,6 +171,7 @@ function initDbSchema() {
       remarks TEXT,
       date TEXT NOT NULL,
       status TEXT DEFAULT 'Pending',
+      approvalNotes TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -221,9 +224,131 @@ function initDbSchema() {
       remarks TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS material_items (
+      id TEXT PRIMARY KEY,
+      itemCode TEXT,
+      itemName TEXT NOT NULL,
+      category TEXT NOT NULL,
+      unit TEXT NOT NULL,
+      description TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS material_issues (
+      id TEXT PRIMARY KEY,
+      voucherNo TEXT NOT NULL,
+      issueDate TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      tower TEXT,
+      floor TEXT,
+      itemId TEXT NOT NULL,
+      qty REAL NOT NULL,
+      issuedTo TEXT NOT NULL,
+      remarks TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (itemId) REFERENCES material_items(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS material_returns (
+      id TEXT PRIMARY KEY,
+      voucherNo TEXT NOT NULL,
+      returnDate TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      tower TEXT,
+      floor TEXT,
+      itemId TEXT NOT NULL,
+      qty REAL NOT NULL,
+      returnedBy TEXT NOT NULL,
+      condition TEXT NOT NULL,
+      remarks TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (itemId) REFERENCES material_items(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS material_purchases (
+      id TEXT PRIMARY KEY,
+      purchaseDate TEXT NOT NULL,
+      purchaseVoucherNo TEXT NOT NULL,
+      supplierName TEXT NOT NULL,
+      supplierMobile TEXT NOT NULL,
+      gstNo TEXT,
+      projectId TEXT NOT NULL,
+      itemId TEXT NOT NULL,
+      qty REAL NOT NULL,
+      rate REAL NOT NULL,
+      totalAmount REAL NOT NULL,
+      transportCharges REAL DEFAULT 0,
+      loadingCharges REAL DEFAULT 0,
+      otherCharges REAL DEFAULT 0,
+      grandTotal REAL NOT NULL,
+      invoiceNumber TEXT NOT NULL,
+      invoiceDate TEXT NOT NULL,
+      remarks TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (itemId) REFERENCES material_items(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS labour_plannings (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      tower TEXT,
+      floor TEXT,
+      activityName TEXT NOT NULL,
+      requiredDate TEXT NOT NULL,
+      requiredCompletionDate TEXT NOT NULL,
+      remarks TEXT,
+      carpenterReq INTEGER DEFAULT 0,
+      helperReq INTEGER DEFAULT 0,
+      barBenderReq INTEGER DEFAULT 0,
+      steelFixerReq INTEGER DEFAULT 0,
+      masonReq INTEGER DEFAULT 0,
+      concreteWorkerReq INTEGER DEFAULT 0,
+      supervisorReq INTEGER DEFAULT 0,
+      foremanReq INTEGER DEFAULT 0,
+      otherReq INTEGER DEFAULT 0,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS worker_transfers (
+      id TEXT PRIMARY KEY,
+      workerId TEXT NOT NULL,
+      fromProjectId TEXT NOT NULL,
+      toProjectId TEXT NOT NULL,
+      transferDate TEXT NOT NULL,
+      remarks TEXT,
+      FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
+      FOREIGN KEY (fromProjectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (toProjectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate existing databases to make sure they have the new columns
+  try {
+    db.exec("ALTER TABLE approvals ADD COLUMN approvalNotes TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE kharchi_approvals ADD COLUMN approvalNotes TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE payment_sheet_approvals ADD COLUMN approvalNotes TEXT");
+  } catch (e) {}
+
   try {
     db.exec("ALTER TABLE billings ADD COLUMN tds REAL DEFAULT 0");
   } catch (e) {}
@@ -876,13 +1001,13 @@ async function startServer() {
   app.put("/api/approvals/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, approvalNotes } = req.body;
       db.prepare(`
         UPDATE approvals
-        SET status = ?
+        SET status = ?, approvalNotes = ?
         WHERE id = ?
-      `).run(status, id);
-      res.json({ id, status });
+      `).run(status, approvalNotes || "", id);
+      res.json({ id, status, approvalNotes });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -924,13 +1049,13 @@ async function startServer() {
   app.put("/api/kharchi-approvals/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, approvalNotes } = req.body;
       db.prepare(`
         UPDATE kharchi_approvals
-        SET status = ?
+        SET status = ?, approvalNotes = ?
         WHERE id = ?
-      `).run(status, id);
-      res.json({ id, status });
+      `).run(status, approvalNotes || "", id);
+      res.json({ id, status, approvalNotes });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -971,13 +1096,13 @@ async function startServer() {
   app.put("/api/payment-sheet-approvals/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, approvalNotes } = req.body;
       db.prepare(`
         UPDATE payment_sheet_approvals
-        SET status = ?
+        SET status = ?, approvalNotes = ?
         WHERE id = ?
-      `).run(status, id);
-      res.json({ id, status });
+      `).run(status, approvalNotes || "", id);
+      res.json({ id, status, approvalNotes });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1185,6 +1310,327 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // --------------
+  // Material Items (Master) endpoints
+  // --------------
+  app.get("/api/material-items", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM material_items").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/material-items", (req, res) => {
+    try {
+      const { id, itemCode, itemName, category, unit, description, createdBy, createdDate } = req.body;
+      db.prepare(`
+        INSERT INTO material_items (id, itemCode, itemName, category, unit, description, createdBy, createdDate, modifiedBy, modifiedDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, itemCode || null, itemName, category, unit, description || null, createdBy || null, createdDate || null, createdBy || null, createdDate || null);
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/material-items/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { itemCode, itemName, category, unit, description, modifiedBy, modifiedDate } = req.body;
+      db.prepare(`
+        UPDATE material_items
+        SET itemCode = ?, itemName = ?, category = ?, unit = ?, description = ?, modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(itemCode || null, itemName, category, unit, description || null, modifiedBy || null, modifiedDate || null, id);
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/material-items/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM material_items WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --------------
+  // Material Issues endpoints
+  // --------------
+  app.get("/api/material-issues", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM material_issues").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/material-issues", (req, res) => {
+    try {
+      const { id, voucherNo, issueDate, projectId, tower, floor, itemId, qty, issuedTo, remarks, createdBy, createdDate } = req.body;
+      db.prepare(`
+        INSERT INTO material_issues (id, voucherNo, issueDate, projectId, tower, floor, itemId, qty, issuedTo, remarks, createdBy, createdDate, modifiedBy, modifiedDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, voucherNo, issueDate, projectId, tower || null, floor || null, itemId, parseFloat(qty), issuedTo, remarks || null, createdBy || null, createdDate || null, createdBy || null, createdDate || null);
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/material-issues/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { voucherNo, issueDate, projectId, tower, floor, itemId, qty, issuedTo, remarks, modifiedBy, modifiedDate } = req.body;
+      db.prepare(`
+        UPDATE material_issues
+        SET voucherNo = ?, issueDate = ?, projectId = ?, tower = ?, floor = ?, itemId = ?, qty = ?, issuedTo = ?, remarks = ?, modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(voucherNo, issueDate, projectId, tower || null, floor || null, itemId, parseFloat(qty), issuedTo, remarks || null, modifiedBy || null, modifiedDate || null, id);
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/material-issues/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM material_issues WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --------------
+  // Material Returns endpoints
+  // --------------
+  app.get("/api/material-returns", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM material_returns").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/material-returns", (req, res) => {
+    try {
+      const { id, voucherNo, returnDate, projectId, tower, floor, itemId, qty, returnedBy, condition, remarks, createdBy, createdDate } = req.body;
+      db.prepare(`
+        INSERT INTO material_returns (id, voucherNo, returnDate, projectId, tower, floor, itemId, qty, returnedBy, condition, remarks, createdBy, createdDate, modifiedBy, modifiedDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, voucherNo, returnDate, projectId, tower || null, floor || null, itemId, parseFloat(qty), returnedBy, condition, remarks || null, createdBy || null, createdDate || null, createdBy || null, createdDate || null);
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/material-returns/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { voucherNo, returnDate, projectId, tower, floor, itemId, qty, returnedBy, condition, remarks, modifiedBy, modifiedDate } = req.body;
+      db.prepare(`
+        UPDATE material_returns
+        SET voucherNo = ?, returnDate = ?, projectId = ?, tower = ?, floor = ?, itemId = ?, qty = ?, returnedBy = ?, condition = ?, remarks = ?, modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(voucherNo, returnDate, projectId, tower || null, floor || null, itemId, parseFloat(qty), returnedBy, condition, remarks || null, modifiedBy || null, modifiedDate || null, id);
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/material-returns/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM material_returns WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --------------
+  // Material Purchases endpoints
+  // --------------
+  app.get("/api/material-purchases", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM material_purchases").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/material-purchases", (req, res) => {
+    try {
+      const {
+        id, purchaseDate, purchaseVoucherNo, supplierName, supplierMobile, gstNo, projectId, itemId, qty, rate, totalAmount,
+        transportCharges, loadingCharges, otherCharges, grandTotal, invoiceNumber, invoiceDate, remarks, createdBy, createdDate
+      } = req.body;
+      db.prepare(`
+        INSERT INTO material_purchases (
+          id, purchaseDate, purchaseVoucherNo, supplierName, supplierMobile, gstNo, projectId, itemId, qty, rate, totalAmount,
+          transportCharges, loadingCharges, otherCharges, grandTotal, invoiceNumber, invoiceDate, remarks, createdBy, createdDate, modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, purchaseDate, purchaseVoucherNo, supplierName, supplierMobile, gstNo || null, projectId, itemId, parseFloat(qty), parseFloat(rate), parseFloat(totalAmount),
+        parseFloat(transportCharges || 0), parseFloat(loadingCharges || 0), parseFloat(otherCharges || 0), parseFloat(grandTotal), invoiceNumber, invoiceDate, remarks || null,
+        createdBy || null, createdDate || null, createdBy || null, createdDate || null
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/material-purchases/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        purchaseDate, purchaseVoucherNo, supplierName, supplierMobile, gstNo, projectId, itemId, qty, rate, totalAmount,
+        transportCharges, loadingCharges, otherCharges, grandTotal, invoiceNumber, invoiceDate, remarks, modifiedBy, modifiedDate
+      } = req.body;
+      db.prepare(`
+        UPDATE material_purchases
+        SET purchaseDate = ?, purchaseVoucherNo = ?, supplierName = ?, supplierMobile = ?, gstNo = ?, projectId = ?, itemId = ?, qty = ?, rate = ?, totalAmount = ?,
+            transportCharges = ?, loadingCharges = ?, otherCharges = ?, grandTotal = ?, invoiceNumber = ?, invoiceDate = ?, remarks = ?, modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        purchaseDate, purchaseVoucherNo, supplierName, supplierMobile, gstNo || null, projectId, itemId, parseFloat(qty), parseFloat(rate), parseFloat(totalAmount),
+        parseFloat(transportCharges || 0), parseFloat(loadingCharges || 0), parseFloat(otherCharges || 0), parseFloat(grandTotal), invoiceNumber, invoiceDate, remarks || null,
+        modifiedBy || null, modifiedDate || null, id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/material-purchases/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM material_purchases WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 8.5 Labour Plannings and Worker Transfers
+  app.get("/api/labour-plannings", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM labour_plannings").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/labour-plannings", (req, res) => {
+    try {
+      const {
+        id, projectId, tower, floor, activityName, requiredDate, requiredCompletionDate, remarks,
+        carpenterReq, helperReq, barBenderReq, steelFixerReq, masonReq, concreteWorkerReq,
+        supervisorReq, foremanReq, otherReq
+      } = req.body;
+      db.prepare(`
+        INSERT INTO labour_plannings (
+          id, projectId, tower, floor, activityName, requiredDate, requiredCompletionDate, remarks,
+          carpenterReq, helperReq, barBenderReq, steelFixerReq, masonReq, concreteWorkerReq,
+          supervisorReq, foremanReq, otherReq
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, projectId, tower || null, floor || null, activityName, requiredDate, requiredCompletionDate, remarks || null,
+        parseInt(carpenterReq || 0), parseInt(helperReq || 0), parseInt(barBenderReq || 0),
+        parseInt(steelFixerReq || 0), parseInt(masonReq || 0), parseInt(concreteWorkerReq || 0),
+        parseInt(supervisorReq || 0), parseInt(foremanReq || 0), parseInt(otherReq || 0)
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/labour-plannings/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        projectId, tower, floor, activityName, requiredDate, requiredCompletionDate, remarks,
+        carpenterReq, helperReq, barBenderReq, steelFixerReq, masonReq, concreteWorkerReq,
+        supervisorReq, foremanReq, otherReq
+      } = req.body;
+      db.prepare(`
+        UPDATE labour_plannings
+        SET projectId = ?, tower = ?, floor = ?, activityName = ?, requiredDate = ?, requiredCompletionDate = ?, remarks = ?,
+            carpenterReq = ?, helperReq = ?, barBenderReq = ?, steelFixerReq = ?, masonReq = ?, concreteWorkerReq = ?,
+            supervisorReq = ?, foremanReq = ?, otherReq = ?
+        WHERE id = ?
+      `).run(
+        projectId, tower || null, floor || null, activityName, requiredDate, requiredCompletionDate, remarks || null,
+        parseInt(carpenterReq || 0), parseInt(helperReq || 0), parseInt(barBenderReq || 0),
+        parseInt(steelFixerReq || 0), parseInt(masonReq || 0), parseInt(concreteWorkerReq || 0),
+        parseInt(supervisorReq || 0), parseInt(foremanReq || 0), parseInt(otherReq || 0),
+        id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/labour-plannings/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM labour_plannings WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/worker-transfers", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM worker_transfers").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/worker-transfers", (req, res) => {
+    try {
+      const { id, workerId, fromProjectId, toProjectId, transferDate, remarks } = req.body;
+      const transaction = db.transaction(() => {
+        db.prepare(`
+          INSERT INTO worker_transfers (id, workerId, fromProjectId, toProjectId, transferDate, remarks)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, workerId, fromProjectId, toProjectId, transferDate, remarks || null);
+
+        db.prepare(`
+          UPDATE workers
+          SET projectId = ?
+          WHERE id = ?
+        `).run(toProjectId, workerId);
+      });
+      transaction();
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 
   // 9. Full Backup Export/Import APIs
   app.get("/api/backup/export", (req, res) => {

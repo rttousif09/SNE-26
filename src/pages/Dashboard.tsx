@@ -4,7 +4,71 @@ import { useAppContext } from '../store';
 import Markdown from 'react-markdown';
 
 export const Dashboard: React.FC = () => {
-  const { projects, workers, billings, clientPayments, expensesLedger } = useAppContext();
+  const { projects, workers, billings, clientPayments, expensesLedger, labourPlannings } = useAppContext();
+
+  const getWorkerCategory = (designation: string): string => {
+    const norm = (designation || "").toLowerCase();
+    if (norm.includes("helper")) return "Helper";
+    if (norm.includes("carpenter")) return "Carpenter";
+    if (norm.includes("bar bender") || norm.includes("bender")) return "Bar Bender";
+    if (norm.includes("steel fixer") || norm.includes("fitter") || norm.includes("fixer")) return "Steel Fixer";
+    if (norm.includes("mason")) return "Mason";
+    if (norm.includes("concrete") || norm.includes("cement")) return "Concrete Worker";
+    if (norm.includes("supervisor") || norm.includes("engineer")) return "Supervisor";
+    if (norm.includes("foreman")) return "Foreman";
+    return "Other";
+  };
+
+  let totalRequiredVal = 0;
+  let totalAvailableVal = 0;
+  let totalShortageVal = 0;
+  let totalExcessVal = 0;
+  let upcomingPlanningCount = 0;
+
+  const todayStr = new Date().toISOString().substring(0, 10);
+
+  (labourPlannings || []).forEach(plan => {
+    if (plan.requiredDate >= todayStr) {
+      upcomingPlanningCount++;
+    }
+
+    const siteWorkers = workers.filter(w => w.projectId === plan.projectId);
+    
+    const catsActive = {
+      Carpenter: 0, Helper: 0, "Bar Bender": 0, "Steel Fixer": 0, Mason: 0,
+      "Concrete Worker": 0, Supervisor: 0, Foreman: 0, Other: 0
+    };
+    siteWorkers.forEach(w => {
+      const cat = getWorkerCategory(w.designation);
+      if (cat in catsActive) {
+        catsActive[cat as keyof typeof catsActive]++;
+      } else {
+        catsActive["Other"]++;
+      }
+    });
+
+    const categoriesList = [
+      { key: "Carpenter", req: plan.carpenterReq || 0, avail: catsActive["Carpenter"] },
+      { key: "Helper", req: plan.helperReq || 0, avail: catsActive["Helper"] },
+      { key: "Bar Bender", req: plan.barBenderReq || 0, avail: catsActive["Bar Bender"] },
+      { key: "Steel Fixer", req: plan.steelFixerReq || 0, avail: catsActive["Steel Fixer"] },
+      { key: "Mason", req: plan.masonReq || 0, avail: catsActive["Mason"] },
+      { key: "Concrete Worker", req: plan.concreteWorkerReq || 0, avail: catsActive["Concrete Worker"] },
+      { key: "Supervisor", req: plan.supervisorReq || 0, avail: catsActive["Supervisor"] },
+      { key: "Foreman", req: plan.foremanReq || 0, avail: catsActive["Foreman"] },
+      { key: "Other", req: plan.otherReq || 0, avail: catsActive["Other"] },
+    ];
+
+    categoriesList.forEach(c => {
+      totalRequiredVal += c.req;
+      totalAvailableVal += c.avail;
+      if (c.req > c.avail) {
+        totalShortageVal += (c.req - c.avail);
+      } else if (c.avail > c.req) {
+        totalExcessVal += (c.avail - c.req);
+      }
+    });
+  });
   
   const [newsData, setNewsData] = useState<{text: string, groundingChunks: any[]} | null>(null);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
@@ -154,6 +218,35 @@ export const Dashboard: React.FC = () => {
 
       {/* Right Column */}
       <div className="flex-1 space-y-4">
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
+          <SectionHeader title="Labour Planning Summary" />
+          <div className="px-2 pb-2 bg-white border border-[#8c9ba8] p-3 shadow-sm rounded-sm">
+            <div className="grid grid-cols-2 gap-2 mb-2 font-mono">
+              <div className="bg-slate-50 border border-slate-300 p-2 rounded text-center">
+                <span className="text-gray-500 block uppercase text-[8px] font-bold">Total Required</span>
+                <span className="text-sm font-extrabold text-blue-900">{totalRequiredVal}</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-300 p-2 rounded text-center">
+                <span className="text-gray-500 block uppercase text-[8px] font-bold font-sans">Total Available</span>
+                <span className="text-sm font-extrabold text-teal-800">{totalAvailableVal}</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-300 p-2 rounded text-center">
+                <span className="text-gray-500 block uppercase text-[8px] font-bold font-sans">Total Shortage</span>
+                <span className={`text-sm font-extrabold ${totalShortageVal > 0 ? 'text-red-700' : 'text-gray-500'}`}>{totalShortageVal}</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-300 p-2 rounded text-center">
+                <span className="text-gray-500 block uppercase text-[8px] font-bold font-sans">Total Excess</span>
+                <span className="text-sm font-extrabold text-emerald-700">{totalExcessVal}</span>
+              </div>
+            </div>
+            
+            <div className="border border-amber-200 bg-amber-50 p-2 rounded flex justify-between items-center text-[10px] sm:text-[9px]">
+              <span className="font-semibold text-amber-850">Upcoming Requirements (Next 30 Days):</span>
+              <span className="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">{upcomingPlanningCount} plans</span>
+            </div>
+          </div>
+        </motion.div>
+
         <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Current Alerts and Messages" />
           <div className="px-2 space-y-1">

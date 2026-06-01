@@ -30,6 +30,13 @@ export const Approvals: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<'advances' | 'paymentSheets' | 'kharchiSheets' | 'history'>('advances');
   const [isAdding, setIsAdding] = useState(false);
+  const [noteModal, setNoteModal] = useState<{
+    id: string;
+    type: 'advance' | 'sheet' | 'kharchi';
+    action: 'Approved' | 'Rejected';
+    details: string;
+  } | null>(null);
+  const [modalNotes, setModalNotes] = useState('');
   const [formData, setFormData] = useState({
     workerId: '',
     projectId: '',
@@ -250,6 +257,22 @@ export const Approvals: React.FC = () => {
     updateKharchiApproval(id, { status: 'Rejected' });
   };
 
+  const handleModalSubmit = () => {
+    if (!noteModal) return;
+    const { id, type, action } = noteModal;
+    
+    if (type === 'advance') {
+      updateApproval(id, { status: action, approvalNotes: modalNotes });
+    } else if (type === 'sheet') {
+      updatePaymentSheetApproval(id, { status: action, approvalNotes: modalNotes });
+    } else if (type === 'kharchi') {
+      updateKharchiApproval(id, { status: action, approvalNotes: modalNotes });
+    }
+    
+    setNoteModal(null);
+    setModalNotes('');
+  };
+
   const historyLog = React.useMemo(() => {
     const logs: any[] = [];
     
@@ -266,6 +289,7 @@ export const Approvals: React.FC = () => {
           date: a.date,
           status: a.status,
           remarks: a.remarks,
+          approvalNotes: a.approvalNotes,
           actionBy: 'Director (saddamsne)'
         });
       }
@@ -283,6 +307,7 @@ export const Approvals: React.FC = () => {
           date: a.date,
           status: a.status,
           remarks: a.remarks,
+          approvalNotes: a.approvalNotes,
           actionBy: 'Director (saddamsne)'
         });
       }
@@ -300,6 +325,7 @@ export const Approvals: React.FC = () => {
           date: a.date,
           status: a.status,
           remarks: a.remarks,
+          approvalNotes: a.approvalNotes,
           actionBy: 'Director (saddamsne)'
         });
       }
@@ -566,14 +592,30 @@ export const Approvals: React.FC = () => {
                         {app.status === 'Pending' ? (
                           <div className="flex items-center justify-center space-x-2">
                             <button
-                              onClick={() => handleApprove(app.id)}
+                              onClick={() => {
+                                setNoteModal({
+                                  id: app.id,
+                                  type: 'advance',
+                                  action: 'Approved',
+                                  details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`
+                                });
+                                setModalNotes('');
+                              }}
                               className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
                             >
                               <Check size={8} />
                               <span>Approve</span>
                             </button>
                             <button
-                              onClick={() => handleReject(app.id)}
+                              onClick={() => {
+                                setNoteModal({
+                                  id: app.id,
+                                  type: 'advance',
+                                  action: 'Rejected',
+                                  details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`
+                                });
+                                setModalNotes('');
+                              }}
                               className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
                             >
                               <XCircle size={8} />
@@ -665,14 +707,30 @@ export const Approvals: React.FC = () => {
                         {sheet.status === 'Pending' ? (
                           <div className="flex items-center justify-center space-x-2">
                             <button
-                              onClick={() => handleApproveSheet(sheet.id)}
+                              onClick={() => {
+                                setNoteModal({
+                                  id: sheet.id,
+                                  type: 'sheet',
+                                  action: 'Approved',
+                                  details: `Payment Sheet: ${getProjectName(sheet.projectId)} - Month: ${sheet.month} - Amount: ₹${sheet.totalAmount.toLocaleString('en-IN')}`
+                                });
+                                setModalNotes('');
+                              }}
                               className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
                             >
                               <Check size={8} />
                               <span>Approve</span>
                             </button>
                             <button
-                              onClick={() => handleRejectSheet(sheet.id)}
+                              onClick={() => {
+                                setNoteModal({
+                                  id: sheet.id,
+                                  type: 'sheet',
+                                  action: 'Rejected',
+                                  details: `Payment Sheet: ${getProjectName(sheet.projectId)} - Month: ${sheet.month} - Amount: ₹${sheet.totalAmount.toLocaleString('en-IN')}`
+                                });
+                                setModalNotes('');
+                              }}
                               className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
                             >
                               <XCircle size={8} />
@@ -768,14 +826,30 @@ export const Approvals: React.FC = () => {
                         {sheet.status === 'Pending' ? (
                           <div className="flex items-center justify-center space-x-2">
                             <button
-                              onClick={() => handleApproveKharchi(sheet.id)}
+                              onClick={() => {
+                                setNoteModal({
+                                  id: sheet.id,
+                                  type: 'kharchi',
+                                  action: 'Approved',
+                                  details: `Kharchi Sheet: ${getProjectName(sheet.projectId)} - Month: ${sheet.month} - Amount: ₹${sheet.totalAmount.toLocaleString('en-IN')}`
+                                });
+                                setModalNotes('');
+                              }}
                               className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
                             >
                               <Check size={8} />
                               <span>Approve</span>
                             </button>
                             <button
-                              onClick={() => handleRejectKharchi(sheet.id)}
+                              onClick={() => {
+                                setNoteModal({
+                                  id: sheet.id,
+                                  type: 'kharchi',
+                                  action: 'Rejected',
+                                  details: `Kharchi Sheet: ${getProjectName(sheet.projectId)} - Month: ${sheet.month} - Amount: ₹${sheet.totalAmount.toLocaleString('en-IN')}`
+                                });
+                                setModalNotes('');
+                              }}
                               className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
                             >
                               <XCircle size={8} />
@@ -839,6 +913,7 @@ export const Approvals: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Details</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Amount</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Approval Notes / Justification</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Action By</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
               </tr>
@@ -862,6 +937,7 @@ export const Approvals: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono text-gray-700">{log.details}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-950">₹{log.amount.toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-600">{log.remarks || '-'}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-emerald-800 italic font-semibold">{log.approvalNotes || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{log.actionBy}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${statusBadge}`}>
@@ -873,7 +949,7 @@ export const Approvals: React.FC = () => {
               })}
               {historyLog.length === 0 && (
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                  <td colSpan={10} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No approval history available.
                   </td>
                 </motion.tr>
@@ -882,6 +958,63 @@ export const Approvals: React.FC = () => {
           </table>
         </div>
       )}
+
+      {/* Approval Notes Input Modal */}
+      <AnimatePresence>
+        {noteModal && (
+          <div className="fixed inset-0 bg-[#001730]/45 flex items-center justify-center p-4 z-[9999] backdrop-blur-xs">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border-2 border-[#8c9ba8] shadow-2xl max-w-md w-full rounded p-4 text-[11px]"
+            >
+              <div className="flex items-center justify-between border-b pb-2 mb-3 bg-[#eef2f6] p-1.5 border border-[#8c9ba8] rounded-sm">
+                <span className="font-bold text-[#002f6c] uppercase tracking-wide">
+                  {noteModal.action === 'Approved' ? '✅ Resolve: Approval Remarks' : '❌ Resolve: Rejection Justification'}
+                </span>
+                <button onClick={() => setNoteModal(null)} className="text-gray-400 hover:text-black cursor-pointer">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="mb-3 p-2 bg-yellow-50 text-yellow-850 border border-yellow-250 rounded font-semibold leading-relaxed font-mono text-[10px]">
+                <p className="font-bold text-gray-700 font-sans text-[11px] mb-0.5">Target Transaction Detail:</p>
+                {noteModal.details}
+              </div>
+
+              <div className="space-y-1 mb-4">
+                <label className="block font-bold text-gray-700">
+                  {noteModal.action === 'Approved' ? 'Remarks / Detailed instructions (Optional):' : 'Rejection Justification Note / Explanation (Required) *'}
+                </label>
+                <textarea
+                  className="sap-input w-full p-2 h-20 text-[11px] font-sans resize-none border border-slate-400"
+                  placeholder={noteModal.action === 'Approved' ? 'Add any advice, adjustment details, or audit remarks...' : 'Please describe why this payment or advance was rejected...'}
+                  value={modalNotes}
+                  onChange={(e) => setModalNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 border-t pt-3">
+                <button 
+                  onClick={() => setNoteModal(null)} 
+                  className="px-3 py-1 bg-slate-200 hover:bg-slate-300 border border-gray-450 font-bold rounded text-gray-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleModalSubmit}
+                  className={`px-3 py-1 font-bold text-white rounded cursor-pointer ${
+                    noteModal.action === 'Approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-650 hover:bg-red-700'
+                  }`}
+                >
+                  Confirm Resolution
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Floating Alert Notifications (Toast pop-ups) */}
       <div className="fixed bottom-4 right-4 z-[9999] flex flex-col space-y-2 max-w-xs md:max-w-sm w-full pointer-events-none text-sans">

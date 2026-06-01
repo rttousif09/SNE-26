@@ -3,6 +3,7 @@ import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, Search, Printer, FileSpreadsheet, Briefcase, User, Calendar, CreditCard, DollarSign, ArrowRight } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { motion, AnimatePresence } from 'motion/react';
+import { LabourRequirementPlanning } from '../components/LabourRequirementPlanning';
 
 export const Workers: React.FC = () => {
   const { 
@@ -14,12 +15,18 @@ export const Workers: React.FC = () => {
     advances, 
     addWorker, 
     updateWorker, 
-    deleteWorker 
+    deleteWorker,
+    labourPlannings,
+    workerTransfers,
+    addLabourPlanning,
+    updateLabourPlanning,
+    deleteLabourPlanning,
+    addWorkerTransfer
   } = useAppContext();
 
   const isReadOnly = user?.username === 'saddamsne';
 
-  const [activeView, setActiveView] = useState<'directory' | 'ledger'>('directory');
+  const [activeView, setActiveView] = useState<'directory' | 'ledger' | 'planning'>('directory');
   
   // Directory Tab States
   const [isAdding, setIsAdding] = useState(false);
@@ -35,6 +42,47 @@ export const Workers: React.FC = () => {
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [ledgerWorkbookTab, setLedgerWorkbookTab] = useState<'statement' | 'payments' | 'kharchi' | 'advance'>('statement');
+
+  // Labour Requirement Planning States
+  const [planningSubTab, setPlanningSubTab] = useState<'requirements' | 'allocation_dashboard' | 'reports' | 'transfer_center'>('requirements');
+  const [isAddingPlanning, setIsAddingPlanning] = useState(false);
+  const [editingPlanningId, setEditingPlanningId] = useState<string | null>(null);
+  
+  const initialPlanningForm = useMemo(() => ({
+    projectId: '',
+    tower: '',
+    floor: '',
+    activityName: '',
+    requiredDate: new Date().toISOString().substring(0, 10),
+    requiredCompletionDate: new Date().toISOString().substring(0, 10),
+    remarks: '',
+    carpenterReq: 0,
+    helperReq: 0,
+    barBenderReq: 0,
+    steelFixerReq: 0,
+    masonReq: 0,
+    concreteWorkerReq: 0,
+    supervisorReq: 0,
+    foremanReq: 0,
+    otherReq: 0
+  }), []);
+  
+  const [planningForm, setPlanningForm] = useState(initialPlanningForm);
+  
+  // Planning Filters
+  const [filterPlanningProject, setFilterPlanningProject] = useState('all');
+  const [filterPlanningActivity, setFilterPlanningActivity] = useState('');
+  const [filterPlanningCategory, setFilterPlanningCategory] = useState('all');
+  const [filterPlanningStartDate, setFilterPlanningStartDate] = useState('');
+  const [filterPlanningEndDate, setFilterPlanningEndDate] = useState('');
+
+  // Transfer Wizard States
+  const [transferWorkerId, setTransferWorkerId] = useState('');
+  const [transferToProjectId, setTransferToProjectId] = useState('');
+  const [transferRemarks, setTransferRemarks] = useState('');
+  
+  // Report states
+  const [reportType, setReportType] = useState<'requirement' | 'availability' | 'shortage' | 'sitewise'>('requirement');
 
   // Directory filter
   const filteredWorkers = workers.filter(worker => {
@@ -143,6 +191,73 @@ export const Workers: React.FC = () => {
   };
 
   const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || 'Unknown';
+
+  const getWorkerCategory = (designation: string): string => {
+    const norm = (designation || "").toLowerCase();
+    if (norm.includes("helper")) return "Helper";
+    if (norm.includes("carpenter")) return "Carpenter";
+    if (norm.includes("bar bender") || norm.includes("bender")) return "Bar Bender";
+    if (norm.includes("steel fixer") || norm.includes("fitter") || norm.includes("fixer")) return "Steel Fixer";
+    if (norm.includes("mason")) return "Mason";
+    if (norm.includes("concrete") || norm.includes("cement")) return "Concrete Worker";
+    if (norm.includes("supervisor") || norm.includes("engineer")) return "Supervisor";
+    if (norm.includes("foreman")) return "Foreman";
+    return "Other";
+  };
+
+  const siteManpower = useMemo(() => {
+    const res: Record<string, Record<string, number>> = {};
+    projects.forEach(p => {
+      res[p.id] = {
+        Carpenter: 0, Helper: 0, "Bar Bender": 0, "Steel Fixer": 0, Mason: 0,
+        "Concrete Worker": 0, Supervisor: 0, Foreman: 0, Other: 0
+      };
+    });
+    res["unassigned"] = {
+      Carpenter: 0, Helper: 0, "Bar Bender": 0, "Steel Fixer": 0, Mason: 0,
+      "Concrete Worker": 0, Supervisor: 0, Foreman: 0, Other: 0
+    };
+    workers.forEach(w => {
+      const pid = w.projectId || "unassigned";
+      if (!res[pid]) {
+        res[pid] = {
+          Carpenter: 0, Helper: 0, "Bar Bender": 0, "Steel Fixer": 0, Mason: 0,
+          "Concrete Worker": 0, Supervisor: 0, Foreman: 0, Other: 0
+        };
+      }
+      const cat = getWorkerCategory(w.designation);
+      if (cat in res[pid]) {
+        res[pid][cat]++;
+      } else {
+        res[pid]["Other"]++;
+      }
+    });
+    return res;
+  }, [projects, workers]);
+
+  const filteredPlannings = useMemo(() => {
+    let list = labourPlannings || [];
+    
+    if (filterPlanningProject !== 'all') {
+      list = list.filter(p => p.projectId === filterPlanningProject);
+    }
+    if (filterPlanningActivity.trim()) {
+      const act = filterPlanningActivity.toLowerCase().trim();
+      list = list.filter(p => (p.activityName || '').toLowerCase().includes(act));
+    }
+    if (filterPlanningStartDate) {
+      list = list.filter(p => p.requiredDate >= filterPlanningStartDate);
+    }
+    if (filterPlanningEndDate) {
+      list = list.filter(p => p.requiredCompletionDate <= filterPlanningEndDate);
+    }
+    if (filterPlanningCategory !== 'all') {
+      const key = `${filterPlanningCategory.charAt(0).toLowerCase() + filterPlanningCategory.slice(1).replace(' ', '')}Req`;
+      list = list.filter(p => (Number((p as any)[key]) || 0) > 0);
+    }
+    
+    return list;
+  }, [labourPlannings, filterPlanningProject, filterPlanningActivity, filterPlanningCategory, filterPlanningStartDate, filterPlanningEndDate]);
 
   const workersPerSite = projects.map(p => ({
     name: p.name,
@@ -388,6 +503,13 @@ export const Workers: React.FC = () => {
           id="tab-workers-ledger"
         >
           <span>🔍 Worker deep Inquiry Ledger (Live Excel Account)</span>
+        </button>
+        <button
+          onClick={() => setActiveView('planning')}
+          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'planning' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
+          id="tab-workers-planning"
+        >
+          <span>📋 Labour Planning</span>
         </button>
       </div>
 
@@ -1122,6 +1244,10 @@ export const Workers: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {activeView === 'planning' && (
+        <LabourRequirementPlanning />
       )}
 
       {/* Roster delete validation modal */}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -16,6 +16,12 @@ interface AppState {
   expensesLedger: ExpenseEntry[];
   messBookings: MessBooking[];
   dlrs: DailyLabourReport[];
+  materialItems: MaterialItem[];
+  materialIssues: MaterialIssue[];
+  materialReturns: MaterialReturn[];
+  materialPurchases: MaterialPurchase[];
+  labourPlannings: LabourPlanning[];
+  workerTransfers: WorkerTransfer[];
 }
 
 interface AppContextType extends AppState {
@@ -62,6 +68,22 @@ interface AppContextType extends AppState {
   addDLR: (dlr: Omit<DailyLabourReport, 'id'>) => void;
   updateDLR: (id: string, dlr: Partial<DailyLabourReport>) => void;
   deleteDLR: (id: string) => void;
+  addMaterialItem: (item: Omit<MaterialItem, 'id'>) => void;
+  updateMaterialItem: (id: string, item: Partial<MaterialItem>) => void;
+  deleteMaterialItem: (id: string) => void;
+  addMaterialIssue: (issue: Omit<MaterialIssue, 'id'>) => void;
+  updateMaterialIssue: (id: string, issue: Partial<MaterialIssue>) => void;
+  deleteMaterialIssue: (id: string) => void;
+  addMaterialReturn: (ret: Omit<MaterialReturn, 'id'>) => void;
+  updateMaterialReturn: (id: string, ret: Partial<MaterialReturn>) => void;
+  deleteMaterialReturn: (id: string) => void;
+  addMaterialPurchase: (purchase: Omit<MaterialPurchase, 'id'>) => void;
+  updateMaterialPurchase: (id: string, purchase: Partial<MaterialPurchase>) => void;
+  deleteMaterialPurchase: (id: string) => void;
+  addLabourPlanning: (planning: Omit<LabourPlanning, 'id'>) => void;
+  updateLabourPlanning: (id: string, planning: Partial<LabourPlanning>) => void;
+  deleteLabourPlanning: (id: string) => void;
+  addWorkerTransfer: (transfer: Omit<WorkerTransfer, 'id'>) => void;
 }
 
 const initialState: AppState = {
@@ -106,6 +128,12 @@ const initialState: AppState = {
   ],
   messBookings: [],
   dlrs: [],
+  materialItems: [],
+  materialIssues: [],
+  materialReturns: [],
+  materialPurchases: [],
+  labourPlannings: [],
+  workerTransfers: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -143,13 +171,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     expensesLedger: [],
     messBookings: [],
     dlrs: [],
+    materialItems: [],
+    materialIssues: [],
+    materialReturns: [],
+    materialPurchases: [],
+    labourPlannings: [],
+    workerTransfers: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes] = await Promise.all([
+        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
           fetch('/api/billings').then(r => r.json()),
@@ -162,10 +196,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/expenses_ledger').then(r => r.json()).catch(() => []),
           fetch('/api/mess-bookings').then(r => r.json()).catch(() => []),
           fetch('/api/dlrs').then(r => r.json()).catch(() => []),
-          fetch('/api/kharchi-approvals').then(r => r.json()).catch(() => [])
+          fetch('/api/kharchi-approvals').then(r => r.json()).catch(() => []),
+          fetch('/api/material-items').then(r => r.json()).catch(() => []),
+          fetch('/api/material-issues').then(r => r.json()).catch(() => []),
+          fetch('/api/material-returns').then(r => r.json()).catch(() => []),
+          fetch('/api/material-purchases').then(r => r.json()).catch(() => []),
+          fetch('/api/labour-plannings').then(r => r.json()).catch(() => []),
+          fetch('/api/worker-transfers').then(r => r.json()).catch(() => [])
         ]);
 
-        setState({
+        const stateObj: AppState = {
           projects: pRes,
           workers: wRes,
           billings: bRes,
@@ -178,8 +218,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           paymentSheetApprovals: psaRes,
           expensesLedger: elRes,
           messBookings: mbRes,
-          dlrs: dlrRes || []
-        });
+          dlrs: dlrRes || [],
+          materialItems: miRes || [],
+          materialIssues: misRes || [],
+          materialReturns: mrRes || [],
+          materialPurchases: mpRes || [],
+          labourPlannings: lpRes || [],
+          workerTransfers: wtRes || []
+        };
+        setState(stateObj);
 
         // Sync with IndexedDB
         await saveAllToStore('projects', pRes);
@@ -195,6 +242,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('expensesLedger', elRes).catch(() => {});
         await saveAllToStore('messBookings', mbRes).catch(() => {});
         if(dlrRes) await saveAllToStore('dlrs', dlrRes).catch(() => {});
+        await saveAllToStore('materialItems', miRes || []).catch(() => {});
+        await saveAllToStore('materialIssues', misRes || []).catch(() => {});
+        await saveAllToStore('materialReturns', mrRes || []).catch(() => {});
+        await saveAllToStore('materialPurchases', mpRes || []).catch(() => {});
+        await saveAllToStore('labourPlannings', lpRes || []).catch(() => {});
+        await saveAllToStore('workerTransfers', wtRes || []).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -211,12 +264,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const expensesLedger = await getAllFromStore('expensesLedger').catch(() => []);
           const messBookings = await getAllFromStore('messBookings').catch(() => []);
           const dlrs = await getAllFromStore('dlrs').catch(() => []);
+          const materialItems = await getAllFromStore('materialItems').catch(() => []);
+          const materialIssues = await getAllFromStore('materialIssues').catch(() => []);
+          const materialReturns = await getAllFromStore('materialReturns').catch(() => []);
+          const materialPurchases = await getAllFromStore('materialPurchases').catch(() => []);
+          const labourPlannings = await getAllFromStore('labourPlannings').catch(() => []);
+          const workerTransfers = await getAllFromStore('workerTransfers').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
                             workerPayments.length === 0 && approvals.length === 0 && paymentSheetApprovals.length === 0 &&
                             kharchiApprovals.length === 0 &&
-                            expensesLedger.length === 0 && messBookings.length === 0 && dlrs.length === 0;
+                            expensesLedger.length === 0 && messBookings.length === 0 && dlrs.length === 0 &&
+                            materialItems.length === 0 && materialIssues.length === 0 && materialReturns.length === 0 && materialPurchases.length === 0 &&
+                            labourPlannings.length === 0 && workerTransfers.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -234,7 +295,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               paymentSheetApprovals,
               expensesLedger,
               messBookings,
-              dlrs
+              dlrs,
+              materialItems,
+              materialIssues,
+              materialReturns,
+              materialPurchases,
+              labourPlannings,
+              workerTransfers
             });
           }
         } catch (e) {
@@ -865,6 +932,348 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addMaterialItem = async (item: Omit<MaterialItem, 'id'>) => {
+    const id = crypto.randomUUID();
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const createdBy = user?.name || user?.username || 'System';
+    const newItem: MaterialItem = {
+      ...item,
+      id,
+      createdBy,
+      createdDate: nowStr,
+      modifiedBy: createdBy,
+      modifiedDate: nowStr
+    };
+    setState(s => {
+      const updated = [...s.materialItems, newItem];
+      saveAllToStore('materialItems', updated).catch(console.error);
+      return { ...s, materialItems: updated };
+    });
+    try {
+      await fetch('/api/material-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newItem)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateMaterialItem = async (id: string, item: Partial<MaterialItem>) => {
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const modifiedBy = user?.name || user?.username || 'System';
+    setState(s => {
+      const updated = s.materialItems.map(d => d.id === id ? { ...d, ...item, modifiedBy, modifiedDate: nowStr } : d);
+      saveAllToStore('materialItems', updated).catch(console.error);
+      return { ...s, materialItems: updated };
+    });
+    try {
+      const existing = state.materialItems.find(d => d.id === id);
+      if (existing) {
+        const updatedObj = { ...existing, ...item, modifiedBy, modifiedDate: nowStr };
+        await fetch(`/api/material-items/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteMaterialItem = async (id: string) => {
+    setState(s => {
+      const updated = s.materialItems.filter(d => d.id !== id);
+      saveAllToStore('materialItems', updated).catch(console.error);
+      return { ...s, materialItems: updated };
+    });
+    try {
+      await fetch(`/api/material-items/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addMaterialIssue = async (issue: Omit<MaterialIssue, 'id'>) => {
+    const id = crypto.randomUUID();
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const createdBy = user?.name || user?.username || 'System';
+    const newIssue: MaterialIssue = {
+      ...issue,
+      id,
+      createdBy,
+      createdDate: nowStr,
+      modifiedBy: createdBy,
+      modifiedDate: nowStr
+    };
+    setState(s => {
+      const updated = [...s.materialIssues, newIssue];
+      saveAllToStore('materialIssues', updated).catch(console.error);
+      return { ...s, materialIssues: updated };
+    });
+    try {
+      await fetch('/api/material-issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newIssue)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateMaterialIssue = async (id: string, issue: Partial<MaterialIssue>) => {
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const modifiedBy = user?.name || user?.username || 'System';
+    setState(s => {
+      const updated = s.materialIssues.map(d => d.id === id ? { ...d, ...issue, modifiedBy, modifiedDate: nowStr } : d);
+      saveAllToStore('materialIssues', updated).catch(console.error);
+      return { ...s, materialIssues: updated };
+    });
+    try {
+      const existing = state.materialIssues.find(d => d.id === id);
+      if (existing) {
+        const updatedObj = { ...existing, ...issue, modifiedBy, modifiedDate: nowStr };
+        await fetch(`/api/material-issues/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteMaterialIssue = async (id: string) => {
+    setState(s => {
+      const updated = s.materialIssues.filter(d => d.id !== id);
+      saveAllToStore('materialIssues', updated).catch(console.error);
+      return { ...s, materialIssues: updated };
+    });
+    try {
+      await fetch(`/api/material-issues/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addMaterialReturn = async (ret: Omit<MaterialReturn, 'id'>) => {
+    const id = crypto.randomUUID();
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const createdBy = user?.name || user?.username || 'System';
+    const newReturn: MaterialReturn = {
+      ...ret,
+      id,
+      createdBy,
+      createdDate: nowStr,
+      modifiedBy: createdBy,
+      modifiedDate: nowStr
+    };
+    setState(s => {
+      const updated = [...s.materialReturns, newReturn];
+      saveAllToStore('materialReturns', updated).catch(console.error);
+      return { ...s, materialReturns: updated };
+    });
+    try {
+      await fetch('/api/material-returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newReturn)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateMaterialReturn = async (id: string, ret: Partial<MaterialReturn>) => {
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const modifiedBy = user?.name || user?.username || 'System';
+    setState(s => {
+      const updated = s.materialReturns.map(d => d.id === id ? { ...d, ...ret, modifiedBy, modifiedDate: nowStr } : d);
+      saveAllToStore('materialReturns', updated).catch(console.error);
+      return { ...s, materialReturns: updated };
+    });
+    try {
+      const existing = state.materialReturns.find(d => d.id === id);
+      if (existing) {
+        const updatedObj = { ...existing, ...ret, modifiedBy, modifiedDate: nowStr };
+        await fetch(`/api/material-returns/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteMaterialReturn = async (id: string) => {
+    setState(s => {
+      const updated = s.materialReturns.filter(d => d.id !== id);
+      saveAllToStore('materialReturns', updated).catch(console.error);
+      return { ...s, materialReturns: updated };
+    });
+    try {
+      await fetch(`/api/material-returns/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addMaterialPurchase = async (purchase: Omit<MaterialPurchase, 'id'>) => {
+    const id = crypto.randomUUID();
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const createdBy = user?.name || user?.username || 'System';
+    const newPurchase: MaterialPurchase = {
+      ...purchase,
+      id,
+      createdBy,
+      createdDate: nowStr,
+      modifiedBy: createdBy,
+      modifiedDate: nowStr
+    };
+    setState(s => {
+      const updated = [...s.materialPurchases, newPurchase];
+      saveAllToStore('materialPurchases', updated).catch(console.error);
+      return { ...s, materialPurchases: updated };
+    });
+    try {
+      await fetch('/api/material-purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPurchase)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateMaterialPurchase = async (id: string, purchase: Partial<MaterialPurchase>) => {
+    const nowStr = new Date().toISOString().substring(0, 10);
+    const modifiedBy = user?.name || user?.username || 'System';
+    setState(s => {
+      const updated = s.materialPurchases.map(d => d.id === id ? { ...d, ...purchase, modifiedBy, modifiedDate: nowStr } : d);
+      saveAllToStore('materialPurchases', updated).catch(console.error);
+      return { ...s, materialPurchases: updated };
+    });
+    try {
+      const existing = state.materialPurchases.find(d => d.id === id);
+      if (existing) {
+        const updatedObj = { ...existing, ...purchase, modifiedBy, modifiedDate: nowStr };
+        await fetch(`/api/material-purchases/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteMaterialPurchase = async (id: string) => {
+    setState(s => {
+      const updated = s.materialPurchases.filter(d => d.id !== id);
+      saveAllToStore('materialPurchases', updated).catch(console.error);
+      return { ...s, materialPurchases: updated };
+    });
+    try {
+      await fetch(`/api/material-purchases/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addLabourPlanning = async (planning: Omit<LabourPlanning, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newPlanning: LabourPlanning = {
+      ...planning,
+      id
+    };
+    setState(s => {
+      const updated = [...s.labourPlannings, newPlanning];
+      saveAllToStore('labourPlannings', updated).catch(console.error);
+      return { ...s, labourPlannings: updated };
+    });
+    try {
+      await fetch('/api/labour-plannings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPlanning)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateLabourPlanning = async (id: string, planning: Partial<LabourPlanning>) => {
+    setState(s => {
+      const updated = s.labourPlannings.map(p => p.id === id ? { ...p, ...planning } : p);
+      saveAllToStore('labourPlannings', updated).catch(console.error);
+      return { ...s, labourPlannings: updated };
+    });
+    try {
+      const existing = state.labourPlannings.find(p => p.id === id);
+      if (existing) {
+        const updatedObj = { ...existing, ...planning };
+        await fetch(`/api/labour-plannings/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteLabourPlanning = async (id: string) => {
+    setState(s => {
+      const updated = s.labourPlannings.filter(p => p.id !== id);
+      saveAllToStore('labourPlannings', updated).catch(console.error);
+      return { ...s, labourPlannings: updated };
+    });
+    try {
+      await fetch(`/api/labour-plannings/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addWorkerTransfer = async (transfer: Omit<WorkerTransfer, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newTransfer: WorkerTransfer = {
+      ...transfer,
+      id
+    };
+    setState(s => {
+      const updatedTransfers = [...s.workerTransfers, newTransfer];
+      const updatedWorkers = s.workers.map(w => w.id === transfer.workerId ? { ...w, projectId: transfer.toProjectId } : w);
+      
+      saveAllToStore('workerTransfers', updatedTransfers).catch(console.error);
+      saveAllToStore('workers', updatedWorkers).catch(console.error);
+      
+      return {
+        ...s,
+        workerTransfers: updatedTransfers,
+        workers: updatedWorkers
+      };
+    });
+    try {
+      await fetch('/api/worker-transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTransfer)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -910,7 +1319,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteMessBooking,
       addDLR,
       updateDLR,
-      deleteDLR
+      deleteDLR,
+      addMaterialItem,
+      updateMaterialItem,
+      deleteMaterialItem,
+      addMaterialIssue,
+      updateMaterialIssue,
+      deleteMaterialIssue,
+      addMaterialReturn,
+      updateMaterialReturn,
+      deleteMaterialReturn,
+      addMaterialPurchase,
+      updateMaterialPurchase,
+      deleteMaterialPurchase,
+      addLabourPlanning,
+      updateLabourPlanning,
+      deleteLabourPlanning,
+      addWorkerTransfer
     }}>
       {children}
     </AppContext.Provider>

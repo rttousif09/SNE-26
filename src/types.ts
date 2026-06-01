@@ -100,6 +100,7 @@ export interface Approval {
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  approvalNotes?: string;
 }
 
 export interface KharchiApproval {
@@ -110,6 +111,7 @@ export interface KharchiApproval {
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  approvalNotes?: string;
 }
 
 export interface PaymentSheetApproval {
@@ -120,6 +122,7 @@ export interface PaymentSheetApproval {
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  approvalNotes?: string;
 }
 
 export interface DailyLabourReport {
@@ -133,6 +136,79 @@ export interface DailyLabourReport {
   rigger: number;
   staff: number;
   remarks?: string;
+}
+
+export interface MaterialItem {
+  id: string;
+  itemCode?: string;
+  itemName: string;
+  category: string;
+  unit: string;
+  description?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+}
+
+export interface MaterialIssue {
+  id: string;
+  voucherNo: string;
+  issueDate: string;
+  projectId: string;
+  tower?: string;
+  floor?: string;
+  itemId: string;
+  qty: number;
+  issuedTo: string;
+  remarks?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+}
+
+export interface MaterialReturn {
+  id: string;
+  voucherNo: string;
+  returnDate: string;
+  projectId: string;
+  tower?: string;
+  floor?: string;
+  itemId: string;
+  qty: number;
+  returnedBy: string;
+  condition: 'Good' | 'Damaged' | 'Scrap';
+  remarks?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+}
+
+export interface MaterialPurchase {
+  id: string;
+  purchaseDate: string;
+  purchaseVoucherNo: string;
+  supplierName: string;
+  supplierMobile: string;
+  gstNo?: string;
+  projectId: string;
+  itemId: string;
+  qty: number;
+  rate: number;
+  totalAmount: number;
+  transportCharges: number;
+  loadingCharges: number;
+  otherCharges: number;
+  grandTotal: number;
+  invoiceNumber: string;
+  invoiceDate: string;
+  remarks?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
 }
 
 export interface ExpenseEntry {
@@ -168,5 +244,35 @@ export interface MessBooking {
   remarks?: string;
   postedExpenseId?: string;
 }
+
+export interface LabourPlanning {
+  id: string;
+  projectId: string;
+  tower?: string;
+  floor?: string;
+  activityName: string;
+  requiredDate: string;
+  requiredCompletionDate: string;
+  remarks?: string;
+  carpenterReq: number;
+  helperReq: number;
+  barBenderReq: number;
+  steelFixerReq: number;
+  masonReq: number;
+  concreteWorkerReq: number;
+  supervisorReq: number;
+  foremanReq: number;
+  otherReq: number;
+}
+
+export interface WorkerTransfer {
+  id: string;
+  workerId: string;
+  fromProjectId: string;
+  toProjectId: string;
+  transferDate: string;
+  remarks?: string;
+}
+
 
 
