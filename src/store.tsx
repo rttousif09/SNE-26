@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -13,6 +13,7 @@ interface AppState {
   approvals: Approval[];
   kharchiApprovals: KharchiApproval[];
   paymentSheetApprovals: PaymentSheetApproval[];
+  advanceSheetApprovals: AdvanceSheetApproval[];
   expensesLedger: ExpenseEntry[];
   messBookings: MessBooking[];
   dlrs: DailyLabourReport[];
@@ -22,6 +23,12 @@ interface AppState {
   materialPurchases: MaterialPurchase[];
   labourPlannings: LabourPlanning[];
   workerTransfers: WorkerTransfer[];
+  assets: Asset[];
+  assetTransfers: AssetTransfer[];
+  assetMaintenances: AssetMaintenance[];
+  workerLedger: WorkerLedgerEntry[];
+  workerHolds: WorkerHold[];
+  workerRecoveryAuditTrail: WorkerRecoveryAuditTrail[];
 }
 
 interface AppContextType extends AppState {
@@ -59,6 +66,9 @@ interface AppContextType extends AppState {
   addPaymentSheetApproval: (approval: Omit<PaymentSheetApproval, 'id' | 'status'>) => void;
   updatePaymentSheetApproval: (id: string, approval: Partial<PaymentSheetApproval>) => void;
   deletePaymentSheetApproval: (id: string) => void;
+  addAdvanceSheetApproval: (approval: Omit<AdvanceSheetApproval, 'id' | 'status'>) => void;
+  updateAdvanceSheetApproval: (id: string, approval: Partial<AdvanceSheetApproval>) => void;
+  deleteAdvanceSheetApproval: (id: string) => void;
   addExpenseEntry: (expense: Omit<ExpenseEntry, 'id'>) => void;
   updateExpenseEntry: (id: string, expense: Partial<ExpenseEntry>) => void;
   deleteExpenseEntry: (id: string) => void;
@@ -84,6 +94,18 @@ interface AppContextType extends AppState {
   updateLabourPlanning: (id: string, planning: Partial<LabourPlanning>) => void;
   deleteLabourPlanning: (id: string) => void;
   addWorkerTransfer: (transfer: Omit<WorkerTransfer, 'id'>) => void;
+  addAsset: (asset: Omit<Asset, 'id'>) => Promise<void>;
+  updateAsset: (id: string, asset: Partial<Asset>) => Promise<void>;
+  deleteAsset: (id: string) => Promise<{ success: boolean; error?: string }>;
+  addAssetTransfer: (transfer: Omit<AssetTransfer, 'id'>) => Promise<void>;
+  addAssetMaintenance: (maintenance: Omit<AssetMaintenance, 'id'>) => Promise<void>;
+  addWorkerLedgerEntry: (entry: Omit<WorkerLedgerEntry, 'id'>) => Promise<void>;
+  updateWorkerLedgerEntry: (id: string, entry: Partial<WorkerLedgerEntry>) => Promise<void>;
+  deleteWorkerLedgerEntry: (id: string) => Promise<void>;
+  addWorkerHold: (hold: Omit<WorkerHold, 'id'>) => Promise<void>;
+  updateWorkerHold: (id: string, hold: Partial<WorkerHold>) => Promise<void>;
+  deleteWorkerHold: (id: string) => Promise<void>;
+  addWorkerRecoveryAudit: (audit: Omit<WorkerRecoveryAuditTrail, 'id'>) => Promise<void>;
 }
 
 const initialState: AppState = {
@@ -114,6 +136,7 @@ const initialState: AppState = {
   approvals: [],
   kharchiApprovals: [],
   paymentSheetApprovals: [],
+  advanceSheetApprovals: [],
   expensesLedger: [
     { id: "el1", date: "2026-01-01", description: "Amount Credit", projectId: "", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 0, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "SBI", crBalance: 5000 },
     { id: "el2", date: "2026-01-01", description: "Travel Advance to Tripmaza", projectId: "p1", kharchi: 0, mess: 0, workerAdvance: 0, tiffin: 0, travel: 5000, machineryMaterial: 0, workerPayment: 0, stationery: 0, others: 0, bank: "", crBalance: 0 },
@@ -134,6 +157,20 @@ const initialState: AppState = {
   materialPurchases: [],
   labourPlannings: [],
   workerTransfers: [],
+  assets: [
+    { id: 'ast1', name: 'Drill Machine TE-70 Heavy', category: 'Drill Machine', assetCode: 'AST-1001', brand: 'Hilti', purchaseDate: '2026-01-10', purchaseCost: 45000, currentSiteId: 'p1', assignedTo: 'John Doe', status: 'In Use' },
+    { id: 'ast2', name: 'Scaffolding Unit Set-B', category: 'Scaffolding', assetCode: 'AST-1002', brand: 'Supra', purchaseDate: '2026-01-15', purchaseCost: 120000, currentSiteId: 'p2', assignedTo: '', status: 'Available' },
+    { id: 'ast3', name: 'Cutter Machine GDC-121', category: 'Cutter Machine', assetCode: 'AST-1003', brand: 'Bosch', purchaseDate: '2026-02-01', purchaseCost: 8500, currentSiteId: 'general_pool', assignedTo: 'Jane Smith', status: 'Under Maintenance' }
+  ],
+  assetTransfers: [
+    { id: 'txn1', assetId: 'ast1', fromSiteId: 'general_pool', toSiteId: 'p1', transferDate: '2026-01-15', transferredBy: 'Admin Supervisor', remarks: 'Initial mobilization to block S3 Eco City' }
+  ],
+  assetMaintenances: [
+    { id: 'maint1', assetId: 'ast3', maintenanceDate: '2026-02-15', maintenanceType: 'Repair', vendor: 'Universal Power Solutions', cost: 1200, remarks: 'Replaced carbon brushes and cleaned stator winding assembly', nextMaintenanceDate: '2026-08-15' }
+  ],
+  workerLedger: [],
+  workerHolds: [],
+  workerRecoveryAuditTrail: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -177,13 +214,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     materialPurchases: [],
     labourPlannings: [],
     workerTransfers: [],
+    assets: [],
+    assetTransfers: [],
+    assetMaintenances: [],
+    workerLedger: [],
+    workerHolds: [],
+    workerRecoveryAuditTrail: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        const [pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes] = await Promise.all([
+        const [
+          pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes, assetsRes, assetTransfersRes, assetMaintenancesRes,
+          wlRes, whRes, wratRes, asaRes
+        ] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
           fetch('/api/billings').then(r => r.json()),
@@ -202,7 +248,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/material-returns').then(r => r.json()).catch(() => []),
           fetch('/api/material-purchases').then(r => r.json()).catch(() => []),
           fetch('/api/labour-plannings').then(r => r.json()).catch(() => []),
-          fetch('/api/worker-transfers').then(r => r.json()).catch(() => [])
+          fetch('/api/worker-transfers').then(r => r.json()).catch(() => []),
+          fetch('/api/assets').then(r => r.json()).catch(() => []),
+          fetch('/api/asset-transfers').then(r => r.json()).catch(() => []),
+          fetch('/api/asset-maintenances').then(r => r.json()).catch(() => []),
+          fetch('/api/worker-ledger').then(r => r.json()).catch(() => []),
+          fetch('/api/worker-holds').then(r => r.json()).catch(() => []),
+          fetch('/api/worker-recovery-audit').then(r => r.json()).catch(() => []),
+          fetch('/api/advance-sheet-approvals').then(r => r.json()).catch(() => [])
         ]);
 
         const stateObj: AppState = {
@@ -216,6 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           approvals: apRes,
           kharchiApprovals: kaRes || [],
           paymentSheetApprovals: psaRes,
+          advanceSheetApprovals: asaRes || [],
           expensesLedger: elRes,
           messBookings: mbRes,
           dlrs: dlrRes || [],
@@ -224,7 +278,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           materialReturns: mrRes || [],
           materialPurchases: mpRes || [],
           labourPlannings: lpRes || [],
-          workerTransfers: wtRes || []
+          workerTransfers: wtRes || [],
+          assets: assetsRes || [],
+          assetTransfers: assetTransfersRes || [],
+          assetMaintenances: assetMaintenancesRes || [],
+          workerLedger: wlRes || [],
+          workerHolds: whRes || [],
+          workerRecoveryAuditTrail: wratRes || []
         };
         setState(stateObj);
 
@@ -248,6 +308,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('materialPurchases', mpRes || []).catch(() => {});
         await saveAllToStore('labourPlannings', lpRes || []).catch(() => {});
         await saveAllToStore('workerTransfers', wtRes || []).catch(() => {});
+        await saveAllToStore('assets', assetsRes || []).catch(() => {});
+        await saveAllToStore('assetTransfers', assetTransfersRes || []).catch(() => {});
+        await saveAllToStore('assetMaintenances', assetMaintenancesRes || []).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -270,6 +333,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const materialPurchases = await getAllFromStore('materialPurchases').catch(() => []);
           const labourPlannings = await getAllFromStore('labourPlannings').catch(() => []);
           const workerTransfers = await getAllFromStore('workerTransfers').catch(() => []);
+          const assets = await getAllFromStore('assets').catch(() => []);
+          const assetTransfers = await getAllFromStore('assetTransfers').catch(() => []);
+          const assetMaintenances = await getAllFromStore('assetMaintenances').catch(() => []);
+          const workerLedger = await getAllFromStore('workerLedger').catch(() => []);
+          const workerHolds = await getAllFromStore('workerHolds').catch(() => []);
+          const workerRecoveryAuditTrail = await getAllFromStore('workerRecoveryAuditTrail').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
@@ -277,7 +346,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                             kharchiApprovals.length === 0 &&
                             expensesLedger.length === 0 && messBookings.length === 0 && dlrs.length === 0 &&
                             materialItems.length === 0 && materialIssues.length === 0 && materialReturns.length === 0 && materialPurchases.length === 0 &&
-                            labourPlannings.length === 0 && workerTransfers.length === 0;
+                            labourPlannings.length === 0 && workerTransfers.length === 0 && assets.length === 0 &&
+                            assetTransfers.length === 0 && assetMaintenances.length === 0 &&
+                            workerLedger.length === 0 && workerHolds.length === 0 && workerRecoveryAuditTrail.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -301,7 +372,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               materialReturns,
               materialPurchases,
               labourPlannings,
-              workerTransfers
+              workerTransfers,
+              assets,
+              assetTransfers,
+              assetMaintenances,
+              workerLedger,
+              workerHolds,
+              workerRecoveryAuditTrail
             });
           }
         } catch (e) {
@@ -675,7 +752,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await fetch(`/api/approvals/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: merged.status })
+          body: JSON.stringify({ status: merged.status, approvalNotes: merged.approvalNotes, approvedAmount: merged.approvedAmount })
         });
         await saveAllToStore('approvals', state.approvals.map(app => app.id === id ? merged : app));
       }
@@ -718,7 +795,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await fetch(`/api/kharchi-approvals/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: merged.status })
+          body: JSON.stringify({ status: merged.status, approvalNotes: merged.approvalNotes })
         });
         await saveAllToStore('kharchiApprovals', state.kharchiApprovals.map(app => app.id === id ? merged : app));
       }
@@ -761,7 +838,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await fetch(`/api/payment-sheet-approvals/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: merged.status })
+          body: JSON.stringify({ status: merged.status, approvalNotes: merged.approvalNotes })
         });
         await saveAllToStore('paymentSheetApprovals', state.paymentSheetApprovals.map(app => app.id === id ? merged : app));
       }
@@ -775,6 +852,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await fetch(`/api/payment-sheet-approvals/${id}`, { method: 'DELETE' });
       await saveAllToStore('paymentSheetApprovals', state.paymentSheetApprovals.filter(app => app.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addAdvanceSheetApproval = async (approval: Omit<AdvanceSheetApproval, 'id' | 'status'>) => {
+    const newApproval: AdvanceSheetApproval = { ...approval, id: generateId(), status: 'Pending' };
+    setState(s => ({ ...s, advanceSheetApprovals: [...s.advanceSheetApprovals, newApproval] }));
+    try {
+      await fetch('/api/advance-sheet-approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newApproval)
+      });
+      await saveAllToStore('advanceSheetApprovals', [...state.advanceSheetApprovals, newApproval]).catch(() => {});
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateAdvanceSheetApproval = async (id: string, approval: Partial<AdvanceSheetApproval>) => {
+    setState(s => ({ ...s, advanceSheetApprovals: s.advanceSheetApprovals.map(app => app.id === id ? { ...app, ...approval } : app) }));
+    try {
+      const existing = state.advanceSheetApprovals.find(app => app.id === id);
+      if (existing) {
+        const merged = { ...existing, ...approval };
+        await fetch(`/api/advance-sheet-approvals/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: merged.status, approvalNotes: merged.approvalNotes })
+        });
+        await saveAllToStore('advanceSheetApprovals', state.advanceSheetApprovals.map(app => app.id === id ? merged : app)).catch(() => {});
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteAdvanceSheetApproval = async (id: string) => {
+    setState(s => ({ ...s, advanceSheetApprovals: s.advanceSheetApprovals.filter(app => app.id !== id) }));
+    try {
+      await fetch(`/api/advance-sheet-approvals/${id}`, { method: 'DELETE' });
+      await saveAllToStore('advanceSheetApprovals', state.advanceSheetApprovals.filter(app => app.id !== id)).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -1274,6 +1394,240 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addAsset = async (asset: Omit<Asset, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newAsset: Asset = { ...asset, id };
+    setState(s => {
+      const updated = [...s.assets, newAsset];
+      saveAllToStore('assets', updated).catch(console.error);
+      return { ...s, assets: updated };
+    });
+    try {
+      await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAsset)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateAsset = async (id: string, asset: Partial<Asset>) => {
+    setState(s => {
+      const updated = s.assets.map(a => a.id === id ? { ...a, ...asset } as Asset : a);
+      saveAllToStore('assets', updated).catch(console.error);
+      return { ...s, assets: updated };
+    });
+    try {
+      const current = state.assets.find(a => a.id === id);
+      if (current) {
+        const merged = { ...current, ...asset };
+        await fetch(`/api/assets/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteAsset = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const hasTransfers = state.assetTransfers.some(t => t.assetId === id);
+    const hasMaintenance = state.assetMaintenances.some(m => m.assetId === id);
+    if (hasTransfers || hasMaintenance) {
+      return { success: false, error: 'Cannot delete asset: This asset has a recorded transaction history (transfers or maintenance logs).' };
+    }
+
+    setState(s => {
+      const updated = s.assets.filter(a => a.id !== id);
+      saveAllToStore('assets', updated).catch(console.error);
+      return { ...s, assets: updated };
+    });
+    try {
+      const res = await fetch(`/api/assets/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errObj = await res.json().catch(() => ({}));
+        return { success: false, error: errObj.error || 'Server error deleting asset.' };
+      }
+      return { success: true };
+    } catch (e: any) {
+      console.error(e);
+      return { success: false, error: e.message || 'Network error deleting asset.' };
+    }
+  };
+
+  const addAssetTransfer = async (transfer: Omit<AssetTransfer, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newTransfer: AssetTransfer = { ...transfer, id };
+    setState(s => {
+      const updatedTransfers = [...s.assetTransfers, newTransfer];
+      const updatedAssets = s.assets.map(a => a.id === transfer.assetId ? { ...a, currentSiteId: transfer.toSiteId } as Asset : a);
+      
+      saveAllToStore('assetTransfers', updatedTransfers).catch(console.error);
+      saveAllToStore('assets', updatedAssets).catch(console.error);
+      
+      return {
+        ...s,
+        assetTransfers: updatedTransfers,
+        assets: updatedAssets
+      };
+    });
+    try {
+      await fetch('/api/asset-transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTransfer)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addAssetMaintenance = async (maintenance: Omit<AssetMaintenance, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newMaintenance: AssetMaintenance = { ...maintenance, id };
+    setState(s => {
+      const updated = [...s.assetMaintenances, newMaintenance];
+      saveAllToStore('assetMaintenances', updated).catch(console.error);
+      return { ...s, assetMaintenances: updated };
+    });
+    try {
+      await fetch('/api/asset-maintenances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMaintenance)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addWorkerLedgerEntry = async (entry: Omit<WorkerLedgerEntry, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newEntry: WorkerLedgerEntry = { ...entry, id };
+    setState(s => {
+      const updated = [...s.workerLedger, newEntry].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      saveAllToStore('workerLedger', updated).catch(console.error);
+      return { ...s, workerLedger: updated };
+    });
+    try {
+      await fetch('/api/worker-ledger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEntry)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateWorkerLedgerEntry = async (id: string, entry: Partial<WorkerLedgerEntry>) => {
+    setState(s => {
+      const updated = s.workerLedger.map(item => item.id === id ? { ...item, ...entry } : item).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      saveAllToStore('workerLedger', updated).catch(console.error);
+      return { ...s, workerLedger: updated };
+    });
+    try {
+      const fullEntry = state.workerLedger.find(item => item.id === id);
+      if (fullEntry) {
+        await fetch(`/api/worker-ledger/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...fullEntry, ...entry })
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteWorkerLedgerEntry = async (id: string) => {
+    setState(s => {
+      const updated = s.workerLedger.filter(item => item.id !== id);
+      saveAllToStore('workerLedger', updated).catch(console.error);
+      return { ...s, workerLedger: updated };
+    });
+    try {
+      await fetch(`/api/worker-ledger/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addWorkerHold = async (hold: Omit<WorkerHold, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newHold: WorkerHold = { ...hold, id };
+    setState(s => {
+      const updated = [...s.workerHolds, newHold];
+      saveAllToStore('workerHolds', updated).catch(console.error);
+      return { ...s, workerHolds: updated };
+    });
+    try {
+      await fetch('/api/worker-holds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newHold)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateWorkerHold = async (id: string, hold: Partial<WorkerHold>) => {
+    setState(s => {
+      const updated = s.workerHolds.map(item => item.id === id ? { ...item, ...hold } : item);
+      saveAllToStore('workerHolds', updated).catch(console.error);
+      return { ...s, workerHolds: updated };
+    });
+    try {
+      const fullHold = state.workerHolds.find(item => item.id === id);
+      if (fullHold) {
+        await fetch(`/api/worker-holds/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...fullHold, ...hold })
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteWorkerHold = async (id: string) => {
+    setState(s => {
+      const updated = s.workerHolds.filter(item => item.id !== id);
+      saveAllToStore('workerHolds', updated).catch(console.error);
+      return { ...s, workerHolds: updated };
+    });
+    try {
+      await fetch(`/api/worker-holds/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addWorkerRecoveryAudit = async (audit: Omit<WorkerRecoveryAuditTrail, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newAudit: WorkerRecoveryAuditTrail = { ...audit, id };
+    setState(s => {
+      const updated = [...s.workerRecoveryAuditTrail, newAudit];
+      saveAllToStore('workerRecoveryAuditTrail', updated).catch(console.error);
+      return { ...s, workerRecoveryAuditTrail: updated };
+    });
+    try {
+      await fetch('/api/worker-recovery-audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAudit)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -1311,6 +1665,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addPaymentSheetApproval,
       updatePaymentSheetApproval,
       deletePaymentSheetApproval,
+      addAdvanceSheetApproval,
+      updateAdvanceSheetApproval,
+      deleteAdvanceSheetApproval,
       addExpenseEntry,
       updateExpenseEntry,
       deleteExpenseEntry,
@@ -1335,7 +1692,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addLabourPlanning,
       updateLabourPlanning,
       deleteLabourPlanning,
-      addWorkerTransfer
+      addWorkerTransfer,
+      addAsset,
+      updateAsset,
+      deleteAsset,
+      addAssetTransfer,
+      addAssetMaintenance,
+      addWorkerLedgerEntry,
+      updateWorkerLedgerEntry,
+      deleteWorkerLedgerEntry,
+      addWorkerHold,
+      updateWorkerHold,
+      deleteWorkerHold,
+      addWorkerRecoveryAudit
     }}>
       {children}
     </AppContext.Provider>

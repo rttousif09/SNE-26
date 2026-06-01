@@ -17,6 +17,8 @@ export interface Worker {
   designation: string;
   joiningDate: string;
   exitDate?: string;
+  mobileNo?: string;
+  openingAdvance?: number;
 }
 
 export interface Billing {
@@ -59,8 +61,15 @@ export interface Advance {
   workerId: string;
   amount: number;
   paidBy: string;
+  paidByDetails?: string;
   remarks: string;
   date: string;
+  isDeducted?: boolean;
+  deductionMonth?: string;
+  deductionAmount?: number;
+  receiptProof?: string; // base64 string
+  receiptFileName?: string;
+  receiptFileType?: string;
 }
 
 export interface SupplyDetail {
@@ -90,13 +99,73 @@ export interface WorkerPayment {
   allowance?: number;
   supplyAmount?: number;
   supplyDetails?: string; // JSON string of SupplyDetail[]
+  recoveryAmount?: number;
+  paymentStatus?: 'Pending' | 'Paid';
+  otherDeduction?: number;
+  otherDeductionDetails?: string;
+}
+
+export interface WorkerLedgerEntry {
+  id: string;
+  workerId: string;
+  projectId: string;
+  date: string;
+  voucherNo?: string;
+  description: string;
+  entryType: 'Opening Balance' | 'Advance Given' | 'Advance Recovery' | 'Worker Payment' | 'Bonus' | 'Deduction' | 'Other';
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  paymentId?: string;
+  advanceId?: string;
+  remarks?: string;
+  createdBy?: string;
+  createdDate?: string;
+}
+
+export interface WorkerHold {
+  id: string;
+  workerId: string;
+  projectId: string;
+  holdDate: string;
+  holdAmount: number;
+  reason?: string;
+  releasedAmount: number;
+  remainingHold: number;
+  status: 'Held' | 'Partially Released' | 'Released';
+  releaseDate?: string;
+  remarks?: string;
+  releaseHistory?: string; // JSON array of release events
+}
+
+export interface WorkerRecoveryAuditTrail {
+  id: string;
+  paymentId: string;
+  workerId: string;
+  prevValue: number;
+  newValue: number;
+  modifiedBy: string;
+  modifiedDate: string;
 }
 
 export interface Approval {
   id: string;
   workerId: string;
   projectId: string;
-  amount: number;
+  amount: number; // Represents approved amount
+  requestAmount?: number;
+  approvedAmount?: number;
+  remarks: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  approvalNotes?: string;
+}
+
+export interface AdvanceSheetApproval {
+  id: string;
+  projectId: string;
+  month: string; // YYYY-MM
+  totalAmount: number;
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
@@ -227,6 +296,11 @@ export interface ExpenseEntry {
   others: number;
   bank?: string;
   crBalance: number;
+  receiptProof?: string; // base64 string
+  receiptFileName?: string;
+  receiptFileType?: string;
+  status?: 'Draft' | 'Submitted' | 'Approved' | 'Rejected';
+  approvalNotes?: string;
 }
 
 export interface MessBooking {
@@ -272,6 +346,63 @@ export interface WorkerTransfer {
   toProjectId: string;
   transferDate: string;
   remarks?: string;
+}
+
+export type AssetCategory =
+  | 'Vibrator'
+  | 'Drill Machine'
+  | 'Cutter Machine'
+  | 'Scaffolding'
+  | 'Shuttering Material'
+  | 'Props'
+  | 'Jack System'
+  | 'Power Tools'
+  | 'Safety Equipment'
+  | 'Other';
+
+export type AssetStatus =
+  | 'Available'
+  | 'In Use'
+  | 'Under Maintenance'
+  | 'Damaged'
+  | 'Lost'
+  | 'Disposed';
+
+export interface Asset {
+  id: string;
+  name: string;
+  category: AssetCategory;
+  assetCode: string;
+  brand: string;
+  purchaseDate: string;
+  purchaseCost: number;
+  currentSiteId: string; // references Project ID or 'general_pool' / 'unassigned'
+  assignedTo?: string;
+  status: AssetStatus;
+  remarks?: string;
+  createdBy?: string;
+  createdDate?: string;
+}
+
+export interface AssetTransfer {
+  id: string;
+  assetId: string;
+  fromSiteId: string;
+  toSiteId: string;
+  transferDate: string;
+  transferredBy: string;
+  remarks?: string;
+}
+
+export interface AssetMaintenance {
+  id: string;
+  assetId: string;
+  maintenanceDate: string;
+  maintenanceType: string;
+  vendor: string;
+  cost: number;
+  remarks?: string;
+  nextMaintenanceDate?: string;
 }
 
 

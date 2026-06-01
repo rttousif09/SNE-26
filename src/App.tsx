@@ -23,6 +23,8 @@ import { SiteMonthlySummary } from './pages/SiteMonthlySummary';
 import { Mess } from './pages/Mess';
 import { DLR } from './pages/DLR';
 import { Materials } from './pages/Materials';
+import { EquipmentAssetManagement } from './pages/EquipmentAssetManagement';
+import { WorkerLedger } from './pages/WorkerLedger';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -44,11 +46,13 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'kharchi': return <Kharchi />;
       case 'advance': return <Advance />;
       case 'worker-payment': return <WorkerPayment />;
+      case 'worker-ledger': return <WorkerLedger />;
       case 'approvals': return <Approvals />;
       case 'expenses': return <Expenses />;
       case 'mess': return <Mess />;
       case 'dlr': return <DLR />;
       case 'materials': return <Materials />;
+      case 'assets': return <EquipmentAssetManagement />;
       case 'expenses-summary': return <ExpensesSummary />;
       case 'site-monthly-summary': return <SiteMonthlySummary />;
       default: return <Dashboard />;
@@ -65,11 +69,13 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'kharchi': return 'Kharchi';
       case 'advance': return 'Advance';
       case 'worker-payment': return 'Workers Payment';
+      case 'worker-ledger': return 'Worker Ledger & Advance Recovery';
       case 'approvals': return 'Approvals Workflow';
       case 'expenses': return 'Expenses Ledger';
       case 'mess': return 'Mess Management';
       case 'dlr': return 'Daily Labour Report (DLR)';
       case 'materials': return 'Material & Inventory Management';
+      case 'assets': return 'Equipment & Asset Register';
       case 'expenses-summary': return 'Expenses Summary Dashboard';
       case 'site-monthly-summary': return 'Site Monthly Report';
       default: return 'Overview';

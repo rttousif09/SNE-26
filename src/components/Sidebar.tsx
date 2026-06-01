@@ -19,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
     { id: 'kharchi', label: 'Kharchi (Pocket Money)', icon: Folder },
     { id: 'advance', label: 'Advance', icon: Folder },
     { id: 'worker-payment', label: 'Workers Payment', icon: Folder },
+    { id: 'worker-ledger', label: 'Worker Ledger & Holds', icon: Folder },
     { id: 'approvals', label: 'Approvals Workflow', icon: Folder },
     { id: 'expenses', label: 'Expenses Ledger', icon: Folder },
     { id: 'expenses-summary', label: 'Expenses Summary Dashboard', icon: Server },
@@ -26,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
     { id: 'mess', label: 'Mess Management', icon: Folder },
     { id: 'dlr', label: 'Daily Labour Report (DLR)', icon: Folder },
     { id: 'materials', label: 'Material & Inventory ERP', icon: Folder },
+    { id: 'assets', label: 'Equipment & Asset Register', icon: Folder },
   ];
 
   return (

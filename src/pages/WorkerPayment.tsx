@@ -13,6 +13,7 @@ export const WorkerPayment: React.FC = () => {
     kharchis, 
     advances, 
     paymentSheetApprovals = [],
+    workerLedger = [],
     addWorkerPayment, 
     updateWorkerPayment, 
     deleteWorkerPayment,
@@ -50,7 +51,9 @@ export const WorkerPayment: React.FC = () => {
     level: '',
     supplyAmount: '',
     date: new Date().toISOString().split('T')[0],
-    supplyDetails: [] as import('../types').SupplyDetail[]
+    supplyDetails: [] as import('../types').SupplyDetail[],
+    recoveryAmount: '',
+    paymentStatus: 'Pending'
   });
 
   // Keep month field updated with month selector unless editing a different month
@@ -74,7 +77,9 @@ export const WorkerPayment: React.FC = () => {
       level: payment.level || '',
       supplyAmount: (payment.supplyAmount || 0).toString(),
       date: payment.date,
-      supplyDetails: payment.supplyDetails ? JSON.parse(payment.supplyDetails) : []
+      supplyDetails: payment.supplyDetails ? JSON.parse(payment.supplyDetails) : [],
+      recoveryAmount: payment.recoveryAmount ? payment.recoveryAmount.toString() : '',
+      paymentStatus: payment.paymentStatus || 'Pending'
     });
     setEditingId(payment.id);
   };
@@ -94,7 +99,9 @@ export const WorkerPayment: React.FC = () => {
       level: '',
       supplyAmount: '',
       date: new Date().toISOString().split('T')[0],
-      supplyDetails: []
+      supplyDetails: [],
+      recoveryAmount: '',
+      paymentStatus: 'Pending'
     });
   };
 
@@ -145,6 +152,24 @@ export const WorkerPayment: React.FC = () => {
     return { kharchi: kharchiTotal, advance: advanceTotal };
   }, [formData.workerId, formData.month, kharchis, advances]);
 
+  // Calculate historical total outstanding advance for selected worker
+  const workerOutstandingAdvance = useMemo(() => {
+    if (!formData.workerId) return 0;
+    const totalAdvancesGiven = advances
+      .filter(a => a.workerId === formData.workerId)
+      .reduce((sum, a) => sum + a.amount, 0);
+
+    const totalRecovered = workerPayments
+      .filter(p => p.workerId === formData.workerId && p.id !== editingId)
+      .reduce((sum, p) => sum + (p.recoveryAmount || 0), 0);
+
+    const manualBalanceContribution = workerLedger
+      .filter(l => l.workerId === formData.workerId)
+      .reduce((sum, l) => sum + l.debit - l.credit, 0);
+
+    return Math.max(0, totalAdvancesGiven - totalRecovered + manualBalanceContribution);
+  }, [formData.workerId, advances, workerPayments, workerLedger, editingId]);
+
   const calculatedValues = useMemo(() => {
     let finalWorkAmount = Number(formData.workAmount) || 0;
     let finalKharchi = autoCalculations.kharchi;
@@ -163,12 +188,14 @@ export const WorkerPayment: React.FC = () => {
 
     const messDeduction = Number(formData.messDeduction) || 0;
     const supplyAmount = Number(formData.supplyAmount) || 0;
+    const recoveryAmount = Number(formData.recoveryAmount) || 0;
     
-    const netPayment = finalWorkAmount + supplyAmount - messDeduction - finalKharchi - autoCalculations.advance;
+    const netPayment = finalWorkAmount + supplyAmount - messDeduction - finalKharchi - autoCalculations.advance - recoveryAmount;
     
     return {
       workAmount: finalWorkAmount,
       kharchi: finalKharchi,
+      recoveryAmount,
       netPayment
     };
   }, [formData, autoCalculations, selectedCategory]);
@@ -183,9 +210,10 @@ export const WorkerPayment: React.FC = () => {
       acc.mess += p.messDeduction;
       acc.kharchi += p.kharchiDeduction;
       acc.advance += p.advanceDeduction;
+      acc.recovery += p.recoveryAmount || 0;
       acc.net += p.netPayment;
       return acc;
-    }, { gross: 0, supply: 0, mess: 0, kharchi: 0, advance: 0, net: 0 });
+    }, { gross: 0, supply: 0, mess: 0, kharchi: 0, advance: 0, recovery: 0, net: 0 });
   }, [filteredPayments]);
 
   const allSupplyWorksInfo = useMemo(() => {
@@ -222,7 +250,9 @@ export const WorkerPayment: React.FC = () => {
       level: formData.level || undefined,
       workCategory: selectedCategory,
       supplyAmount: Number(formData.supplyAmount || 0),
-      supplyDetails: formData.supplyDetails.length > 0 ? JSON.stringify(formData.supplyDetails) : undefined
+      supplyDetails: formData.supplyDetails.length > 0 ? JSON.stringify(formData.supplyDetails) : undefined,
+      recoveryAmount: Number(formData.recoveryAmount || 0),
+      paymentStatus: (formData.paymentStatus || 'Pending') as 'Pending' | 'Paid'
     };
 
     if (editingId) {
@@ -532,23 +562,62 @@ export const WorkerPayment: React.FC = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3 bg-amber-50/30 p-2 border border-amber-200 rounded-sm">
+              <div className="flex flex-col">
+                <label className="font-semibold text-gray-700 mb-1 flex justify-between items-center">
+                  <span>Recovery Amount from Outstanding Advance (INR):</span>
+                  {formData.workerId && (
+                    <span className="font-mono text-[9px] text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
+                      O/S Advance: ₹{workerOutstandingAdvance.toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </label>
+                <input 
+                  type="number" 
+                  step="any"
+                  className="sap-input font-bold text-red-650 bg-amber-50/50" 
+                  placeholder="E.g. 1000, 2000"
+                  value={formData.recoveryAmount} 
+                  onChange={e => setFormData({...formData, recoveryAmount: e.target.value})} 
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label className="font-semibold text-gray-700 mb-1">Payment Status:</label>
+                <select 
+                  className="sap-input font-bold text-blue-700"
+                  value={formData.paymentStatus}
+                  onChange={e => setFormData({...formData, paymentStatus: e.target.value})}
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Paid">Paid</option>
+                </select>
+              </div>
+            </div>
+
             {/* Calculations Workspace */}
-            <div className={`grid gap-3 p-2.5 border border-[#8c9ba8] rounded-sm ${selectedCategory === 'Monthly work' ? 'grid-cols-4 bg-blue-50/25' : 'grid-cols-3 bg-[#eef2f6]'}`}>
-              {selectedCategory === 'Monthly work' && (
+            <div className="grid gap-3 p-2.5 border border-[#8c9ba8] rounded-sm bg-[#eef2f6] grid-cols-4 md:grid-cols-5">
+              {selectedCategory === 'Monthly work' ? (
                 <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-500 uppercase tracking-tight">Clc. Gross Wage</span>
+                  <span className="text-[10px] text-gray-500 uppercase tracking-tight font-bold">Clc. Gross Wage</span>
                   <span className="font-mono font-bold text-gray-800 text-xs mt-0.5">₹{calculatedValues.workAmount.toLocaleString('en-IN')}</span>
                 </div>
+              ) : (
+                <div className="hidden"></div>
               )}
               <div className="flex flex-col">
-                <span className="text-[10px] text-gray-500 uppercase tracking-tight">Month Kharchi (Deducted)</span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-tight font-bold">Pocket-Money (Kharchi)</span>
                 <span className="font-mono font-bold text-red-650 text-xs mt-0.5">₹{calculatedValues.kharchi.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] text-gray-500 uppercase tracking-tight">Month Capital Advance</span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-tight font-bold">Capital Advance (Month)</span>
                 <span className="font-mono font-bold text-red-650 text-xs mt-0.5">₹{autoCalculations.advance.toLocaleString('en-IN')}</span>
               </div>
-              <div className="flex flex-col justify-center bg-[#cce5ff] px-2 py-1.5 border border-[#99ccff] rounded-sm">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-amber-805 uppercase tracking-tight font-bold">Advance Recovery (Ded.)</span>
+                <span className="font-mono font-bold text-red-750 text-xs mt-0.5">₹{calculatedValues.recoveryAmount.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex flex-col justify-center bg-[#cce5ff] px-2 py-1.5 border border-[#99ccff] rounded-sm col-span-1">
                 <span className="text-[9px] text-[#0056b3] uppercase font-bold tracking-tight">Calculated Net Payable</span>
                 <span className="font-mono font-black text-[#0056b3] text-sm leading-none mt-0.5">₹{netPayment.toLocaleString('en-IN')}</span>
               </div>
@@ -641,7 +710,9 @@ export const WorkerPayment: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Mess Ded.</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Kharchi Ded.</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Advance Ded.</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-amber-800 bg-amber-50 w-24">Recovery (Adv)</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-700 bg-green-50 w-28">Net Payable</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16 bg-gray-50">Status</th>
                 {!isLocked && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16">Actions</th>}
               </tr>
             </thead>
@@ -667,8 +738,18 @@ export const WorkerPayment: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600">₹{payment.messDeduction.toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{payment.kharchiDeduction.toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{payment.advanceDeduction.toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/15">₹{(payment.recoveryAmount || 0).toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-750 bg-green-50/50">
                       ₹{payment.netPayment.toLocaleString('en-IN')}
+                    </td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                      <span className={`px-1.5 py-0.5 rounded-sm font-sans font-bold text-[9px] uppercase tracking-wider ${
+                        payment.paymentStatus === 'Paid' 
+                          ? 'bg-green-100 text-green-800 border border-green-200' 
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}>
+                        {payment.paymentStatus || 'Pending'}
+                      </span>
                     </td>
                     {!isLocked && (
                       <td className="border border-[#8c9ba8] px-2 py-1 text-center font-sans">
@@ -698,7 +779,7 @@ export const WorkerPayment: React.FC = () => {
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700">
                     ₹{(totals.supply || 0).toLocaleString('en-IN')}
                   </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600">
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
                     ₹{totals.mess.toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
@@ -707,16 +788,20 @@ export const WorkerPayment: React.FC = () => {
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
                     ₹{totals.advance.toLocaleString('en-IN')}
                   </td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/20 font-bold">
+                    ₹{totals.recovery.toLocaleString('en-IN')}
+                  </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-black text-green-800 bg-green-100/70 text-[11px]">
                     ₹{totals.net.toLocaleString('en-IN')}
                   </td>
+                  <td className="border border-[#8c9ba8] px-2 py-1"></td>
                   {!isLocked && <td className="border border-[#8c9ba8] px-2 py-1"></td>}
                 </motion.tr>
               )}
 
               {filteredPayments.length === 0 && (
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isLocked ? 11 : 12} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                  <td colSpan={isLocked ? 13 : 14} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No payment records found for {selectedMonth} in this project. Use controls above to record new wage ledgers.
                   </td>
                 </motion.tr>

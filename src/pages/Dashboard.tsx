@@ -4,7 +4,7 @@ import { useAppContext } from '../store';
 import Markdown from 'react-markdown';
 
 export const Dashboard: React.FC = () => {
-  const { projects, workers, billings, clientPayments, expensesLedger, labourPlannings } = useAppContext();
+  const { projects, workers, billings, clientPayments, expensesLedger, labourPlannings, assets = [] } = useAppContext();
 
   const getWorkerCategory = (designation: string): string => {
     const norm = (designation || "").toLowerCase();
@@ -179,6 +179,20 @@ export const Dashboard: React.FC = () => {
             <BarChart label="Active Projects" used={projects.length} total={10} colorClass="bg-[#a4d49d]" />
             <div className="mt-2">
               <a href="#" className="text-blue-600 underline">More Information</a>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
+          <SectionHeader title="Machinery & Capital Equipment Allocation" />
+          <div className="px-2">
+            <BarChart label="Machinery Deployed (In Use)" used={assets.filter(a => a.status === 'In Use').length} total={assets.length || 1} colorClass="bg-blue-600" />
+            <BarChart label="Machinery Under Repair" used={assets.filter(a => a.status === 'Under Maintenance').length} total={assets.length || 1} colorClass="bg-amber-500" />
+            <BarChart label="Machinery Damaged" used={assets.filter(a => a.status === 'Damaged').length} total={assets.length || 1} colorClass="bg-red-650" />
+            
+            <div className="mt-2 pt-1.5 border-t border-dashed border-gray-300 flex justify-between text-[10px]">
+              <div>Total Inventory Capacity: <strong className="font-mono text-[#0056b3]">{assets.length} items</strong></div>
+              <div>Available Idle: <strong className="font-mono text-emerald-800">{assets.filter(a => a.status === 'Available').length} units</strong></div>
             </div>
           </div>
         </motion.div>

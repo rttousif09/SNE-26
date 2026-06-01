@@ -336,6 +336,93 @@ function initDbSchema() {
       FOREIGN KEY (fromProjectId) REFERENCES projects(id) ON DELETE CASCADE,
       FOREIGN KEY (toProjectId) REFERENCES projects(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      assetCode TEXT NOT NULL,
+      brand TEXT NOT NULL,
+      purchaseDate TEXT NOT NULL,
+      purchaseCost REAL NOT NULL,
+      currentSiteId TEXT NOT NULL,
+      assignedTo TEXT,
+      status TEXT NOT NULL,
+      remarks TEXT,
+      createdBy TEXT,
+      createdDate TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS asset_transfers (
+      id TEXT PRIMARY KEY,
+      assetId TEXT NOT NULL,
+      fromSiteId TEXT NOT NULL,
+      toSiteId TEXT NOT NULL,
+      transferDate TEXT NOT NULL,
+      transferredBy TEXT NOT NULL,
+      remarks TEXT,
+      FOREIGN KEY (assetId) REFERENCES assets(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS asset_maintenances (
+      id TEXT PRIMARY KEY,
+      assetId TEXT NOT NULL,
+      maintenanceDate TEXT NOT NULL,
+      maintenanceType TEXT NOT NULL,
+      vendor TEXT NOT NULL,
+      cost REAL NOT NULL,
+      remarks TEXT,
+      nextMaintenanceDate TEXT,
+      FOREIGN KEY (assetId) REFERENCES assets(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS worker_ledger (
+      id TEXT PRIMARY KEY,
+      workerId TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      voucherNo TEXT,
+      description TEXT NOT NULL,
+      entryType TEXT NOT NULL,
+      debit REAL DEFAULT 0,
+      credit REAL DEFAULT 0,
+      runningBalance REAL DEFAULT 0,
+      paymentId TEXT,
+      advanceId TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS worker_holds (
+      id TEXT PRIMARY KEY,
+      workerId TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      holdDate TEXT NOT NULL,
+      holdAmount REAL NOT NULL,
+      reason TEXT,
+      releasedAmount REAL DEFAULT 0,
+      remainingHold REAL NOT NULL,
+      status TEXT DEFAULT 'Held',
+      releaseDate TEXT,
+      remarks TEXT,
+      releaseHistory TEXT,
+      FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS worker_recovery_audit_trail (
+      id TEXT PRIMARY KEY,
+      paymentId TEXT NOT NULL,
+      workerId TEXT NOT NULL,
+      prevValue REAL NOT NULL,
+      newValue REAL NOT NULL,
+      modifiedBy TEXT NOT NULL,
+      modifiedDate TEXT NOT NULL,
+      FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE,
+      FOREIGN KEY (paymentId) REFERENCES worker_payments(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrate existing databases to make sure they have the new columns
@@ -347,6 +434,12 @@ function initDbSchema() {
   } catch (e) {}
   try {
     db.exec("ALTER TABLE payment_sheet_approvals ADD COLUMN approvalNotes TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN recoveryAmount REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE worker_payments ADD COLUMN paymentStatus TEXT DEFAULT 'Pending'");
   } catch (e) {}
 
   try {
@@ -396,6 +489,41 @@ function initDbSchema() {
   try {
     db.exec("ALTER TABLE worker_payments ADD COLUMN allowance REAL");
   } catch (e) {}
+
+  // New features columns migrations (Advances, WorkerPayments, Approvals, Expenses, Advance Sheet Approvals)
+  try { db.exec("ALTER TABLE advances ADD COLUMN paidByDetails TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN isDeducted INTEGER DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN deductionMonth TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN deductionAmount REAL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN receiptProof TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN receiptFileName TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN receiptFileType TEXT"); } catch (e) {}
+
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeduction REAL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeductionDetails TEXT"); } catch (e) {}
+
+  try { db.exec("ALTER TABLE approvals ADD COLUMN requestAmount REAL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE approvals ADD COLUMN approvedAmount REAL DEFAULT 0"); } catch (e) {}
+
+  try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN receiptProof TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN receiptFileName TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN receiptFileType TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN status TEXT DEFAULT 'Draft'"); } catch (e) {}
+  try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN approvalNotes TEXT"); } catch (e) {}
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS advance_sheet_approvals (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      month TEXT NOT NULL,
+      totalAmount REAL NOT NULL,
+      remarks TEXT,
+      date TEXT NOT NULL,
+      status TEXT DEFAULT 'Pending',
+      approvalNotes TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+  `);
 
   // Insert initial seed data if table is completely empty
   const countRow = db.prepare("SELECT COUNT(*) as count FROM projects").get() as { count: number };
@@ -830,11 +958,15 @@ async function startServer() {
 
   app.post("/api/advances", (req, res) => {
     try {
-      const { id, projectId, workerId, amount, paidBy, remarks, date } = req.body;
+      const { id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType } = req.body;
       db.prepare(`
-        INSERT INTO advances (id, projectId, workerId, amount, paidBy, remarks, date)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, projectId, workerId, parseFloat(amount), paidBy, remarks || "", date);
+        INSERT INTO advances (id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, projectId, workerId, parseFloat(amount), paidBy, paidByDetails || "", remarks || "", date, 
+        isDeducted ? 1 : 0, deductionMonth || "", parseFloat(deductionAmount || 0), 
+        receiptProof || "", receiptFileName || "", receiptFileType || ""
+      );
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -844,12 +976,17 @@ async function startServer() {
   app.put("/api/advances/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, workerId, amount, paidBy, remarks, date } = req.body;
+      const { projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType } = req.body;
       db.prepare(`
         UPDATE advances
-        SET projectId = ?, workerId = ?, amount = ?, paidBy = ?, remarks = ?, date = ?
+        SET projectId = ?, workerId = ?, amount = ?, paidBy = ?, paidByDetails = ?, remarks = ?, date = ?, 
+            isDeducted = ?, deductionMonth = ?, deductionAmount = ?, receiptProof = ?, receiptFileName = ?, receiptFileType = ?
         WHERE id = ?
-      `).run(projectId, workerId, parseFloat(amount), paidBy, remarks || "", date, id);
+      `).run(
+        projectId, workerId, parseFloat(amount), paidBy, paidByDetails || "", remarks || "", date, 
+        isDeducted ? 1 : 0, deductionMonth || "", parseFloat(deductionAmount || 0), 
+        receiptProof || "", receiptFileName || "", receiptFileType || "", id
+      );
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -878,10 +1015,10 @@ async function startServer() {
 
   app.post("/api/worker-payments", (req, res) => {
     try {
-      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails } = req.body;
+      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails } = req.body;
       db.prepare(`
-        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         projectId,
@@ -900,7 +1037,11 @@ async function startServer() {
         overtimeHours ? parseFloat(overtimeHours) : null,
         allowance ? parseFloat(allowance) : null,
         parseFloat(supplyAmount || 0),
-        supplyDetails || null
+        supplyDetails || null,
+        parseFloat(recoveryAmount || 0),
+        paymentStatus || 'Pending',
+        parseFloat(otherDeduction || 0),
+        otherDeductionDetails || ""
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -911,10 +1052,10 @@ async function startServer() {
   app.put("/api/worker-payments/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails } = req.body;
+      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails } = req.body;
       db.prepare(`
         UPDATE worker_payments
-        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, workCategory = ?, workDays = ?, ratePerDay = ?, overtimeHours = ?, allowance = ?, supplyAmount = ?, supplyDetails = ?
+        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, workCategory = ?, workDays = ?, ratePerDay = ?, overtimeHours = ?, allowance = ?, supplyAmount = ?, supplyDetails = ?, recoveryAmount = ?, paymentStatus = ?, otherDeduction = ?, otherDeductionDetails = ?
         WHERE id = ?
       `).run(
         projectId,
@@ -934,6 +1075,10 @@ async function startServer() {
         allowance ? parseFloat(allowance) : null,
         parseFloat(supplyAmount || 0),
         supplyDetails || null,
+        parseFloat(recoveryAmount || 0),
+        paymentStatus || 'Pending',
+        parseFloat(otherDeduction || 0),
+        otherDeductionDetails || "",
         id
       );
       res.json(req.body);
@@ -947,6 +1092,187 @@ async function startServer() {
       const { id } = req.params;
       db.prepare("DELETE FROM worker_payments WHERE id = ?").run(id);
       res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 7.5 Worker Ledger, Holds, and Audit Trails
+  app.get("/api/worker-ledger", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM worker_ledger ORDER BY date ASC, id ASC").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/worker-ledger", (req, res) => {
+    try {
+      const { id, workerId, projectId, date, voucherNo, description, entryType, debit, credit, runningBalance, paymentId, advanceId, createdBy, createdDate } = req.body;
+      db.prepare(`
+        INSERT INTO worker_ledger (id, workerId, projectId, date, voucherNo, description, entryType, debit, credit, runningBalance, paymentId, advanceId, createdBy, createdDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        workerId,
+        projectId,
+        date,
+        voucherNo || null,
+        description,
+        entryType,
+        parseFloat(debit || 0),
+        parseFloat(credit || 0),
+        parseFloat(runningBalance || 0),
+        paymentId || null,
+        advanceId || null,
+        createdBy || null,
+        createdDate || null
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/worker-ledger/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { workerId, projectId, date, voucherNo, description, entryType, debit, credit, runningBalance, paymentId, advanceId, createdBy, createdDate } = req.body;
+      db.prepare(`
+        UPDATE worker_ledger
+        SET workerId = ?, projectId = ?, date = ?, voucherNo = ?, description = ?, entryType = ?, debit = ?, credit = ?, runningBalance = ?, paymentId = ?, advanceId = ?, createdBy = ?, createdDate = ?
+        WHERE id = ?
+      `).run(
+        workerId,
+        projectId,
+        date,
+        voucherNo || null,
+        description,
+        entryType,
+        parseFloat(debit || 0),
+        parseFloat(credit || 0),
+        parseFloat(runningBalance || 0),
+        paymentId || null,
+        advanceId || null,
+        createdBy || null,
+        createdDate || null,
+        id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/worker-ledger/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM worker_ledger WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/worker-holds", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM worker_holds").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/worker-holds", (req, res) => {
+    try {
+      const { id, workerId, projectId, holdDate, holdAmount, reason, releasedAmount, remainingHold, status, releaseDate, remarks, releaseHistory } = req.body;
+      db.prepare(`
+        INSERT INTO worker_holds (id, workerId, projectId, holdDate, holdAmount, reason, releasedAmount, remainingHold, status, releaseDate, remarks, releaseHistory)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        workerId,
+        projectId,
+        holdDate,
+        parseFloat(holdAmount || 0),
+        reason || null,
+        parseFloat(releasedAmount || 0),
+        parseFloat(remainingHold || 0),
+        status || 'Held',
+        releaseDate || null,
+        remarks || null,
+        releaseHistory || null
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/worker-holds/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { workerId, projectId, holdDate, holdAmount, reason, releasedAmount, remainingHold, status, releaseDate, remarks, releaseHistory } = req.body;
+      db.prepare(`
+        UPDATE worker_holds
+        SET workerId = ?, projectId = ?, holdDate = ?, holdAmount = ?, reason = ?, releasedAmount = ?, remainingHold = ?, status = ?, releaseDate = ?, remarks = ?, releaseHistory = ?
+        WHERE id = ?
+      `).run(
+        workerId,
+        projectId,
+        holdDate,
+        parseFloat(holdAmount || 0),
+        reason || null,
+        parseFloat(releasedAmount || 0),
+        parseFloat(remainingHold || 0),
+        status || 'Held',
+        releaseDate || null,
+        remarks || null,
+        releaseHistory || null,
+        id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/worker-holds/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM worker_holds WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/worker-recovery-audit", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM worker_recovery_audit_trail").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/worker-recovery-audit", (req, res) => {
+    try {
+      const { id, paymentId, workerId, prevValue, newValue, modifiedBy, modifiedDate } = req.body;
+      db.prepare(`
+        INSERT INTO worker_recovery_audit_trail (id, paymentId, workerId, prevValue, newValue, modifiedBy, modifiedDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        paymentId,
+        workerId,
+        parseFloat(prevValue || 0),
+        parseFloat(newValue || 0),
+        modifiedBy,
+        modifiedDate
+      );
+      res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -987,11 +1313,14 @@ async function startServer() {
 
   app.post("/api/approvals", (req, res) => {
     try {
-      const { id, workerId, projectId, amount, remarks, date, status } = req.body;
+      const { id, workerId, projectId, amount, remarks, date, status, requestAmount, approvedAmount } = req.body;
       db.prepare(`
-        INSERT INTO approvals (id, workerId, projectId, amount, remarks, date, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, workerId, projectId, parseFloat(amount), remarks || "", date, status || "Pending");
+        INSERT INTO approvals (id, workerId, projectId, amount, remarks, date, status, requestAmount, approvedAmount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, workerId, projectId, parseFloat(amount), remarks || "", date, status || "Pending",
+        parseFloat(requestAmount || amount || 0), parseFloat(approvedAmount || amount || 0)
+      );
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1001,13 +1330,13 @@ async function startServer() {
   app.put("/api/approvals/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { status, approvalNotes } = req.body;
+      const { status, approvalNotes, approvedAmount } = req.body;
       db.prepare(`
         UPDATE approvals
-        SET status = ?, approvalNotes = ?
+        SET status = ?, approvalNotes = ?, approvedAmount = ?, amount = ?
         WHERE id = ?
-      `).run(status, approvalNotes || "", id);
-      res.json({ id, status, approvalNotes });
+      `).run(status, approvalNotes || "", parseFloat(approvedAmount || 0), parseFloat(approvedAmount || 0), id);
+      res.json({ id, status, approvalNotes, approvedAmount });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1132,19 +1461,22 @@ async function startServer() {
     try {
       const {
         id, date, description, projectId, kharchi, mess, workerAdvance,
-        tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance
+        tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance,
+        receiptProof, receiptFileName, receiptFileType, status, approvalNotes
       } = req.body;
       db.prepare(`
         INSERT INTO expenses_ledger (
           id, date, description, projectId, kharchi, mess, workerAdvance,
-          tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance,
+          receiptProof, receiptFileName, receiptFileType, status, approvalNotes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, date, description, projectId || null,
         parseFloat(kharchi || 0), parseFloat(mess || 0), parseFloat(workerAdvance || 0),
         parseFloat(tiffin || 0), parseFloat(travel || 0), parseFloat(machineryMaterial || 0),
         parseFloat(workerPayment || 0), parseFloat(stationery || 0), parseFloat(others || 0),
-        bank || null, parseFloat(crBalance || 0)
+        bank || null, parseFloat(crBalance || 0),
+        receiptProof || "", receiptFileName || "", receiptFileType || "", status || "Draft", approvalNotes || ""
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -1157,20 +1489,22 @@ async function startServer() {
       const { id } = req.params;
       const {
         date, description, projectId, kharchi, mess, workerAdvance,
-        tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance
+        tiffin, travel, machineryMaterial, workerPayment, stationery, others, bank, crBalance,
+        receiptProof, receiptFileName, receiptFileType, status, approvalNotes
       } = req.body;
       db.prepare(`
         UPDATE expenses_ledger
         SET date = ?, description = ?, projectId = ?, kharchi = ?, mess = ?, workerAdvance = ?,
             tiffin = ?, travel = ?, machineryMaterial = ?, workerPayment = ?, stationery = ?, others = ?,
-            bank = ?, crBalance = ?
+            bank = ?, crBalance = ?, receiptProof = ?, receiptFileName = ?, receiptFileType = ?, status = ?, approvalNotes = ?
         WHERE id = ?
       `).run(
         date, description, projectId || null,
         parseFloat(kharchi || 0), parseFloat(mess || 0), parseFloat(workerAdvance || 0),
         parseFloat(tiffin || 0), parseFloat(travel || 0), parseFloat(machineryMaterial || 0),
         parseFloat(workerPayment || 0), parseFloat(stationery || 0), parseFloat(others || 0),
-        bank || null, parseFloat(crBalance || 0), id
+        bank || null, parseFloat(crBalance || 0),
+        receiptProof || "", receiptFileName || "", receiptFileType || "", status || "Draft", approvalNotes || "", id
       );
       res.json({ success: true, id });
     } catch (err: any) {
@@ -1182,6 +1516,54 @@ async function startServer() {
     try {
       const { id } = req.params;
       db.prepare("DELETE FROM expenses_ledger WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Advance Sheet Approvals Endpoints
+  app.get("/api/advance-sheet-approvals", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM advance_sheet_approvals").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/advance-sheet-approvals", (req, res) => {
+    try {
+      const { id, projectId, month, totalAmount, remarks, date, status } = req.body;
+      db.prepare(`
+        INSERT INTO advance_sheet_approvals (id, projectId, month, totalAmount, remarks, date, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, projectId, month, parseFloat(totalAmount), remarks || "", date, status || "Pending");
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/advance-sheet-approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, approvalNotes } = req.body;
+      db.prepare(`
+        UPDATE advance_sheet_approvals
+        SET status = ?, approvalNotes = ?
+        WHERE id = ?
+      `).run(status, approvalNotes || "", id);
+      res.json({ id, status, approvalNotes });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/advance-sheet-approvals/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM advance_sheet_approvals WHERE id = ?").run(id);
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1625,6 +2007,149 @@ async function startServer() {
         `).run(toProjectId, workerId);
       });
       transaction();
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Assets Endpoints
+  app.get("/api/assets", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM assets").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/assets", (req, res) => {
+    try {
+      const { id, name, category, assetCode, brand, purchaseDate, purchaseCost, currentSiteId, assignedTo, status, remarks, createdBy, createdDate } = req.body;
+      db.prepare(`
+        INSERT INTO assets (id, name, category, assetCode, brand, purchaseDate, purchaseCost, currentSiteId, assignedTo, status, remarks, createdBy, createdDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        name,
+        category,
+        assetCode,
+        brand,
+        purchaseDate,
+        parseFloat(purchaseCost || 0),
+        currentSiteId,
+        assignedTo || null,
+        status,
+        remarks || null,
+        createdBy || null,
+        createdDate || null
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/assets/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, category, assetCode, brand, purchaseDate, purchaseCost, currentSiteId, assignedTo, status, remarks } = req.body;
+      db.prepare(`
+        UPDATE assets
+        SET name = ?, category = ?, assetCode = ?, brand = ?, purchaseDate = ?, purchaseCost = ?, currentSiteId = ?, assignedTo = ?, status = ?, remarks = ?
+        WHERE id = ?
+      `).run(
+        name,
+        category,
+        assetCode,
+        brand,
+        purchaseDate,
+        parseFloat(purchaseCost || 0),
+        currentSiteId,
+        assignedTo || null,
+        status,
+        remarks || null,
+        id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/assets/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const transfers = db.prepare("SELECT COUNT(*) as count FROM asset_transfers WHERE assetId = ?").get() as { count: number };
+      const maintenance = db.prepare("SELECT COUNT(*) as count FROM asset_maintenances WHERE assetId = ?").get() as { count: number };
+      if (transfers.count > 0 || maintenance.count > 0) {
+        return res.status(400).json({ error: "Cannot delete asset: This asset has a recorded transaction history (transfers or maintenance logs)." });
+      }
+      db.prepare("DELETE FROM assets WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Asset Transfers Endpoints
+  app.get("/api/asset-transfers", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM asset_transfers").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/asset-transfers", (req, res) => {
+    try {
+      const { id, assetId, fromSiteId, toSiteId, transferDate, transferredBy, remarks } = req.body;
+      const transaction = db.transaction(() => {
+        db.prepare(`
+          INSERT INTO asset_transfers (id, assetId, fromSiteId, toSiteId, transferDate, transferredBy, remarks)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(id, assetId, fromSiteId, toSiteId, transferDate, transferredBy, remarks || null);
+
+        db.prepare(`
+          UPDATE assets
+          SET currentSiteId = ?
+          WHERE id = ?
+        `).run(toSiteId, assetId);
+      });
+      transaction();
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Asset Maintenances Endpoints
+  app.get("/api/asset-maintenances", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM asset_maintenances").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/asset-maintenances", (req, res) => {
+    try {
+      const { id, assetId, maintenanceDate, maintenanceType, vendor, cost, remarks, nextMaintenanceDate } = req.body;
+      db.prepare(`
+        INSERT INTO asset_maintenances (id, assetId, maintenanceDate, maintenanceType, vendor, cost, remarks, nextMaintenanceDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        assetId,
+        maintenanceDate,
+        maintenanceType,
+        vendor,
+        parseFloat(cost || 0),
+        remarks || null,
+        nextMaintenanceDate || null
+      );
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
