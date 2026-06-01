@@ -53,6 +53,8 @@ export const WorkerPayment: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     supplyDetails: [] as import('../types').SupplyDetail[],
     recoveryAmount: '',
+    otherDeduction: '',
+    otherDeductionDetails: '',
     paymentStatus: 'Pending'
   });
 
@@ -79,6 +81,8 @@ export const WorkerPayment: React.FC = () => {
       date: payment.date,
       supplyDetails: payment.supplyDetails ? JSON.parse(payment.supplyDetails) : [],
       recoveryAmount: payment.recoveryAmount ? payment.recoveryAmount.toString() : '',
+      otherDeduction: payment.otherDeduction ? payment.otherDeduction.toString() : '',
+      otherDeductionDetails: payment.otherDeductionDetails || '',
       paymentStatus: payment.paymentStatus || 'Pending'
     });
     setEditingId(payment.id);
@@ -101,6 +105,8 @@ export const WorkerPayment: React.FC = () => {
       date: new Date().toISOString().split('T')[0],
       supplyDetails: [],
       recoveryAmount: '',
+      otherDeduction: '',
+      otherDeductionDetails: '',
       paymentStatus: 'Pending'
     });
   };
@@ -189,13 +195,15 @@ export const WorkerPayment: React.FC = () => {
     const messDeduction = Number(formData.messDeduction) || 0;
     const supplyAmount = Number(formData.supplyAmount) || 0;
     const recoveryAmount = Number(formData.recoveryAmount) || 0;
+    const otherDeductionAmount = Number(formData.otherDeduction) || 0;
     
-    const netPayment = finalWorkAmount + supplyAmount - messDeduction - finalKharchi - autoCalculations.advance - recoveryAmount;
+    const netPayment = finalWorkAmount + supplyAmount - messDeduction - finalKharchi - autoCalculations.advance - recoveryAmount - otherDeductionAmount;
     
     return {
       workAmount: finalWorkAmount,
       kharchi: finalKharchi,
       recoveryAmount,
+      otherDeduction: otherDeductionAmount,
       netPayment
     };
   }, [formData, autoCalculations, selectedCategory]);
@@ -211,9 +219,10 @@ export const WorkerPayment: React.FC = () => {
       acc.kharchi += p.kharchiDeduction;
       acc.advance += p.advanceDeduction;
       acc.recovery += p.recoveryAmount || 0;
+      acc.otherDeduction += p.otherDeduction || 0;
       acc.net += p.netPayment;
       return acc;
-    }, { gross: 0, supply: 0, mess: 0, kharchi: 0, advance: 0, recovery: 0, net: 0 });
+    }, { gross: 0, supply: 0, mess: 0, kharchi: 0, advance: 0, recovery: 0, otherDeduction: 0, net: 0 });
   }, [filteredPayments]);
 
   const allSupplyWorksInfo = useMemo(() => {
@@ -252,6 +261,8 @@ export const WorkerPayment: React.FC = () => {
       supplyAmount: Number(formData.supplyAmount || 0),
       supplyDetails: formData.supplyDetails.length > 0 ? JSON.stringify(formData.supplyDetails) : undefined,
       recoveryAmount: Number(formData.recoveryAmount || 0),
+      otherDeduction: Number(formData.otherDeduction || 0),
+      otherDeductionDetails: formData.otherDeductionDetails,
       paymentStatus: (formData.paymentStatus || 'Pending') as 'Pending' | 'Paid'
     };
 
@@ -582,6 +593,30 @@ export const WorkerPayment: React.FC = () => {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col">
+                  <label className="font-semibold text-gray-700 mb-1">Other Deduction (INR):</label>
+                  <input 
+                    type="number" 
+                    step="any"
+                    className="sap-input text-red-650"
+                    placeholder="E.g. 500"
+                    value={formData.otherDeduction}
+                    onChange={e => setFormData({...formData, otherDeduction: e.target.value})}
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-gray-700 mb-1">Other Deduction Details:</label>
+                  <input 
+                    type="text" 
+                    className="sap-input"
+                    placeholder="Reason..."
+                    value={formData.otherDeductionDetails}
+                    onChange={e => setFormData({...formData, otherDeductionDetails: e.target.value})}
+                  />
+                </div>
+              </div>
+
               <div className="flex flex-col">
                 <label className="font-semibold text-gray-700 mb-1">Payment Status:</label>
                 <select 
@@ -616,6 +651,10 @@ export const WorkerPayment: React.FC = () => {
               <div className="flex flex-col">
                 <span className="text-[10px] text-amber-805 uppercase tracking-tight font-bold">Advance Recovery (Ded.)</span>
                 <span className="font-mono font-bold text-red-750 text-xs mt-0.5">₹{calculatedValues.recoveryAmount.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-amber-805 uppercase tracking-tight font-bold">Other Ded.</span>
+                <span className="font-mono font-bold text-red-750 text-xs mt-0.5">₹{calculatedValues.otherDeduction.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex flex-col justify-center bg-[#cce5ff] px-2 py-1.5 border border-[#99ccff] rounded-sm col-span-1">
                 <span className="text-[9px] text-[#0056b3] uppercase font-bold tracking-tight">Calculated Net Payable</span>
@@ -711,6 +750,7 @@ export const WorkerPayment: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Kharchi Ded.</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Advance Ded.</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-amber-800 bg-amber-50 w-24">Recovery (Adv)</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-700 bg-red-50 w-20">Other Ded.</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-700 bg-green-50 w-28">Net Payable</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16 bg-gray-50">Status</th>
                 {!isLocked && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16">Actions</th>}
@@ -727,6 +767,7 @@ export const WorkerPayment: React.FC = () => {
                     transition={isPending ? { backgroundColor: { repeat: Infinity, duration: 2.5, ease: "easeInOut" }, default: { duration: 0.2 } } : { duration: 0.2 }} 
                     key={payment.id} 
                     className="hover:bg-[#e6f2ff] cursor-default font-mono"
+                    title={payment.otherDeductionDetails ? `Other Ded: ${payment.otherDeductionDetails}` : undefined}
                   >
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.srNo || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.idNo}</td>
@@ -739,6 +780,7 @@ export const WorkerPayment: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{payment.kharchiDeduction.toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{payment.advanceDeduction.toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/15">₹{(payment.recoveryAmount || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-700 bg-red-50/30">₹{(payment.otherDeduction || 0).toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-750 bg-green-50/50">
                       ₹{payment.netPayment.toLocaleString('en-IN')}
                     </td>
@@ -790,6 +832,9 @@ export const WorkerPayment: React.FC = () => {
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/20 font-bold">
                     ₹{totals.recovery.toLocaleString('en-IN')}
+                  </td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-700 font-bold">
+                    ₹{totals.otherDeduction.toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-black text-green-800 bg-green-100/70 text-[11px]">
                     ₹{totals.net.toLocaleString('en-IN')}

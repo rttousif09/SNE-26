@@ -26,12 +26,21 @@ export const Workers: React.FC = () => {
 
   const isReadOnly = user?.username === 'saddamsne';
 
-  const [activeView, setActiveView] = useState<'directory' | 'ledger' | 'planning'>('directory');
+  const [activeView, setActiveView] = useState<'directory' | 'ledger' | 'planning' | 'transfers'>('directory');
   
   // Directory Tab States
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [transferModalData, setTransferModalData] = useState<any>(null);
+  const [transferForm, setTransferForm] = useState({ toProjectId: '', transferDate: new Date().toISOString().substring(0,10), remarks: '' });
+  const [showTransferredOnly, setShowTransferredOnly] = useState(false);
+  
+  // Transfer History Tab States
+  const [transferDateFrom, setTransferDateFrom] = useState('');
+  const [transferDateTo, setTransferDateTo] = useState('');
+  const [transferSearch, setTransferSearch] = useState('');
+
   const [formData, setFormData] = useState({
     serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: ''
   });
@@ -88,17 +97,48 @@ export const Workers: React.FC = () => {
   const filteredWorkers = workers.filter(worker => {
     if (selectedFilterProject !== 'all' && worker.projectId !== selectedFilterProject) return false;
     
+    if (showTransferredOnly) {
+      const hasTransfer = workerTransfers.some(t => t.workerId === worker.id);
+      if (!hasTransfer) return false;
+    }
+
     const query = searchQuery.trim().toLowerCase();
     if (!query) return true;
     return (
       worker.name.toLowerCase().includes(query) ||
-      worker.workerId.toLowerCase().includes(query)
+      worker.workerId.toLowerCase().includes(query) ||
+      worker.serialNo.toLowerCase().includes(query)
     );
   }).sort((a, b) => {
     const sA = parseInt(a.serialNo) || 0;
     const sB = parseInt(b.serialNo) || 0;
     return sA - sB;
   });
+
+  const getWorkerName = (id: string) => workers.find(w => w.id === id)?.name || 'Unknown';
+  const getWorkerEmpId = (id: string) => workers.find(w => w.id === id)?.workerId || 'Unknown';
+
+  const filteredTransfers = useMemo(() => {
+    let list = workerTransfers || [];
+    
+    if (transferSearch.trim()) {
+      const q = transferSearch.toLowerCase().trim();
+      list = list.filter(t => {
+        const workerName = getWorkerName(t.workerId).toLowerCase();
+        const empId = getWorkerEmpId(t.workerId).toLowerCase();
+        return workerName.includes(q) || empId.includes(q);
+      });
+    }
+
+    if (transferDateFrom) {
+      list = list.filter(t => t.transferDate >= transferDateFrom);
+    }
+    if (transferDateTo) {
+      list = list.filter(t => t.transferDate <= transferDateTo);
+    }
+
+    return list.sort((a, b) => new Date(b.transferDate).getTime() - new Date(a.transferDate).getTime());
+  }, [workerTransfers, transferSearch, transferDateFrom, transferDateTo, workers]);
 
   const handleEdit = (worker: any) => {
     setFormData({
@@ -511,6 +551,13 @@ export const Workers: React.FC = () => {
         >
           <span>📋 Labour Planning</span>
         </button>
+        <button
+          onClick={() => setActiveView('transfers')}
+          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'transfers' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
+          id="tab-workers-transfers"
+        >
+          <span>🔄 Transfer History</span>
+        </button>
       </div>
 
       {activeView === 'directory' ? (
@@ -538,6 +585,15 @@ export const Workers: React.FC = () => {
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
+              <label className="flex items-center space-x-1 ml-2 mr-1 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={showTransferredOnly} 
+                  onChange={e => setShowTransferredOnly(e.target.checked)} 
+                  className="rounded text-[#0056b3] focus:ring-[#0056b3]" 
+                />
+                <span className="text-[10.5px] font-bold text-gray-600 uppercase tracking-tight">Transferred Only</span>
+              </label>
               <div className="w-px h-4 bg-gray-300 mx-1"></div>
               <Search size={12} className="text-gray-600" />
               <span className="font-semibold text-gray-700">Filter Search:</span>
@@ -658,6 +714,80 @@ export const Workers: React.FC = () => {
           )}
           </AnimatePresence>
 
+          {/* Transfer Worker Modal */}
+          <AnimatePresence>
+          {transferModalData && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm"
+              onClick={() => setTransferModalData(null)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="sap-panel relative z-10 w-full max-w-md p-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-purple-600"
+            >
+              <div className="font-extrabold mb-3 border-b border-purple-600/30 pb-1.5 text-purple-700 uppercase tracking-wider text-xs flex justify-between items-center">
+                <span>Transfer Worker</span>
+                <button type="button" onClick={() => setTransferModalData(null)} className="text-gray-400 hover:text-gray-600">
+                  <X size={12} />
+                </button>
+              </div>
+              <div className="mb-4 text-[11px] bg-slate-50 border border-slate-200 p-2 rounded">
+                <p><strong>Employee ID:</strong> {transferModalData.workerId}</p>
+                <p><strong>Worker Name:</strong> {transferModalData.name}</p>
+                <p><strong>Current Site:</strong> {getProjectName(transferModalData.projectId)}</p>
+              </div>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                addWorkerTransfer({
+                  workerId: transferModalData.id,
+                  fromProjectId: transferModalData.projectId,
+                  toProjectId: transferForm.toProjectId,
+                  transferDate: transferForm.transferDate,
+                  remarks: transferForm.remarks
+                });
+                setTransferModalData(null);
+              }} className="space-y-3">
+                <div className="flex flex-col space-y-1 text-[11px]">
+                  <label className="font-semibold text-gray-700">Select New Site *</label>
+                  <select required className="sap-input" value={transferForm.toProjectId} onChange={e => setTransferForm({...transferForm, toProjectId: e.target.value})}>
+                    <option value="">-- Select Destination Site --</option>
+                    {projects.filter(p => p.id !== transferModalData.projectId).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col space-y-1 text-[11px]">
+                  <label className="font-semibold text-gray-700">Transfer Date *</label>
+                  <input required type="date" className="sap-input" value={transferForm.transferDate} onChange={e => setTransferForm({...transferForm, transferDate: e.target.value})} />
+                </div>
+                <div className="flex flex-col space-y-1 text-[11px]">
+                  <label className="font-semibold text-gray-700">Remarks (Optional)</label>
+                  <textarea className="sap-input resize-none h-16" value={transferForm.remarks} onChange={e => setTransferForm({...transferForm, remarks: e.target.value})} placeholder="Reason for transfer..." />
+                </div>
+                <div className="flex justify-end pt-3 space-x-2 border-t border-gray-200 mt-2">
+                  <button type="submit" className="sap-btn flex items-center space-x-1.5 bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-700 hover:text-white transition">
+                    <ArrowRight size={12} />
+                    <strong>Execute Transfer</strong>
+                  </button>
+                  <button type="button" onClick={() => setTransferModalData(null)} className="sap-btn flex items-center space-x-1 bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-200 transition">
+                    <X size={12} />
+                    <span>Cancel</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+            </div>
+          )}
+          </AnimatePresence>
+
           {/* Master Spreadsheet Table */}
           <table className="w-full border-collapse border border-[#8c9ba8] bg-white shadow-sm">
             <thead className="sap-header select-none">
@@ -727,6 +857,20 @@ export const Workers: React.FC = () => {
                       {!isReadOnly && (
                         <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
                           <div className="flex items-center justify-center space-x-2">
+                            <button 
+                              onClick={() => { 
+                                setTransferModalData(worker); 
+                                setTransferForm({ 
+                                  toProjectId: '', 
+                                  transferDate: new Date().toISOString().substring(0,10), 
+                                  remarks: '' 
+                                }); 
+                              }} 
+                              className="text-purple-600 hover:text-purple-800 p-0.5 border border-transparent hover:border-purple-300 rounded" 
+                              title="Transfer Worker to another Site"
+                            >
+                              <ArrowRight size={12} />
+                            </button>
                             <button onClick={() => handleEdit(worker)} className="text-blue-600 hover:text-blue-800 p-0.5 border border-transparent hover:border-blue-300 rounded" title="Edit Profile Details">
                               <Edit size={12} />
                             </button>
@@ -1248,6 +1392,93 @@ export const Workers: React.FC = () => {
 
       {activeView === 'planning' && (
         <LabourRequirementPlanning />
+      )}
+
+      {activeView === 'transfers' && (
+        <div className="flex flex-col space-y-4">
+          <div className="flex items-center justify-between bg-[#eef2f6] p-2 border border-[#8c9ba8] shadow-sm rounded-sm">
+            <h2 className="font-bold text-[#002f6c] uppercase text-sm flex items-center">
+              <Briefcase className="mr-2" size={16} /> Worker Transfer History
+            </h2>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] uppercase font-bold text-gray-500">From Date:</span>
+                <input 
+                  type="date" 
+                  className="sap-input text-xs w-32" 
+                  value={transferDateFrom}
+                  onChange={e => setTransferDateFrom(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] uppercase font-bold text-gray-500">To Date:</span>
+                <input 
+                  type="date" 
+                  className="sap-input text-xs w-32" 
+                  value={transferDateTo}
+                  onChange={e => setTransferDateTo(e.target.value)}
+                />
+              </div>
+              <div className="relative">
+                <Search className="absolute left-2 top-1.5 text-gray-400" size={12} />
+                <input
+                  type="text"
+                  className="sap-input w-48 text-[11px] pl-7"
+                  placeholder="Employee ID / Name..."
+                  value={transferSearch}
+                  onChange={e => setTransferSearch(e.target.value)}
+                />
+                {transferSearch && (
+                  <button
+                    onClick={() => setTransferSearch('')}
+                    className="absolute right-2 top-1.5 hover:bg-gray-300 p-0.5 rounded text-gray-500 cursor-pointer"
+                    title="Clear Search"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <table className="w-full border-collapse border border-[#8c9ba8] bg-white shadow-sm">
+            <thead className="sap-header select-none">
+              <tr className="divide-x divide-[#8c9ba8]">
+                <th className="border border-[#8c9ba8] px-2 py-1.5 text-left font-bold w-12 bg-[#bcc5cf]/40">No.</th>
+                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold w-32">Employee ID</th>
+                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold">Worker Name</th>
+                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold text-red-700">Transferred From</th>
+                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold text-green-700">Transferred To</th>
+                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold w-32">Date</th>
+                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold min-w-32">Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransfers.map((item, idx) => (
+                <motion.tr 
+                  initial={{ opacity: 0, y: 5 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  transition={{ duration: 0.1, delay: Math.min(idx * 0.02, 0.2) }}
+                  key={item.id} 
+                  className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150 text-[10.5px]"
+                >
+                  <td className="border border-[#bcc5cf] px-2 py-1.5 text-center font-mono text-gray-500 font-semibold">{idx + 1}</td>
+                  <td className="border border-[#bcc5cf] px-3 py-1.5"><span className="px-1.5 py-0.5 border border-purple-200 bg-purple-50 text-purple-800 rounded-sm font-bold font-mono">{getWorkerEmpId(item.workerId)}</span></td>
+                  <td className="border border-[#bcc5cf] px-3 py-1.5 font-bold font-sans">{getWorkerName(item.workerId)}</td>
+                  <td className="border border-[#bcc5cf] px-3 py-1.5 text-red-700 font-semibold">{getProjectName(item.fromProjectId)}</td>
+                  <td className="border border-[#bcc5cf] px-3 py-1.5 text-green-700 font-semibold">{getProjectName(item.toProjectId)}</td>
+                  <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono">{item.transferDate.split('-').reverse().join('-')}</td>
+                  <td className="border border-[#bcc5cf] px-3 py-1.5 text-gray-500 italic">{item.remarks || '—'}</td>
+                </motion.tr>
+              ))}
+              {filteredTransfers.length === 0 && (
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                  <td colSpan={7} className="border border-[#8c9ba8] px-3 py-8 text-center text-gray-500 font-semibold italic bg-amber-50/10">No transfer history logs found matching specified criteria.</td>
+                </motion.tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Roster delete validation modal */}

@@ -41,7 +41,30 @@ export const Expenses: React.FC = () => {
     category: 'mess', // defaults to mess
     amount: '',
     bank: '',
+    receiptProof: '',
+    receiptFileName: '',
+    receiptFileType: ''
   });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File size must be less than 5MB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({
+          ...prev,
+          receiptProof: reader.result as string,
+          receiptFileName: file.name,
+          receiptFileType: file.type
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Reset form
   const handleCancel = () => {
@@ -55,6 +78,9 @@ export const Expenses: React.FC = () => {
       category: 'mess',
       amount: '',
       bank: '',
+      receiptProof: '',
+      receiptFileName: '',
+      receiptFileType: ''
     });
   };
 
@@ -86,6 +112,9 @@ export const Expenses: React.FC = () => {
       category,
       amount: amount.toString(),
       bank: entry.bank || '',
+      receiptProof: entry.receiptProof || '',
+      receiptFileName: entry.receiptFileName || '',
+      receiptFileType: entry.receiptFileType || ''
     });
     setEditingId(entry.id);
     setIsAdding(true);
@@ -121,6 +150,10 @@ export const Expenses: React.FC = () => {
       projectId: formData.projectId || undefined,
       bank: isCredit ? formData.bank : undefined,
       crBalance: isCredit ? amountVal : 0,
+      receiptProof: formData.receiptProof,
+      receiptFileName: formData.receiptFileName,
+      receiptFileType: formData.receiptFileType,
+      status: 'Submitted' as 'Submitted',
       ...categoriesData
     };
 
@@ -139,7 +172,10 @@ export const Expenses: React.FC = () => {
         projectId: '',
         category: 'kharchi',
         amount: '',
-        bank: ''
+        bank: '',
+        receiptProof: '',
+        receiptFileName: '',
+        receiptFileType: ''
       });
       setTransactionType('spent');
     }
@@ -941,6 +977,21 @@ export const Expenses: React.FC = () => {
                 </>
               )}
 
+              <div className="md:col-span-2">
+                <label className="block text-[10px] text-gray-500 font-bold mb-1">BILL / RECEIPT PROOF (OPTIONAL)</label>
+                <input 
+                  type="file" 
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  className="w-full text-xs p-1"
+                />
+                {formData.receiptFileName && (
+                  <div className="text-[10px] text-green-700 italic mt-0.5 truncate">
+                    Attached: {formData.receiptFileName}
+                  </div>
+                )}
+              </div>
+
               <div className="md:col-span-6 flex justify-end space-x-1.5 pt-1.5 border-t border-gray-200 mt-1">
                 <button 
                   type="button" 
@@ -1002,6 +1053,7 @@ export const Expenses: React.FC = () => {
               <th className="border border-black py-1.5 px-2 font-bold w-16">DATE</th>
               <th className="border border-black py-1.5 px-2 font-bold text-left w-48">DESCRIPTION</th>
               <th className="border border-black py-1.5 px-2 font-bold text-left w-24">PROJECT</th>
+              <th className="border border-black py-1.5 px-2 font-bold text-center w-12">RECEIPT</th>
               <th className="border border-black py-1.5 px-1 font-bold bg-amber-50/20 text-yellow-900 w-16">Kharchi</th>
               <th className="border border-black py-1.5 px-1 font-bold bg-purple-50/20 text-purple-900 w-16">Mess</th>
               <th className="border border-black py-1.5 px-1 font-bold bg-red-50/20 text-red-900 w-20 text-center leading-tight">Worker<br/>Advance</th>
@@ -1057,6 +1109,15 @@ export const Expenses: React.FC = () => {
                     {/* Project */}
                     <td className="border border-black py-1.5 px-2 text-left text-gray-800 select-none">
                       {getProjectName(item.projectId)}
+                    </td>
+
+                    {/* Receipt */}
+                    <td className="border border-black py-1.5 px-2 text-center text-gray-800 select-none">
+                      {item.receiptProof && (
+                        <a href={item.receiptProof} download={item.receiptFileName} className="text-blue-600 hover:underline text-[9px]">
+                          View
+                        </a>
+                      )}
                     </td>
 
                     {/* Kharchi */}
@@ -1164,7 +1225,7 @@ export const Expenses: React.FC = () => {
             </AnimatePresence>
             {filteredLedger.length === 0 && (
               <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                <td colSpan={isReadOnly ? 16 : 17} className="border border-black py-10 text-center text-gray-500 font-semibold italic bg-amber-50/10">
+                <td colSpan={isReadOnly ? 17 : 18} className="border border-black py-10 text-center text-gray-500 font-semibold italic bg-amber-50/10">
                   No fund flow transactions matched selected options.
                 </td>
               </motion.tr>

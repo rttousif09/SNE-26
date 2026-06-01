@@ -15,28 +15,35 @@ export const Approvals: React.FC = () => {
   const { 
     user, 
     approvals, 
+    advanceSheetApprovals = [],
     paymentSheetApprovals = [], 
     kharchiApprovals = [],
+    expensesLedger = [],
     workers, 
     projects, 
     addApproval, 
     updateApproval, 
     deleteApproval,
+    updateAdvanceSheetApproval,
+    deleteAdvanceSheetApproval,
     updatePaymentSheetApproval,
     deletePaymentSheetApproval,
     updateKharchiApproval,
-    deleteKharchiApproval
+    deleteKharchiApproval,
+    updateExpenseEntry
   } = useAppContext();
   
-  const [activeTab, setActiveTab] = useState<'advances' | 'paymentSheets' | 'kharchiSheets' | 'history'>('advances');
+  const [activeTab, setActiveTab] = useState<'advances' | 'paymentSheets' | 'kharchiSheets' | 'advanceSheets' | 'expenses' | 'history'>('advances');
   const [isAdding, setIsAdding] = useState(false);
   const [noteModal, setNoteModal] = useState<{
     id: string;
-    type: 'advance' | 'sheet' | 'kharchi';
+    type: 'advance' | 'sheet' | 'kharchi' | 'advanceSheet' | 'expense';
     action: 'Approved' | 'Rejected';
     details: string;
+    requestAmount?: number;
   } | null>(null);
   const [modalNotes, setModalNotes] = useState('');
+  const [approvedAmount, setApprovedAmount] = useState<string>('');
   const [formData, setFormData] = useState({
     workerId: '',
     projectId: '',
@@ -226,7 +233,8 @@ export const Approvals: React.FC = () => {
     addApproval({
       workerId: formData.workerId,
       projectId: formData.projectId,
-      amount: Number(formData.amount),
+      amount: Number(formData.amount), // This seems default for requested amount currently
+      requestAmount: Number(formData.amount),
       remarks: formData.remarks,
       date: formData.date
     });
@@ -262,15 +270,25 @@ export const Approvals: React.FC = () => {
     const { id, type, action } = noteModal;
     
     if (type === 'advance') {
-      updateApproval(id, { status: action, approvalNotes: modalNotes });
+      const finalAmount = approvedAmount ? Number(approvedAmount) : undefined;
+      updateApproval(id, { 
+        status: action, 
+        approvalNotes: modalNotes,
+        ...(finalAmount !== undefined && action === 'Approved' ? { approvedAmount: finalAmount, amount: finalAmount } : {})
+      });
     } else if (type === 'sheet') {
       updatePaymentSheetApproval(id, { status: action, approvalNotes: modalNotes });
     } else if (type === 'kharchi') {
       updateKharchiApproval(id, { status: action, approvalNotes: modalNotes });
+    } else if (type === 'advanceSheet') {
+      updateAdvanceSheetApproval(id, { status: action, approvalNotes: modalNotes });
+    } else if (type === 'expense') {
+      updateExpenseEntry(id, { status: action, approvalNotes: modalNotes });
     }
     
     setNoteModal(null);
     setModalNotes('');
+    setApprovedAmount('');
   };
 
   const historyLog = React.useMemo(() => {
@@ -331,13 +349,51 @@ export const Approvals: React.FC = () => {
       }
     });
 
+    advanceSheetApprovals.forEach(a => {
+      if (a.status !== 'Pending') {
+        const projectName = getProjectName(a.projectId);
+        logs.push({
+          id: `as-${a.id}`,
+          type: 'Advance Sheet',
+          projectName,
+          details: `Month: ${a.month}`,
+          amount: a.totalAmount,
+          date: a.date,
+          status: a.status as 'Approved'|'Rejected',
+          remarks: a.remarks,
+          approvalNotes: a.approvalNotes,
+          actionBy: 'Director (saddamsne)'
+        });
+      }
+    });
+
+    expensesLedger.forEach(e => {
+      if (e.status && e.status !== 'Draft' && e.status !== 'Submitted') {
+        const projectName = getProjectName(e.projectId || '');
+        logs.push({
+          id: `ex-${e.id}`,
+          type: 'Expense Sheet',
+          projectName: projectName || 'General',
+          details: e.description,
+          amount: e.kharchi + e.mess + e.workerAdvance + e.tiffin + e.travel + e.machineryMaterial + e.workerPayment + e.stationery + e.others + e.crBalance,
+          date: e.date,
+          status: e.status as 'Approved'|'Rejected',
+          remarks: `Bank: ${e.bank || ''}`,
+          approvalNotes: e.approvalNotes,
+          actionBy: 'Director (saddamsne)'
+        });
+      }
+    });
+
     return logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [approvals, paymentSheetApprovals, kharchiApprovals, workers, projects]);
+  }, [approvals, paymentSheetApprovals, kharchiApprovals, advanceSheetApprovals, expensesLedger, workers, projects]);
 
   // Filter pending counts
   const pendingAdvancesCount = approvals.filter(a => a.status === 'Pending').length;
   const pendingSheetsCount = paymentSheetApprovals.filter(s => s.status === 'Pending').length;
   const pendingKharchiCount = kharchiApprovals.filter(s => s.status === 'Pending').length;
+  const pendingAdvanceSheetsCount = advanceSheetApprovals.filter(s => s.status === 'Pending').length;
+  const pendingExpensesCount = expensesLedger.filter(s => s.status === 'Submitted').length;
 
   return (
     <div className="text-[11px] space-y-3">
@@ -408,6 +464,40 @@ export const Approvals: React.FC = () => {
           {pendingKharchiCount > 0 && (
             <span className="bg-red-650 text-white font-mono text-[9px] px-1 rounded-sm font-bold">
               {pendingKharchiCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('advanceSheets')}
+          className={`px-4 py-2 border-t-2 border-x font-semibold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeTab === 'advanceSheets'
+              ? 'border-t-[#0056b3] border-x-[#8c9ba8] bg-white text-[#0056b3]'
+              : 'border-t-transparent border-x-transparent bg-transparent text-gray-600 hover:text-gray-900 border-l-0'
+          }`}
+        >
+          <FileText size={14} className={activeTab === 'advanceSheets' ? 'text-[#0056b3]' : 'text-gray-500'} />
+          <span>Advance Sheets</span>
+          {pendingAdvanceSheetsCount > 0 && (
+            <span className="bg-red-650 text-white font-mono text-[9px] px-1 rounded-sm font-bold">
+              {pendingAdvanceSheetsCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('expenses')}
+          className={`px-4 py-2 border-t-2 border-x font-semibold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeTab === 'expenses'
+              ? 'border-t-[#0056b3] border-x-[#8c9ba8] bg-white text-[#0056b3]'
+              : 'border-t-transparent border-x-transparent bg-transparent text-gray-600 hover:text-gray-900 border-l-0'
+          }`}
+        >
+          <FileText size={14} className={activeTab === 'expenses' ? 'text-[#0056b3]' : 'text-gray-500'} />
+          <span>Expense Records</span>
+          {pendingExpensesCount > 0 && (
+            <span className="bg-red-650 text-white font-mono text-[9px] px-1 rounded-sm font-bold">
+              {pendingExpensesCount}
             </span>
           )}
         </button>
@@ -597,9 +687,11 @@ export const Approvals: React.FC = () => {
                                   id: app.id,
                                   type: 'advance',
                                   action: 'Approved',
-                                  details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`
+                                  details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`,
+                                  requestAmount: app.requestAmount || app.amount
                                 });
                                 setModalNotes('');
+                                setApprovedAmount((app.requestAmount || app.amount).toString());
                               }}
                               className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
                             >
@@ -891,6 +983,210 @@ export const Approvals: React.FC = () => {
         </div>
       )}
 
+      {activeTab === 'advanceSheets' && (
+        <div className="space-y-3">
+          <table className="w-full border-collapse border border-[#8c9ba8] bg-white text-[11px]">
+            <thead className="sap-header bg-[#eef2f6]">
+              <tr>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-12">Date</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-20">Type</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-32">Project</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-20">Month</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-gray-50 w-24">Total Amount (₹)</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Owner Note</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-20 bg-gray-50">Status</th>
+                {isOwner && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Decisions</th>}
+                {!isOwner && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16">Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {advanceSheetApprovals.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(sheet => (
+                <motion.tr 
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  transition={{ duration: 0.2 }}
+                  key={sheet.id}
+                  className="hover:bg-[#e6f2ff] cursor-default font-mono"
+                >
+                  <td className="border border-[#8c9ba8] px-2 py-1">{sheet.date.split('-').reverse().join('-')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800 tracking-tight">Advance Sheet</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{getProjectName(sheet.projectId)}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1">{sheet.month}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{sheet.totalAmount.toLocaleString('en-IN')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700 italic">{sheet.remarks || '-'}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-amber-700 font-medium italic">{sheet.approvalNotes || '-'}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                    <span className={`px-1.5 py-0.5 rounded-sm font-sans font-bold text-[9px] uppercase tracking-wider ${
+                      sheet.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
+                      sheet.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                      'bg-amber-100 text-amber-800 border-amber-200'
+                    }`}>
+                      {sheet.status}
+                    </span>
+                  </td>
+                  {isOwner && (
+                    <td className="border border-[#8c9ba8] px-1 py-1 text-center">
+                      {sheet.status === 'Pending' ? (
+                        <div className="flex justify-center space-x-1">
+                          <button
+                            onClick={() => {
+                              setNoteModal({
+                                id: sheet.id,
+                                type: 'advanceSheet',
+                                action: 'Approved',
+                                details: `Advance Sheet: ${getProjectName(sheet.projectId)} - Month: ${sheet.month} - Amount: ₹${sheet.totalAmount.toLocaleString('en-IN')}`
+                              });
+                              setModalNotes('');
+                            }}
+                            className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                          >
+                            <Check size={8} />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setNoteModal({
+                                id: sheet.id,
+                                type: 'advanceSheet',
+                                action: 'Rejected',
+                                details: `Advance Sheet: ${getProjectName(sheet.projectId)} - Month: ${sheet.month} - Amount: ₹${sheet.totalAmount.toLocaleString('en-IN')}`
+                              });
+                              setModalNotes('');
+                            }}
+                            className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                          >
+                            <XCircle size={8} />
+                            <span>Reject</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-medium text-[10px]">Decided</span>
+                      )}
+                    </td>
+                  )}
+                  {!isOwner && (
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                      {sheet.status === 'Pending' ? (
+                        <button
+                          onClick={() => deleteAdvanceSheetApproval(sheet.id)}
+                          className="text-red-500 hover:text-red-700 cursor-pointer"
+                          title="Delete Request"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
+                  )}
+                </motion.tr>
+              ))}
+              {advanceSheetApprovals.length === 0 && (
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                  <td colSpan={isOwner ? 9 : 10} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No advance sheets have been submitted for approval yet.
+                  </td>
+                </motion.tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'expenses' && (
+        <div className="space-y-3">
+          <table className="w-full border-collapse border border-[#8c9ba8] bg-white text-[11px]">
+            <thead className="sap-header bg-[#eef2f6]">
+              <tr>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-12">Date</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-20">Type</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-32">Project</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-gray-50 w-24">Total Amount (₹)</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Memo / Bank</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Owner Note</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-20 bg-gray-50">Status</th>
+                {isOwner && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Decisions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {expensesLedger.filter(e => e.status && e.status !== 'Draft').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(exp => (
+                <motion.tr 
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  transition={{ duration: 0.2 }}
+                  key={exp.id}
+                  className="hover:bg-[#e6f2ff] cursor-default font-mono"
+                >
+                  <td className="border border-[#8c9ba8] px-2 py-1">{exp.date.split('-').reverse().join('-')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800 tracking-tight">Expense Entry</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{getProjectName(exp.projectId)}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{(exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700 italic">{`${exp.description} ${exp.bank ? `(${exp.bank})` : ''}`}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-amber-700 font-medium italic">{exp.approvalNotes || '-'}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                    <span className={`px-1.5 py-0.5 rounded-sm font-sans font-bold text-[9px] uppercase tracking-wider ${
+                      exp.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
+                      exp.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                      'bg-amber-100 text-amber-800 border-amber-200'
+                    }`}>
+                      {exp.status}
+                    </span>
+                  </td>
+                  {isOwner && (
+                    <td className="border border-[#8c9ba8] px-1 py-1 text-center">
+                      {exp.status === 'Submitted' ? (
+                        <div className="flex justify-center space-x-1">
+                          <button
+                            onClick={() => {
+                              setNoteModal({
+                                id: exp.id,
+                                type: 'expense',
+                                action: 'Approved',
+                                details: `Expense: ${getProjectName(exp.projectId)} - Amount: ₹${(exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}`
+                              });
+                              setModalNotes('');
+                            }}
+                            className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                          >
+                            <Check size={8} />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setNoteModal({
+                                id: exp.id,
+                                type: 'expense',
+                                action: 'Rejected',
+                                details: `Expense: ${getProjectName(exp.projectId)} - Amount: ₹${(exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}`
+                              });
+                              setModalNotes('');
+                            }}
+                            className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                          >
+                            <XCircle size={8} />
+                            <span>Reject</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-medium text-[10px]">Decided</span>
+                      )}
+                    </td>
+                  )}
+                </motion.tr>
+              ))}
+              {expensesLedger.filter(e => e.status && e.status !== 'Draft').length === 0 && (
+                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                  <td colSpan={isOwner ? 8 : 7} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No expense records have been submitted for approval yet.
+                  </td>
+                </motion.tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Tab 4 Content: Approval History */}
       {activeTab === 'history' && (
         <div className="space-y-3">
@@ -982,6 +1278,19 @@ export const Approvals: React.FC = () => {
                 <p className="font-bold text-gray-700 font-sans text-[11px] mb-0.5">Target Transaction Detail:</p>
                 {noteModal.details}
               </div>
+
+              {noteModal.type === 'advance' && noteModal.action === 'Approved' && (
+                <div className="mb-4">
+                  <label className="block font-bold text-gray-700 mb-1">Approved Amount (Leave empty for requested amount):</label>
+                  <input
+                    type="number"
+                    value={approvedAmount}
+                    onChange={(e) => setApprovedAmount(e.target.value)}
+                    placeholder={`Requested: ${noteModal.requestAmount || ''}`}
+                    className="sap-input w-full"
+                  />
+                </div>
+              )}
 
               <div className="space-y-1 mb-4">
                 <label className="block font-bold text-gray-700">

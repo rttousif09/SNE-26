@@ -5,29 +5,44 @@ import { Save, Edit, X, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const Advance: React.FC = () => {
-  const { user, advances, projects, workers, addAdvance, updateAdvance, deleteAdvance } = useAppContext();
+  const { user, advances, projects, workers, addAdvance, updateAdvance, deleteAdvance, advanceSheetApprovals, addAdvanceSheetApproval } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [sheetMonth, setSheetMonth] = useState('');
+  const [sheetRemarks, setSheetRemarks] = useState('');
   const [formData, setFormData] = useState({
-    workerId: '', amount: '', paidBy: '', remarks: '', date: ''
+    workerId: '', amount: '', paidBy: 'Saddam Hussain', paidByDetails: '', remarks: '', date: '',
+    isDeducted: false, deductionMonth: '', deductionAmount: '',
+    receiptProof: '', receiptFileName: '', receiptFileType: ''
   });
 
   const handleEdit = (advance: any) => {
     setFormData({
       workerId: advance.workerId,
       amount: advance.amount.toString(),
-      paidBy: advance.paidBy,
+      paidBy: advance.paidBy || 'Saddam Hussain',
+      paidByDetails: advance.paidByDetails || '',
       remarks: advance.remarks || '',
-      date: advance.date
+      date: advance.date,
+      isDeducted: advance.isDeducted || false,
+      deductionMonth: advance.deductionMonth || '',
+      deductionAmount: advance.deductionAmount?.toString() || '',
+      receiptProof: advance.receiptProof || '',
+      receiptFileName: advance.receiptFileName || '',
+      receiptFileType: advance.receiptFileType || ''
     });
     setEditingId(advance.id);
   };
 
   const handleCancel = () => {
     setEditingId(null);
-    setFormData({ workerId: '', amount: '', paidBy: '', remarks: '', date: '' });
+    setFormData({ 
+      workerId: '', amount: '', paidBy: 'Saddam Hussain', paidByDetails: '', remarks: '', date: '',
+      isDeducted: false, deductionMonth: '', deductionAmount: '',
+      receiptProof: '', receiptFileName: '', receiptFileType: '' 
+    });
   };
 
   const projectWorkers = useMemo(() => {
@@ -44,28 +59,50 @@ export const Advance: React.FC = () => {
     return filteredAdvances.reduce((sum, a) => sum + a.amount, 0);
   }, [filteredAdvances]);
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File size must be less than 5MB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({
+          ...prev,
+          receiptProof: reader.result as string,
+          receiptFileName: file.name,
+          receiptFileType: file.type
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
     
+    const payload = {
+      projectId: selectedProject,
+      workerId: formData.workerId,
+      amount: Number(formData.amount),
+      paidBy: formData.paidBy,
+      paidByDetails: formData.paidBy === 'Other' ? formData.paidByDetails : undefined,
+      remarks: formData.remarks,
+      date: formData.date,
+      isDeducted: formData.isDeducted,
+      deductionMonth: formData.isDeducted ? formData.deductionMonth : undefined,
+      deductionAmount: formData.isDeducted && formData.deductionAmount ? Number(formData.deductionAmount) : undefined,
+      receiptProof: formData.receiptProof,
+      receiptFileName: formData.receiptFileName,
+      receiptFileType: formData.receiptFileType
+    };
+
     if (editingId) {
-      updateAdvance(editingId, {
-        projectId: selectedProject,
-        workerId: formData.workerId,
-        amount: Number(formData.amount),
-        paidBy: formData.paidBy,
-        remarks: formData.remarks,
-        date: formData.date
-      });
+      updateAdvance(editingId, payload);
     } else {
-      addAdvance({
-        projectId: selectedProject,
-        workerId: formData.workerId,
-        amount: Number(formData.amount),
-        paidBy: formData.paidBy,
-        remarks: formData.remarks,
-        date: formData.date
-      });
+      addAdvance(payload);
     }
     
     handleCancel();
@@ -75,6 +112,25 @@ export const Advance: React.FC = () => {
     const worker = workers.find(w => w.id === id);
     return worker ? { name: worker.name, idNo: worker.workerId, srNo: worker.serialNo } : { name: 'Unknown', idNo: '-', srNo: '-' };
   };
+
+  const handleSendForApproval = () => {
+    if (!selectedProject || !sheetMonth) return;
+    addAdvanceSheetApproval({
+      projectId: selectedProject,
+      month: sheetMonth,
+      totalAmount: totalAdvance,
+      remarks: sheetRemarks,
+      date: new Date().toISOString().split('T')[0]
+    });
+    setSheetMonth('');
+    setSheetRemarks('');
+    alert('Advance Sheet pending approval request submitted to owner.');
+  };
+
+  const projectSheetApprovals = useMemo(() => {
+    if (!selectedProject) return [];
+    return advanceSheetApprovals.filter(a => a.projectId === selectedProject);
+  }, [selectedProject, advanceSheetApprovals]);
 
   return (
     <div className="text-[11px]">
@@ -113,8 +169,56 @@ export const Advance: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Paid By:</label>
-              <input required type="text" className="sap-input flex-1" value={formData.paidBy} onChange={e => setFormData({...formData, paidBy: e.target.value})} />
+              <select required className="sap-input flex-1" value={formData.paidBy} onChange={e => setFormData({...formData, paidBy: e.target.value})}>
+                <option value="Saddam Hussain">Saddam Hussain</option>
+                <option value="Tousif Reja">Tousif Reja</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
+            {formData.paidBy === 'Other' && (
+              <div className="flex items-center col-span-2">
+                <label className="w-32 text-gray-600">Specify Paid By:</label>
+                <input required type="text" className="sap-input flex-1" value={formData.paidByDetails} onChange={e => setFormData({...formData, paidByDetails: e.target.value})} placeholder="Specify name" />
+              </div>
+            )}
+            
+            <div className="flex items-center col-span-2">
+              <label className="w-32">Is Deducted?</label>
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center space-x-1 cursor-pointer">
+                  <input type="radio" name="isDeducted" checked={formData.isDeducted === true} onChange={() => setFormData({...formData, isDeducted: true})} />
+                  <span>Yes</span>
+                </label>
+                <label className="flex items-center space-x-1 cursor-pointer">
+                  <input type="radio" name="isDeducted" checked={formData.isDeducted === false} onChange={() => setFormData({...formData, isDeducted: false, deductionMonth: '', deductionAmount: ''})} />
+                  <span>No</span>
+                </label>
+              </div>
+            </div>
+
+            {formData.isDeducted && (
+              <>
+                <div className="flex items-center">
+                  <label className="w-32 text-gray-700">Deduction Month:</label>
+                  <input required type="month" className="sap-input flex-1" value={formData.deductionMonth} onChange={e => setFormData({...formData, deductionMonth: e.target.value})} />
+                </div>
+                <div className="flex items-center">
+                  <label className="w-32 text-gray-700">Deduct Amount:</label>
+                  <input required type="number" className="sap-input flex-1" value={formData.deductionAmount} onChange={e => setFormData({...formData, deductionAmount: e.target.value})} />
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center col-span-2">
+              <label className="w-32">Payment Proof:</label>
+              <input type="file" accept="image/*,application/pdf" className="text-xs flex-1" onChange={handleFileUpload} />
+            </div>
+            {formData.receiptFileName && (
+              <div className="col-span-2 pl-32 text-xs text-green-700 italic">
+                Attached: {formData.receiptFileName}
+              </div>
+            )}
+
             <div className="flex items-center col-span-2">
               <label className="w-32">Remarks:</label>
               <input type="text" className="sap-input flex-1" value={formData.remarks} onChange={e => setFormData({...formData, remarks: e.target.value})} />
@@ -151,6 +255,8 @@ export const Advance: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Date</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Paid By</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Deduction Info</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Receipt</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Amount</th>
                 {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-12">Actions</th>}
               </tr>
@@ -158,14 +264,25 @@ export const Advance: React.FC = () => {
             <tbody>
               {filteredAdvances.map((advance, idx) => {
                 const worker = getWorkerDetails(advance.workerId);
+                const deductionText = advance.isDeducted 
+                  ? `Yes (${advance.deductionMonth}, ₹${advance.deductionAmount})`
+                  : 'No';
                 return (
                   <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={advance.id} className="hover:bg-[#e6f2ff] cursor-default">
                     <td className="border border-[#8c9ba8] px-2 py-1">{worker.srNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{worker.idNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{worker.name}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{advance.date}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1">{advance.paidBy}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1">{advance.paidBy === 'Other' ? advance.paidByDetails : advance.paidBy}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{advance.remarks}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-xs">{deductionText}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
+                      {advance.receiptProof && (
+                        <a href={advance.receiptProof} download={advance.receiptFileName} className="text-blue-600 hover:underline text-xs" title={advance.receiptFileName}>
+                          View
+                        </a>
+                      )}
+                    </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right">
                       {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(advance.amount)}
                     </td>
@@ -189,6 +306,67 @@ export const Advance: React.FC = () => {
               )}
             </tbody>
           </table>
+
+          {/* Advance Sheet Approval Section */}
+          <div className="mt-8 bg-blue-50 p-4 border border-blue-200">
+            <h3 className="text-sm font-bold text-blue-900 mb-2">Advance Sheet Approval</h3>
+            
+            {/* Sheet Submission */}
+            {!isReadOnly && (
+              <div className="flex items-center space-x-2 mb-4 bg-white p-2 border border-blue-100">
+                <label className="font-semibold text-blue-800">Select Month to Send For Approval:</label>
+                <input type="month" className="sap-input" value={sheetMonth} onChange={e => setSheetMonth(e.target.value)} />
+                <input type="text" className="sap-input flex-1" placeholder="Remarks (optional)" value={sheetRemarks} onChange={e => setSheetRemarks(e.target.value)} />
+                <button 
+                  onClick={handleSendForApproval}
+                  disabled={!sheetMonth || filteredAdvances.length === 0}
+                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-medium"
+                >
+                  Send for Owner Approval
+                </button>
+              </div>
+            )}
+
+            {/* Approval Status */}
+            {projectSheetApprovals.length > 0 ? (
+              <div className="bg-white border border-blue-100">
+                <table className="w-full text-[11px] border-collapse">
+                  <thead className="bg-blue-900 text-white">
+                    <tr>
+                      <th className="border border-blue-200 px-2 py-1 text-left font-semibold">Date Submitted</th>
+                      <th className="border border-blue-200 px-2 py-1 text-left font-semibold">Month</th>
+                      <th className="border border-blue-200 px-2 py-1 text-right font-semibold">Total Amount</th>
+                      <th className="border border-blue-200 px-2 py-1 text-left font-semibold">Remarks</th>
+                      <th className="border border-blue-200 px-2 py-1 text-center font-semibold">Status</th>
+                      <th className="border border-blue-200 px-2 py-1 text-left font-semibold">Owner Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectSheetApprovals.map(sa => (
+                      <tr key={sa.id} className="hover:bg-blue-50">
+                        <td className="border border-blue-200 px-2 py-1">{sa.date}</td>
+                        <td className="border border-blue-200 px-2 py-1 font-semibold">{sa.month}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(sa.totalAmount)}</td>
+                        <td className="border border-blue-200 px-2 py-1">{sa.remarks}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-center">
+                          <span className={`px-2 py-0.5 rounded-full font-bold ${
+                            sa.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                            sa.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {sa.status}
+                          </span>
+                        </td>
+                        <td className="border border-blue-200 px-2 py-1 text-gray-700 italic">{sa.approvalNotes || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-gray-500 italic mt-2">No advance sheets have been submitted for approval yet.</p>
+            )}
+          </div>
         </>
       )}
 

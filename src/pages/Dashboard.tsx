@@ -173,6 +173,21 @@ export const Dashboard: React.FC = () => {
         </motion.div>
 
         <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
+          <SectionHeader title="Global Profit & Loss (Estimated Overall)" />
+          <div className="px-2">
+            <BarChart label="Total Client Cash Inflows" used={totalReceived} total={Math.max(totalReceived, totalSpent)} colorClass="bg-green-600" />
+            <BarChart label="Total Operational Cash Outflows" used={totalSpent} total={Math.max(totalReceived, totalSpent)} colorClass="bg-red-600" />
+            
+            <div className="mt-2 pt-2 border-t border-dashed border-gray-300">
+              <KeyValue 
+                label="Global App P&L Statement" 
+                value={<strong className={`text-[11px] font-mono ${totalReceived - totalSpent >= 0 ? 'text-green-700' : 'text-red-700'}`}>₹{(totalReceived - totalSpent).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>} 
+              />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={{ hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } }}>
           <SectionHeader title="Resource Allocation" />
           <div className="px-2">
             <BarChart label="Workers Deployed / Total Capacity" used={workers.length} total={100} colorClass="bg-[#a4d49d]" />

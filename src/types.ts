@@ -6,6 +6,17 @@ export interface Project {
   completionDate?: string;
   address: string;
   budget: number;
+  projectType?: 'Residential' | 'Commercial' | 'Government';
+  workOrderNo?: string;
+  scopeOfWork?: string;
+  rateType?: 'Supply' | 'Item Rate' | 'BUA Basis' | 'Lump-sum';
+  workOrderAttachment?: string;
+  workOrderFileName?: string;
+  workOrderFileType?: string;
+  projectManager?: string;
+  billingEngineer?: string;
+  siteIncharge?: string;
+  ourRepresentatives?: string;
 }
 
 export interface Worker {

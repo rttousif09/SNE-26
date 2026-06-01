@@ -205,6 +205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     approvals: [],
     kharchiApprovals: [],
     paymentSheetApprovals: [],
+    advanceSheetApprovals: [],
     expensesLedger: [],
     messBookings: [],
     dlrs: [],
@@ -339,11 +340,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const workerLedger = await getAllFromStore('workerLedger').catch(() => []);
           const workerHolds = await getAllFromStore('workerHolds').catch(() => []);
           const workerRecoveryAuditTrail = await getAllFromStore('workerRecoveryAuditTrail').catch(() => []);
+          const advanceSheetApprovals = await getAllFromStore('advanceSheetApprovals').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
                             workerPayments.length === 0 && approvals.length === 0 && paymentSheetApprovals.length === 0 &&
-                            kharchiApprovals.length === 0 &&
+                            kharchiApprovals.length === 0 && advanceSheetApprovals.length === 0 &&
                             expensesLedger.length === 0 && messBookings.length === 0 && dlrs.length === 0 &&
                             materialItems.length === 0 && materialIssues.length === 0 && materialReturns.length === 0 && materialPurchases.length === 0 &&
                             labourPlannings.length === 0 && workerTransfers.length === 0 && assets.length === 0 &&
@@ -364,6 +366,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               approvals,
               kharchiApprovals,
               paymentSheetApprovals,
+              advanceSheetApprovals,
               expensesLedger,
               messBookings,
               dlrs,
