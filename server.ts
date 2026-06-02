@@ -451,6 +451,14 @@ function initDbSchema() {
   try {
     db.exec("ALTER TABLE projects ADD COLUMN clientName TEXT");
   } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN projectManager TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN pmContact TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN billingEngineer TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN beContact TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN siteIncharge TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN siContact TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN ourRepresentatives TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN repContact TEXT"); } catch (e) {}
 
   try {
     db.exec("ALTER TABLE billings ADD COLUMN gst REAL DEFAULT 0");
@@ -498,6 +506,7 @@ function initDbSchema() {
   try { db.exec("ALTER TABLE advances ADD COLUMN receiptProof TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE advances ADD COLUMN receiptFileName TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE advances ADD COLUMN receiptFileType TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN deductionDetails TEXT"); } catch (e) {}
 
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeduction REAL DEFAULT 0"); } catch (e) {}
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeductionDetails TEXT"); } catch (e) {}
@@ -522,6 +531,37 @@ function initDbSchema() {
       status TEXT DEFAULT 'Pending',
       approvalNotes TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS tracked_bills (
+      id TEXT PRIMARY KEY,
+      billNo TEXT NOT NULL,
+      billType TEXT NOT NULL,
+      clientName TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      billingPeriod TEXT NOT NULL,
+      billDate TEXT NOT NULL,
+      billAmount REAL NOT NULL,
+      remarks TEXT,
+      currentStatus TEXT NOT NULL,
+      statusUpdateDate TEXT NOT NULL,
+      updatedBy TEXT NOT NULL,
+      amountCertified REAL DEFAULT 0,
+      amountReceived REAL DEFAULT 0,
+      outstandingAmount REAL DEFAULT 0,
+      lastPaymentDate TEXT,
+      expectedPaymentDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS bill_timeline (
+      id TEXT PRIMARY KEY,
+      billId TEXT NOT NULL,
+      status TEXT NOT NULL,
+      updateDate TEXT NOT NULL,
+      updatedBy TEXT NOT NULL,
+      remarks TEXT,
+      FOREIGN KEY (billId) REFERENCES tracked_bills(id) ON DELETE CASCADE
     );
   `);
 
@@ -679,12 +719,16 @@ async function startServer() {
 
   app.post("/api/projects", (req, res) => {
     try {
-      const { id, name, clientName, startDate, completionDate, address, budget } = req.body;
+      const { id, name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact } = req.body;
       db.prepare(`
-        INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, name, clientName || null, startDate, completionDate || null, address, parseFloat(budget));
-      res.status(201).json({ id, name, clientName, startDate, completionDate, address, budget });
+        INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, name, clientName || null, startDate, completionDate || null, address, parseFloat(budget),
+        projectManager || "", pmContact || "", billingEngineer || "", beContact || "",
+        siteIncharge || "", siContact || "", ourRepresentatives || "", repContact || ""
+      );
+      res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -693,13 +737,19 @@ async function startServer() {
   app.put("/api/projects/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { name, clientName, startDate, completionDate, address, budget } = req.body;
+      const { name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact } = req.body;
       db.prepare(`
         UPDATE projects
-        SET name = ?, clientName = ?, startDate = ?, completionDate = ?, address = ?, budget = ?
+        SET name = ?, clientName = ?, startDate = ?, completionDate = ?, address = ?, budget = ?,
+            projectManager = ?, pmContact = ?, billingEngineer = ?, beContact = ?, siteIncharge = ?, siContact = ?, ourRepresentatives = ?, repContact = ?
         WHERE id = ?
-      `).run(name, clientName || null, startDate, completionDate || null, address, parseFloat(budget), id);
-      res.json({ id, name, clientName, startDate, completionDate, address, budget });
+      `).run(
+        name, clientName || null, startDate, completionDate || null, address, parseFloat(budget),
+        projectManager || "", pmContact || "", billingEngineer || "", beContact || "",
+        siteIncharge || "", siContact || "", ourRepresentatives || "", repContact || "",
+        id
+      );
+      res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -958,14 +1008,14 @@ async function startServer() {
 
   app.post("/api/advances", (req, res) => {
     try {
-      const { id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType } = req.body;
+      const { id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType, deductionDetails } = req.body;
       db.prepare(`
-        INSERT INTO advances (id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO advances (id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType, deductionDetails)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, projectId, workerId, parseFloat(amount), paidBy, paidByDetails || "", remarks || "", date, 
         isDeducted ? 1 : 0, deductionMonth || "", parseFloat(deductionAmount || 0), 
-        receiptProof || "", receiptFileName || "", receiptFileType || ""
+        receiptProof || "", receiptFileName || "", receiptFileType || "", deductionDetails || ""
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -976,16 +1026,16 @@ async function startServer() {
   app.put("/api/advances/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType } = req.body;
+      const { projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType, deductionDetails } = req.body;
       db.prepare(`
         UPDATE advances
         SET projectId = ?, workerId = ?, amount = ?, paidBy = ?, paidByDetails = ?, remarks = ?, date = ?, 
-            isDeducted = ?, deductionMonth = ?, deductionAmount = ?, receiptProof = ?, receiptFileName = ?, receiptFileType = ?
+            isDeducted = ?, deductionMonth = ?, deductionAmount = ?, receiptProof = ?, receiptFileName = ?, receiptFileType = ?, deductionDetails = ?
         WHERE id = ?
       `).run(
         projectId, workerId, parseFloat(amount), paidBy, paidByDetails || "", remarks || "", date, 
         isDeducted ? 1 : 0, deductionMonth || "", parseFloat(deductionAmount || 0), 
-        receiptProof || "", receiptFileName || "", receiptFileType || "", id
+        receiptProof || "", receiptFileName || "", receiptFileType || "", deductionDetails || "", id
       );
       res.json(req.body);
     } catch (err: any) {
@@ -2220,6 +2270,8 @@ async function startServer() {
       db.prepare("DELETE FROM projects").run();
       db.prepare("DELETE FROM expenses_ledger").run();
       db.prepare("DELETE FROM mess_bookings").run();
+      try { db.prepare("DELETE FROM tracked_bills").run(); } catch(e){}
+      try { db.prepare("DELETE FROM bill_timeline").run(); } catch(e){}
 
       // Insert fresh data
       if (backup.projects && Array.isArray(backup.projects)) {
@@ -2401,11 +2453,193 @@ async function startServer() {
           );
         }
       }
+
+      if (backup.trackedBills && Array.isArray(backup.trackedBills)) {
+        const insert = db.prepare(`
+          INSERT INTO tracked_bills (
+            id, billNo, billType, clientName, projectId, billingPeriod, billDate, billAmount, remarks,
+            currentStatus, statusUpdateDate, updatedBy, amountCertified, amountReceived, outstandingAmount,
+            lastPaymentDate, expectedPaymentDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const tb of backup.trackedBills) {
+          insert.run(
+            tb.id,
+            tb.billNo,
+            tb.billType,
+            tb.clientName,
+            tb.projectId,
+            tb.billingPeriod,
+            tb.billDate,
+            parseFloat(tb.billAmount || 0),
+            tb.remarks || null,
+            tb.currentStatus,
+            tb.statusUpdateDate,
+            tb.updatedBy,
+            parseFloat(tb.amountCertified || 0),
+            parseFloat(tb.amountReceived || 0),
+            parseFloat(tb.outstandingAmount || 0),
+            tb.lastPaymentDate || null,
+            tb.expectedPaymentDate || null
+          );
+        }
+      }
+
+      if (backup.billTimelines && Array.isArray(backup.billTimelines)) {
+        const insert = db.prepare(`
+          INSERT INTO bill_timeline (id, billId, status, updateDate, updatedBy, remarks)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        for (const tl of backup.billTimelines) {
+          insert.run(
+            tl.id,
+            tl.billId,
+            tl.status,
+            tl.updateDate,
+            tl.updatedBy,
+            tl.remarks || null
+          );
+        }
+      }
     });
 
     try {
       transaction();
       res.json({ success: true, message: "Backup database imported successfully!" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+
+  // ------------------------------------
+  // Tracked Bills & Status Timelines API
+  // ------------------------------------
+  app.get("/api/tracked-bills", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM tracked_bills").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/tracked-bills", (req, res) => {
+    try {
+      const {
+        id, billNo, billType, clientName, projectId, billingPeriod, billDate, billAmount, remarks,
+        currentStatus, statusUpdateDate, updatedBy, amountCertified, amountReceived, outstandingAmount,
+        lastPaymentDate, expectedPaymentDate
+      } = req.body;
+
+      db.prepare(`
+        INSERT INTO tracked_bills (
+          id, billNo, billType, clientName, projectId, billingPeriod, billDate, billAmount, remarks,
+          currentStatus, statusUpdateDate, updatedBy, amountCertified, amountReceived, outstandingAmount,
+          lastPaymentDate, expectedPaymentDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        billNo,
+        billType,
+        clientName,
+        projectId,
+        billingPeriod,
+        billDate,
+        parseFloat(billAmount || 0),
+        remarks || null,
+        currentStatus,
+        statusUpdateDate,
+        updatedBy,
+        parseFloat(amountCertified || 0),
+        parseFloat(amountReceived || 0),
+        parseFloat(outstandingAmount || 0),
+        lastPaymentDate || null,
+        expectedPaymentDate || null
+      );
+
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/tracked-bills/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        billNo, billType, clientName, projectId, billingPeriod, billDate, billAmount, remarks,
+        currentStatus, statusUpdateDate, updatedBy, amountCertified, amountReceived, outstandingAmount,
+        lastPaymentDate, expectedPaymentDate
+      } = req.body;
+
+      db.prepare(`
+        UPDATE tracked_bills
+        SET billNo = ?, billType = ?, clientName = ?, projectId = ?, billingPeriod = ?, billDate = ?, billAmount = ?, remarks = ?,
+            currentStatus = ?, statusUpdateDate = ?, updatedBy = ?, amountCertified = ?, amountReceived = ?, outstandingAmount = ?,
+            lastPaymentDate = ?, expectedPaymentDate = ?
+        WHERE id = ?
+      `).run(
+        billNo,
+        billType,
+        clientName,
+        projectId,
+        billingPeriod,
+        billDate,
+        parseFloat(billAmount || 0),
+        remarks || null,
+        currentStatus,
+        statusUpdateDate,
+        updatedBy,
+        parseFloat(amountCertified || 0),
+        parseFloat(amountReceived || 0),
+        parseFloat(outstandingAmount || 0),
+        lastPaymentDate || null,
+        expectedPaymentDate || null,
+        id
+      );
+
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/tracked-bills/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM tracked_bills WHERE id = ?").run(id);
+      db.prepare("DELETE FROM bill_timeline WHERE billId = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/bill-timelines", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM bill_timeline").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/bill-timelines", (req, res) => {
+    try {
+      const { id, billId, status, updateDate, updatedBy, remarks } = req.body;
+      db.prepare(`
+        INSERT INTO bill_timeline (id, billId, status, updateDate, updatedBy, remarks)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        billId,
+        status,
+        updateDate,
+        updatedBy,
+        remarks || null
+      );
+      res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

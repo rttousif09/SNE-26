@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
+import { checkExpenseDuplicate, addOverrideLog } from '../lib/duplicateChecker';
+import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 
 export const Expenses: React.FC = () => {
   const { 
@@ -19,6 +21,11 @@ export const Expenses: React.FC = () => {
   } = useAppContext();
 
   const isReadOnly = user?.username === 'saddamsne';
+
+  // Duplicate verification states
+  const [dupModalOpen, setDupModalOpen] = useState(false);
+  const [dupData, setDupData] = useState<any[]>([]);
+  const [pendingSaveFn, setPendingSaveFn] = useState<((overrideReason?: string) => void) | null>(null);
 
   // State
   const [isAdding, setIsAdding] = useState(false);
@@ -157,28 +164,60 @@ export const Expenses: React.FC = () => {
       ...categoriesData
     };
 
-    if (editingId) {
-      updateExpenseEntry(editingId, payload);
-    } else {
-      addExpenseEntry(payload);
+    const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
+      if (editingId) {
+        updateExpenseEntry(editingId, payload);
+      } else {
+        addExpenseEntry(payload);
+      }
+      
+      if (bypassCheck && overrideReason) {
+        addOverrideLog(
+          user?.username || 'Unknown',
+          'Expenses Ledger',
+          `Desc: ${formData.description}, Date: ${formData.date}, Amount: Rs ${amountVal.toLocaleString()}, Site: ${getProjectName(formData.projectId)}`,
+          overrideReason
+        );
+      }
+      
+      if (shouldExit) {
+        handleCancel();
+      } else {
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          description: '',
+          projectId: '',
+          category: 'kharchi',
+          amount: '',
+          bank: '',
+          receiptProof: '',
+          receiptFileName: '',
+          receiptFileType: ''
+        });
+        setTransactionType('spent');
+      }
+    };
+
+    const countMatches = checkExpenseDuplicate(
+      expensesLedger,
+      {
+        date: formData.date,
+        description: formData.description,
+        projectId: formData.projectId || '',
+        amount: amountVal,
+        category: isCredit ? 'crBalance' : formData.category
+      },
+      editingId || undefined
+    );
+
+    if (countMatches.length > 0) {
+      setDupData(countMatches);
+      setPendingSaveFn(() => (reason?: string) => onProceedSave(true, reason || 'No details'));
+      setDupModalOpen(true);
+      return;
     }
-    
-    if (shouldExit) {
-      handleCancel();
-    } else {
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        description: '',
-        projectId: '',
-        category: 'kharchi',
-        amount: '',
-        bank: '',
-        receiptProof: '',
-        receiptFileName: '',
-        receiptFileType: ''
-      });
-      setTransactionType('spent');
-    }
+
+    onProceedSave();
   };
 
   const handleDelete = (id: string) => {
@@ -1275,6 +1314,29 @@ export const Expenses: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <DuplicateWarningModal
+        isOpen={dupModalOpen}
+        moduleName="Expenses Ledger"
+        warningText="Warning: An expense with the same Date, Category, Site and Amount already exists. Please verify details before proceeding."
+        duplicates={dupData}
+        currentUser={user}
+        onCancel={() => {
+          setDupModalOpen(false);
+          setPendingSaveFn(null);
+        }}
+        onSaveAnyway={(reason) => {
+          setDupModalOpen(false);
+          if (pendingSaveFn) {
+            pendingSaveFn(reason);
+            setPendingSaveFn(null);
+          }
+        }}
+        onViewExisting={(record) => {
+          setDupModalOpen(false);
+          handleEdit(record);
+        }}
+      />
     </div>
   );
 };

@@ -14,9 +14,13 @@ export interface Project {
   workOrderFileName?: string;
   workOrderFileType?: string;
   projectManager?: string;
+  pmContact?: string;
   billingEngineer?: string;
+  beContact?: string;
   siteIncharge?: string;
+  siContact?: string;
   ourRepresentatives?: string;
+  repContact?: string;
 }
 
 export interface Worker {
@@ -81,6 +85,7 @@ export interface Advance {
   receiptProof?: string; // base64 string
   receiptFileName?: string;
   receiptFileType?: string;
+  deductionDetails?: string;
 }
 
 export interface SupplyDetail {
@@ -415,6 +420,65 @@ export interface AssetMaintenance {
   remarks?: string;
   nextMaintenanceDate?: string;
 }
+
+export interface Attendance {
+  id: string;
+  workerId: string;
+  projectId: string;
+  date: string; // YYYY-MM-DD
+  status: 'Present' | 'Absent' | 'HalfDay' | 'Leave';
+}
+
+export interface DuplicateOverrideLog {
+  id: string;
+  userName: string;
+  dateTime: string;
+  module: string;
+  warningDetails: string;
+  reason: string;
+}
+
+export interface SupplierPayment {
+  id: string;
+  supplierName: string;
+  paymentDate: string;
+  amountPaid: number;
+  paymentMode: string;
+  invoiceReference?: string;
+  remarks?: string;
+}
+
+export type BillStatus = 'Draft' | 'Submitted' | 'Under Review' | 'Certified' | 'Payment Expected' | 'Partially Paid' | 'Fully Paid' | 'Closed';
+
+export interface TrackedBill {
+  id: string;
+  billNo: string;
+  billType: 'RA Bill' | 'Final Bill' | 'Extra Item Bill';
+  clientName: string;
+  projectId: string;
+  billingPeriod: string;
+  billDate: string;
+  billAmount: number;
+  remarks: string;
+  currentStatus: BillStatus;
+  statusUpdateDate: string;
+  updatedBy: string;
+  amountCertified: number;
+  amountReceived: number;
+  outstandingAmount: number;
+  lastPaymentDate?: string;
+  expectedPaymentDate?: string;
+}
+
+export interface BillTimelineEntry {
+  id: string;
+  billId: string;
+  status: BillStatus;
+  updateDate: string;
+  updatedBy: string;
+  remarks: string;
+}
+
 
 
 

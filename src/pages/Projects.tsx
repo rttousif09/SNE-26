@@ -18,7 +18,7 @@ export const Projects: React.FC = () => {
     projectType: 'Residential' as 'Residential' | 'Commercial' | 'Government' | '',
     workOrderNo: '', scopeOfWork: '', rateType: 'Item Rate' as 'Supply' | 'Item Rate' | 'BUA Basis' | 'Lump-sum' | '',
     workOrderAttachment: '', workOrderFileName: '', workOrderFileType: '',
-    projectManager: '', billingEngineer: '', siteIncharge: '', ourRepresentatives: ''
+    projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: ''
   });
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -67,9 +67,13 @@ export const Projects: React.FC = () => {
       workOrderFileName: project.workOrderFileName || '',
       workOrderFileType: project.workOrderFileType || '',
       projectManager: project.projectManager || '',
+      pmContact: project.pmContact || '',
       billingEngineer: project.billingEngineer || '',
+      beContact: project.beContact || '',
       siteIncharge: project.siteIncharge || '',
-      ourRepresentatives: project.ourRepresentatives || ''
+      siContact: project.siContact || '',
+      ourRepresentatives: project.ourRepresentatives || '',
+      repContact: project.repContact || ''
     });
     setEditingId(project.id);
     setIsAdding(true);
@@ -82,7 +86,7 @@ export const Projects: React.FC = () => {
       name: '', clientName: '', startDate: '', completionDate: '', address: '', budget: '',
       projectType: 'Residential', workOrderNo: '', scopeOfWork: '', rateType: 'Item Rate',
       workOrderAttachment: '', workOrderFileName: '', workOrderFileType: '',
-      projectManager: '', billingEngineer: '', siteIncharge: '', ourRepresentatives: ''
+      projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: ''
     });
   };
 
@@ -213,9 +217,13 @@ export const Projects: React.FC = () => {
       workOrderFileName: formData.workOrderFileName,
       workOrderFileType: formData.workOrderFileType,
       projectManager: formData.projectManager,
+      pmContact: formData.pmContact,
       billingEngineer: formData.billingEngineer,
+      beContact: formData.beContact,
       siteIncharge: formData.siteIncharge,
-      ourRepresentatives: formData.ourRepresentatives
+      siContact: formData.siContact,
+      ourRepresentatives: formData.ourRepresentatives,
+      repContact: formData.repContact
     };
 
     if (editingId) {
@@ -358,22 +366,46 @@ export const Projects: React.FC = () => {
               {/* Group C: Site Contacts */}
               <div className="sap-panel p-3">
                 <div className="font-bold text-[#0056b3] border-b border-[#8c9ba8] pb-1 mb-2">C. Site Contacts</div>
-                <div className="space-y-1.5 text-[11px]">
-                  <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">1. Project Manager</label>
-                    <input type="text" className="sap-input" value={formData.projectManager} onChange={e => setFormData({...formData, projectManager: e.target.value})} />
+                <div className="space-y-3 text-[11px]">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">1. Project Manager Name</label>
+                      <input type="text" className="sap-input" value={formData.projectManager} onChange={e => setFormData({...formData, projectManager: e.target.value})} placeholder="Name" />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">PM Contact No.</label>
+                      <input type="text" className="sap-input" value={formData.pmContact} onChange={e => setFormData({...formData, pmContact: e.target.value})} placeholder="Phone number" />
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">2. Billing Engineer</label>
-                    <input type="text" className="sap-input" value={formData.billingEngineer} onChange={e => setFormData({...formData, billingEngineer: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">2. Billing Engineer Name</label>
+                      <input type="text" className="sap-input" value={formData.billingEngineer} onChange={e => setFormData({...formData, billingEngineer: e.target.value})} placeholder="Name" />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">BE Contact No.</label>
+                      <input type="text" className="sap-input" value={formData.beContact} onChange={e => setFormData({...formData, beContact: e.target.value})} placeholder="Phone number" />
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">3. Site-Incharge</label>
-                    <input type="text" className="sap-input" value={formData.siteIncharge} onChange={e => setFormData({...formData, siteIncharge: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">3. Site-Incharge Name</label>
+                      <input type="text" className="sap-input" value={formData.siteIncharge} onChange={e => setFormData({...formData, siteIncharge: e.target.value})} placeholder="Name" />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">SI Contact No.</label>
+                      <input type="text" className="sap-input" value={formData.siContact} onChange={e => setFormData({...formData, siContact: e.target.value})} placeholder="Phone number" />
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">4. Our Representatives</label>
-                    <input type="text" className="sap-input" value={formData.ourRepresentatives} onChange={e => setFormData({...formData, ourRepresentatives: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">4. Our Representative Name</label>
+                      <input type="text" className="sap-input" value={formData.ourRepresentatives} onChange={e => setFormData({...formData, ourRepresentatives: e.target.value})} placeholder="Name" />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="font-semibold text-gray-500">Rep Contact No.</label>
+                      <input type="text" className="sap-input" value={formData.repContact} onChange={e => setFormData({...formData, repContact: e.target.value})} placeholder="Phone number" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -404,6 +436,7 @@ export const Projects: React.FC = () => {
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Start Date</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Completion Date</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Address</th>
+            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Contact Numbers</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Budget</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16">Actions</th>
           </tr>
@@ -423,6 +456,15 @@ export const Projects: React.FC = () => {
               <td className="border border-[#8c9ba8] px-2 py-1">{project.startDate}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.completionDate || '-'}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.address}</td>
+              <td className="border border-[#8c9ba8] px-2 py-1">
+                <div className="space-y-0.5 text-[10px] text-gray-600 font-mono">
+                  {project.pmContact && <div>PM: {project.pmContact}</div>}
+                  {project.beContact && <div>BE: {project.beContact}</div>}
+                  {project.siContact && <div>SI: {project.siContact}</div>}
+                  {project.repContact && <div>Rep: {project.repContact}</div>}
+                  {!project.pmContact && !project.beContact && !project.siContact && !project.repContact && <span className="text-gray-400">-</span>}
+                </div>
+              </td>
               <td className="border border-[#8c9ba8] px-2 py-1 text-right">{project.budget.toLocaleString()}</td>
               <td className="border border-[#8c9ba8] px-2 py-1 text-center">
                 <div className="flex border border-gray-300 rounded shadow-sm overflow-hidden inline-flex bg-white">
@@ -524,26 +566,28 @@ export const Projects: React.FC = () => {
                         )}
                       </div>
                     </div>
-                  </div>
-
-                  <div className="sap-panel p-3 bg-slate-50">
+                  </div>                   <div className="sap-panel p-3 bg-slate-50">
                     <div className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-2">C. Site Contacts</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-[11px]">
                       <div className="flex flex-col">
                         <span className="font-semibold text-gray-500 uppercase tracking-tight text-[9px]">Project Manager</span>
                         <span className="font-semibold mt-0.5">{project.projectManager || '-'}</span>
+                        {project.pmContact && <span className="text-gray-600 text-[10px] font-mono mt-0.5">📞 {project.pmContact}</span>}
                       </div>
                       <div className="flex flex-col">
                         <span className="font-semibold text-gray-500 uppercase tracking-tight text-[9px]">Billing Engineer</span>
                         <span className="font-semibold mt-0.5">{project.billingEngineer || '-'}</span>
+                        {project.beContact && <span className="text-gray-600 text-[10px] font-mono mt-0.5">📞 {project.beContact}</span>}
                       </div>
                       <div className="flex flex-col">
                         <span className="font-semibold text-gray-500 uppercase tracking-tight text-[9px]">Site-Incharge</span>
                         <span className="font-semibold mt-0.5">{project.siteIncharge || '-'}</span>
+                        {project.siContact && <span className="text-gray-600 text-[10px] font-mono mt-0.5">📞 {project.siContact}</span>}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-semibold text-gray-500 uppercase tracking-tight text-[9px]">Our Representatives</span>
+                        <span className="font-semibold text-gray-500 uppercase tracking-tight text-[9px]">Our Representative</span>
                         <span className="font-semibold mt-0.5">{project.ourRepresentatives || '-'}</span>
+                        {project.repContact && <span className="text-gray-600 text-[10px] font-mono mt-0.5">📞 {project.repContact}</span>}
                       </div>
                     </div>
                   </div>

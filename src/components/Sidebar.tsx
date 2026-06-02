@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Database, Folder, FileText, Server } from 'lucide-react';
+import { ChevronRight, ChevronDown, Database, Folder, FileText, Server, ClipboardCheck } from 'lucide-react';
 
 interface SidebarProps {
   currentTab: string;
@@ -10,24 +10,66 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
   const [expanded, setExpanded] = useState(true);
   const [catalogExpanded, setCatalogExpanded] = useState(true);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard Overview', icon: Server },
-    { id: 'projects', label: 'Projects', icon: Folder },
-    { id: 'workers', label: 'Workers Management', icon: Folder },
-    { id: 'billing', label: 'Billing Management', icon: Folder },
-    { id: 'client-payment', label: 'Client Payment', icon: Folder },
-    { id: 'kharchi', label: 'Kharchi (Pocket Money)', icon: Folder },
-    { id: 'advance', label: 'Advance', icon: Folder },
-    { id: 'worker-payment', label: 'Workers Payment', icon: Folder },
-    { id: 'worker-ledger', label: 'Worker Ledger & Holds', icon: Folder },
-    { id: 'approvals', label: 'Approvals Workflow', icon: Folder },
-    { id: 'expenses', label: 'Expenses Ledger', icon: Folder },
-    { id: 'expenses-summary', label: 'Expenses Summary Dashboard', icon: Server },
-    { id: 'site-monthly-summary', label: 'Site Monthly Report', icon: FileText },
-    { id: 'mess', label: 'Mess Management', icon: Folder },
-    { id: 'dlr', label: 'Daily Labour Report (DLR)', icon: Folder },
-    { id: 'materials', label: 'Material & Inventory ERP', icon: Folder },
-    { id: 'assets', label: 'Equipment & Asset Register', icon: Folder },
+  // States to track expansion of each defined folder
+  const [foldersExpanded, setFoldersExpanded] = useState<Record<string, boolean>>({
+    projectDetails: true,
+    workerManagement: true,
+    payrollLabour: true,
+    billingAccounts: true,
+    materialInventory: true,
+  });
+
+  const toggleFolder = (key: string) => {
+    setFoldersExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const folders = [
+    {
+      key: 'projectDetails',
+      label: 'a) Project Details',
+      items: [
+        { id: 'projects', label: '1) Projects' },
+        { id: 'site-monthly-summary', label: '2) Site Monthly Report' }
+      ]
+    },
+    {
+      key: 'workerManagement',
+      label: 'b) Worker Management',
+      items: [
+        { id: 'workers', label: '1) Workers Management' },
+        { id: 'dlr', label: '2) DLR' },
+        { id: 'worker-ledger', label: '3) Worker Ledger & Holds' }
+      ]
+    },
+    {
+      key: 'payrollLabour',
+      label: 'c) Payroll and Labour Payments',
+      items: [
+        { id: 'kharchi', label: '1) Kharchi' },
+        { id: 'mess', label: '2) Mess' },
+        { id: 'advance', label: '3) Advance' },
+        { id: 'worker-payment', label: '4) Workers payment' }
+      ]
+    },
+    {
+      key: 'billingAccounts',
+      label: 'd) Billing & Accounts',
+      items: [
+        { id: 'billing', label: '1) Billing Management' },
+        { id: 'client-payment', label: '2) Client Payment' },
+        { id: 'expenses', label: '3) Expenses Ledger' },
+        { id: 'expenses-summary', label: '4) Expenses Summary Dashboard' },
+        { id: 'bill-tracking', label: '5) Bill Tracking Workflow' }
+      ]
+    },
+    {
+      key: 'materialInventory',
+      label: 'e) Material & Inventory',
+      items: [
+        { id: 'materials', label: '1) Material & Inventory ERP' },
+        { id: 'assets', label: '2) Equipment & Asset Register' }
+      ]
+    }
   ];
 
   return (
@@ -57,18 +99,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
             </div>
             
             {catalogExpanded && (
-              <div className="ml-4">
-                {navItems.map((item) => {
-                  const isActive = currentTab === item.id;
+              <div className="ml-4 space-y-1">
+                {/* 1. Dashboard Overview at Root of Catalog */}
+                <div
+                  onClick={() => setCurrentTab('dashboard')}
+                  className={`flex items-center space-x-1 py-0.5 cursor-pointer ${currentTab === 'dashboard' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                >
+                  <div className="w-3"></div>
+                  <Server size={12} className="text-[#0056b3]" />
+                  <span className="font-semibold text-[#002f6c]">Dashboard Overview</span>
+                </div>
+
+                {/* 2. Approvals Workflow at Root of Catalog */}
+                <div
+                  onClick={() => setCurrentTab('approvals')}
+                  className={`flex items-center space-x-1 py-0.5 cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                >
+                  <div className="w-3"></div>
+                  <ClipboardCheck size={12} className="text-[#0056b3]" />
+                  <span className="font-semibold text-[#002f6c]">Approvals Workflow</span>
+                </div>
+
+                {/* Collapsible Folders */}
+                {folders.map((folder) => {
+                  const isFolderOpen = foldersExpanded[folder.key];
                   return (
-                    <div
-                      key={item.id}
-                      onClick={() => setCurrentTab(item.id)}
-                      className={`flex items-center space-x-1 py-0.5 cursor-pointer ${isActive ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
-                    >
-                      <div className="w-3"></div>
-                      <FileText size={12} className="text-[#0056b3]" />
-                      <span>{item.label}</span>
+                    <div key={folder.key} className="space-y-0.5">
+                      <div 
+                        onClick={() => toggleFolder(folder.key)}
+                        className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff] font-medium text-gray-700"
+                      >
+                        <div className="w-3 flex justify-center">
+                          {isFolderOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                        </div>
+                        <Folder size={11} className="text-amber-500 fill-amber-150" />
+                        <span>{folder.label}</span>
+                      </div>
+
+                      {isFolderOpen && (
+                        <div className="ml-3 border-l border-gray-300 pl-1.5 space-y-0.5">
+                          {folder.items.map((item) => {
+                            const isActive = currentTab === item.id;
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => setCurrentTab(item.id)}
+                                className={`flex items-center space-x-1 py-0.5 cursor-pointer ${isActive ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                              >
+                                <FileText size={11} className="text-[#0056b3]" />
+                                <span>{item.label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

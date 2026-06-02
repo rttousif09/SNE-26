@@ -1,23 +1,71 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../store';
 import { 
   Plus, Trash2, Edit, Printer, FileSpreadsheet, Search, AlertTriangle, 
-  Building2, Grid, Calendar, ShoppingCart, Send, RotateCcw, TrendingUp, Info
+  Building2, Grid, Calendar, ShoppingCart, Send, RotateCcw, TrendingUp, Info, ArrowLeftRight, User, DollarSign, Wrench, Hammer
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { 
+  checkMaterialPurchaseDuplicate, 
+  checkMaterialIssueDuplicate, 
+  checkMaterialReturnDuplicate, 
+  checkSupplierPaymentDuplicate, 
+  addOverrideLog 
+} from '../lib/duplicateChecker';
+import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 
-const ITEM_CATEGORIES = ['Civil', 'Structural', 'Electrical', 'Plumbing', 'Finishing', 'Safety', 'Mechanical', 'Others'];
+// Reusable standard lists
+const ITEM_CATEGORIES = [
+  'Consumables', 'Safety Items', 'Tools', 'Equipment', 'Machinery', 'Office Supplies', 
+  'Civil', 'Structural', 'Electrical', 'Plumbing', 'Finishing', 'Other'
+];
 const ITEM_UNITS = ['Nos', 'Kg', 'Ton', 'Sqm', 'Cum', 'Meter', 'Bundle', 'Bag', 'Roll', 'Litre'];
-const RETURN_CONDITIONS = ['Good', 'Damaged', 'Scrap'];
+const ASSET_STATUSES = ['Available', 'In Use', 'Under Maintenance', 'Damaged', 'Lost', 'Disposed'];
+
+interface MaterialTransfer {
+  id: string;
+  transferDate: string;
+  itemId: string;
+  qty: number;
+  fromProjectId: string;
+  toProjectId: string;
+  remarks?: string;
+  createdBy: string;
+  createdDate: string;
+}
+
+interface MaterialLoss {
+  id: string;
+  date: string;
+  projectId: string;
+  itemId: string;
+  qty: number;
+  reason: string;
+  responsiblePerson: string;
+  recoveryAmount?: number;
+  remarks?: string;
+  createdBy: string;
+  createdDate: string;
+}
+
+interface SupplierPayment {
+  id: string;
+  supplierName: string;
+  paymentDate: string;
+  amountPaid: number;
+  paymentMode: string;
+  invoiceReference?: string;
+  remarks?: string;
+}
 
 export const Materials: React.FC = () => {
   const { 
     projects, 
     materialItems, 
-    materialIssues, 
-    materialReturns, 
-    materialPurchases,
+    materialIssues,      // Re-purposed as Client Receipts
+    materialReturns,     // Re-purposed as Client Returns
+    materialPurchases,   // Re-purposed as Company Purchases
     addMaterialItem,
     updateMaterialItem,
     deleteMaterialItem,
@@ -30,1757 +78,1793 @@ export const Materials: React.FC = () => {
     addMaterialPurchase,
     updateMaterialPurchase,
     deleteMaterialPurchase,
+    assets,
+    addAsset,
+    updateAsset,
+    deleteAsset,
     user
   } = useAppContext();
 
-  // Active ERP Tab
-  const [activeTab, setActiveTab ] = useState<'dashboard' | 'master' | 'purchase' | 'issue' | 'return' | 'ledger'>('dashboard');
+  // Active ERP Workspace Tab
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'receipt' | 'return' | 'reconciliation' | 'transfer' | 'loss_damage' | 'company_purchase' | 'equipment' | 'supplier_ledger' | 'reports'>('dashboard');
 
-  // Search/Filters
+  // Duplicate verification states
+  const [dupModalOpen, setDupModalOpen] = useState(false);
+  const [dupModuleTitle, setDupModuleTitle] = useState('');
+  const [dupWarningText, setDupWarningText] = useState('');
+  const [dupData, setDupData] = useState<any[]>([]);
+  const [pendingSaveFn, setPendingSaveFn] = useState<((overrideReason?: string) => void) | null>(null);
+
+  // Multi-utility state lists backed by localStorage
+  const [materialTransfers, setMaterialTransfers] = useState<MaterialTransfer[]>(() => {
+    const saved = localStorage.getItem('erp_material_transfers');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [materialLosses, setMaterialLosses] = useState<MaterialLoss[]>(() => {
+    const saved = localStorage.getItem('erp_material_losses');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [supplierPayments, setSupplierPayments] = useState<SupplierPayment[]>(() => {
+    const saved = localStorage.getItem('erp_supplier_payments');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Synchronize dynamic local registries
+  useEffect(() => {
+    localStorage.setItem('erp_material_transfers', JSON.stringify(materialTransfers));
+  }, [materialTransfers]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_material_losses', JSON.stringify(materialLosses));
+  }, [materialLosses]);
+
+  useEffect(() => {
+    localStorage.setItem('erp_supplier_payments', JSON.stringify(supplierPayments));
+  }, [supplierPayments]);
+
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterProject, setFilterProject] = useState('all');
   const [filterItem, setFilterItem] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLedgerSupplier, setSelectedLedgerSupplier] = useState('');
 
-  // 1. --- MASTER STATE ---
-  const [isEditingMaster, setIsEditingMaster] = useState<string | null>(null);
-  const [masterForm, setMasterForm] = useState({
-    itemCode: '',
-    itemName: '',
-    category: 'Civil',
-    unit: 'Nos',
-    description: ''
-  });
+  // Editing Modals/Form states
+  const [editTargetId, setEditTargetId] = useState<string | null>(null);
+  
+  const [masterForm, setMasterForm] = useState({ itemCode: '', itemName: '', category: 'Civil', unit: 'Nos', description: '' });
+  const [receiptForm, setReceiptForm] = useState({ voucherNo: '', issueDate: new Date().toISOString().split('T')[0], projectId: '', tower: '', floor: '', itemId: '', qty: 0, issuedTo: '', remarks: '' });
+  const [returnForm, setReturnForm] = useState({ voucherNo: '', returnDate: new Date().toISOString().split('T')[0], projectId: '', itemId: '', qty: 0, returnedBy: '', remarks: '' });
+  const [transferForm, setTransferForm] = useState({ transferDate: new Date().toISOString().split('T')[0], itemId: '', qty: 0, fromProjectId: '', toProjectId: '', remarks: '' });
+  const [lossForm, setLossForm] = useState({ date: new Date().toISOString().split('T')[0], projectId: '', itemId: '', qty: 0, reason: '', responsiblePerson: '', recoveryAmount: 0, remarks: '' });
+  const [purchaseForm, setPurchaseForm] = useState({ purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', projectId: '', itemId: '', qty: 0, rate: 0, invoiceNumber: '', remarks: '' });
+  const [equipmentForm, setEquipmentForm] = useState({ purchaseDate: new Date().toISOString().split('T')[0], name: '', assetCode: '', brand: '', purchaseCost: 0, currentSiteId: '', status: 'Available' as any, remarks: '' });
+  const [paymentForm, setPaymentForm] = useState({ supplierName: '', paymentDate: new Date().toISOString().split('T')[0], amountPaid: 0, paymentMode: 'Bank Transfer', invoiceReference: '', remarks: '' });
 
-  // 2. --- PURCHASE STATE ---
-  const [isEditingPurchase, setIsEditingPurchase] = useState<string | null>(null);
-  const [purchaseForm, setPurchaseForm] = useState({
-    purchaseDate: new Date().toISOString().split('T')[0],
-    purchaseVoucherNo: '',
-    supplierName: '',
-    supplierMobile: '',
-    gstNo: '',
-    projectId: '',
-    itemId: '',
-    qty: 0,
-    rate: 0,
-    transportCharges: 0,
-    loadingCharges: 0,
-    otherCharges: 0,
-    invoiceNumber: '',
-    invoiceDate: new Date().toISOString().split('T')[0],
-    remarks: ''
-  });
+  // Helpers
+  const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || 'Deleted Project Site';
+  const getItemName = (id: string) => materialItems.find(i => i.id === id)?.itemName || 'Deleted item';
+  const getItemUnit = (id: string) => materialItems.find(i => i.id === id)?.unit || 'UoM';
 
-  // 3. --- ISSUE STATE ---
-  const [isEditingIssue, setIsEditingIssue] = useState<string | null>(null);
-  const [issueForm, setIssueForm] = useState({
-    voucherNo: '',
-    issueDate: new Date().toISOString().split('T')[0],
-    projectId: '',
-    tower: '',
-    floor: '',
-    itemId: '',
-    qty: 0,
-    issuedTo: '',
-    remarks: ''
-  });
-
-  // 4. --- RETURN STATE ---
-  const [isEditingReturn, setIsEditingReturn] = useState<string | null>(null);
-  const [returnForm, setReturnForm] = useState({
-    voucherNo: '',
-    returnDate: new Date().toISOString().split('T')[0],
-    projectId: '',
-    tower: '',
-    floor: '',
-    itemId: '',
-    qty: 0,
-    returnedBy: '',
-    condition: 'Good' as 'Good' | 'Damaged' | 'Scrap',
-    remarks: ''
-  });
-
-  // 5. --- LEDGER STATE ---
-  const [ledgerProjectId, setLedgerProjectId] = useState('');
-  const [ledgerItemId, setLedgerItemId] = useState('');
-
-  // ----------------------------------------------------
-  // AUTO VOUCHER GENERATOR HELPER
-  // ----------------------------------------------------
-  const getNextVoucherNo = (type: 'PUR' | 'ISS' | 'RET') => {
-    const year = new Date().getFullYear();
-    if (type === 'PUR') {
-      const matchCount = materialPurchases.length;
-      return `PUR-${year}-${String(matchCount + 1).padStart(4, '0')}`;
-    } else if (type === 'ISS') {
-      const matchCount = materialIssues.length;
-      return `ISS-${year}-${String(matchCount + 1).padStart(4, '0')}`;
-    } else {
-      const matchCount = materialReturns.length;
-      return `RET-${year}-${String(matchCount + 1).padStart(4, '0')}`;
-    }
+  // Master Deletion Safe Check
+  const canDeleteMasterItem = (itemId: string): boolean => {
+    const hasReceipts = materialIssues.some(i => i.itemId === itemId);
+    const hasReturns = materialReturns.some(r => r.itemId === itemId);
+    const hasTransfers = materialTransfers.some(t => t.itemId === itemId);
+    const hasLosses = materialLosses.some(l => l.itemId === itemId);
+    const hasPurchases = materialPurchases.some(p => p.itemId === itemId);
+    return !hasReceipts && !hasReturns && !hasTransfers && !hasLosses && !hasPurchases;
   };
 
-  // ----------------------------------------------------
-  // STOCK BALANCE CALCULATIONS ENGINE
-  // ----------------------------------------------------
-  const inventoryBalances = useMemo(() => {
-    // Balances is site-wise and item-wise details
-    // Map with key: `${projectId}_${itemId}`
-    const balances: { [key: string]: { 
-      projectId: string; 
-      itemId: string; 
-      purchased: number; 
-      issued: number; 
-      returnedGood: number; 
-      returnedDamaged: number; 
-      returnedScrap: number; 
-    }} = {};
+  // --- AUTOMATED MATERIAL RECONCILIATION LOGIC ---
+  const reconciliationBalances = useMemo(() => {
+    const balances: { [key: string]: { projectId: string; itemId: string; received: number; returned: number; balance: number } } = {};
 
-    // 1. Process Purchases (+ to site balance)
-    materialPurchases.forEach(p => {
-      const key = `${p.projectId}_${p.itemId}`;
-      if (!balances[key]) {
-        balances[key] = { projectId: p.projectId, itemId: p.itemId, purchased: 0, issued: 0, returnedGood: 0, returnedDamaged: 0, returnedScrap: 0 };
-      }
-      balances[key].purchased += (p.qty || 0);
+    // 1. Inward Receipts (from clients, using materialIssues)
+    materialIssues.forEach(m => {
+      const key = `${m.projectId}_${m.itemId}`;
+      if (!balances[key]) balances[key] = { projectId: m.projectId, itemId: m.itemId, received: 0, returned: 0, balance: 0 };
+      balances[key].received += Number(m.qty || 0);
     });
 
-    // 2. Process Issues (- from site balance)
-    materialIssues.forEach(i => {
-      const key = `${i.projectId}_${i.itemId}`;
-      if (!balances[key]) {
-        balances[key] = { projectId: i.projectId, itemId: i.itemId, purchased: 0, issued: 0, returnedGood: 0, returnedDamaged: 0, returnedScrap: 0 };
-      }
-      balances[key].issued += (i.qty || 0);
-    });
-
-    // 3. Process Returns (+ back to site balance or ledger record)
+    // 2. Outward Returns (to clients, using materialReturns)
     materialReturns.forEach(r => {
       const key = `${r.projectId}_${r.itemId}`;
-      if (!balances[key]) {
-        balances[key] = { projectId: r.projectId, itemId: r.itemId, purchased: 0, issued: 0, returnedGood: 0, returnedDamaged: 0, returnedScrap: 0 };
-      }
-      if (r.condition === 'Good') {
-        balances[key].returnedGood += (r.qty || 0);
-      } else if (r.condition === 'Damaged') {
-        balances[key].returnedDamaged += (r.qty || 0);
-      } else {
-        balances[key].returnedScrap += (r.qty || 0);
-      }
+      if (!balances[key]) balances[key] = { projectId: r.projectId, itemId: r.itemId, received: 0, returned: 0, balance: 0 };
+      balances[key].returned += Number(r.qty || 0);
     });
 
-    return Object.values(balances).map(b => {
-      const totalReturned = b.returnedGood + b.returnedDamaged + b.returnedScrap;
-      
-      // Stock available at site = Purchased - Issued + Returned (Good Reusable)
-      // Damaged/Scrap usually goes out or gets written off, but client asked for net consumption: "Net Consumption = (Purchase + Returns) - Issues" or similar, wait
-      // User requested: Net Consumption = Issued - Returned 
-      // Running Balance = Available at Site = Purchased + Returned_Good - Issued
-      const netConsumption = Math.max(0, b.issued - totalReturned);
-      const availableBalance = Math.max(0, (b.purchased + b.returnedGood) - b.issued);
+    // Compute Net Balance (Received - Returned)
+    return Object.values(balances).map(b => ({
+      ...b,
+      balance: Math.max(0, b.received - b.returned)
+    }));
+  }, [materialIssues, materialReturns]);
 
-      return {
-        ...b,
-        netConsumption,
-        availableBalance,
-        totalReturned
-      };
+  // Overall Global Item-wise reconciliation summary
+  const itemWiseSummary = useMemo(() => {
+    const summary: { [itemId: string]: { itemId: string; received: number; returned: number; balance: number } } = {};
+    reconciliationBalances.forEach(b => {
+      if (!summary[b.itemId]) summary[b.itemId] = { itemId: b.itemId, received: 0, returned: 0, balance: 0 };
+      summary[b.itemId].received += b.received;
+      summary[b.itemId].returned += b.returned;
+      summary[b.itemId].balance += b.balance;
     });
-  }, [materialPurchases, materialIssues, materialReturns]);
-
-  // Overall Item Balances summary
-  const overallItemBalances = useMemo(() => {
-    const summary: { [itemId: string]: { 
-      itemId: string; 
-      purchased: number; 
-      issued: number; 
-      returned: number; 
-      available: number; 
-    }} = {};
-
-    inventoryBalances.forEach(b => {
-      if (!summary[b.itemId]) {
-        summary[b.itemId] = { itemId: b.itemId, purchased: 0, issued: 0, returned: 0, available: 0 };
-      }
-      summary[b.itemId].purchased += b.purchased;
-      summary[b.itemId].issued += b.issued;
-      summary[b.itemId].returned += b.totalReturned;
-      summary[b.itemId].available += b.availableBalance;
-    });
-
     return Object.values(summary);
-  }, [inventoryBalances]);
+  }, [reconciliationBalances]);
 
-  // ----------------------------------------------------
-  // LEDGER GENERATOR ENGINE
-  // ----------------------------------------------------
-  const materialLedger = useMemo(() => {
-    if (!ledgerProjectId || !ledgerItemId) return [];
-
-    const ledgerEntries: any[] = [];
-
-    // Filter relevant purchases
-    materialPurchases
-      .filter(p => p.projectId === ledgerProjectId && p.itemId === ledgerItemId)
-      .forEach(p => {
-        ledgerEntries.push({
-          date: p.purchaseDate,
-          voucherNo: p.purchaseVoucherNo,
-          type: 'Purchase',
-          qtyIn: p.qty,
-          qtyOut: 0,
-          description: `Purchased from ${p.supplierName}`,
-          raw: p
-        });
-      });
-
-    // Filter relevant issues
-    materialIssues
-      .filter(i => i.projectId === ledgerProjectId && i.itemId === ledgerItemId)
-      .forEach(i => {
-        ledgerEntries.push({
-          date: i.issueDate,
-          voucherNo: i.voucherNo,
-          type: 'Issue',
-          qtyIn: 0,
-          qtyOut: i.qty,
-          description: `Issued to ${i.issuedTo}${i.tower ? ` (T: ${i.tower}, F: ${i.floor})` : ''}`,
-          raw: i
-        });
-      });
-
-    // Filter relevant returns
-    materialReturns
-      .filter(r => r.projectId === ledgerProjectId && r.itemId === ledgerItemId)
-      .forEach(r => {
-        ledgerEntries.push({
-          date: r.returnDate,
-          voucherNo: r.voucherNo,
-          type: 'Return',
-          qtyIn: r.condition === 'Good' ? r.qty : 0, // only good goes back to main inventory, but log everything
-          qtyOut: 0,
-          description: `Returned by ${r.returnedBy} (${r.condition})`,
-          raw: r
-        });
-      });
-
-    // Sort chronologically
-    ledgerEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    // Compute Running Balance
-    let balance = 0;
-    return ledgerEntries.map(entry => {
-      // Net change for available balance at site
-      balance += entry.qtyIn - entry.qtyOut;
-      return {
-        ...entry,
-        runningBalance: balance
-      };
-    });
-  }, [ledgerProjectId, ledgerItemId, materialPurchases, materialIssues, materialReturns]);
-
-  // ----------------------------------------------------
-  // HANDLERS FOR FORMS
-  // ----------------------------------------------------
-  const handleSaveMaster = () => {
-    if (!masterForm.itemName) {
-      alert('Please fill in a valid Material Name.');
-      return;
-    }
-    if (isEditingMaster === 'new') {
-      addMaterialItem(masterForm);
-    } else if (isEditingMaster) {
-      updateMaterialItem(isEditingMaster, masterForm);
-    }
-    setIsEditingMaster(null);
-  };
-
-  const handleSavePurchase = () => {
-    if (!purchaseForm.projectId || !purchaseForm.itemId || !purchaseForm.qty || !purchaseForm.rate) {
-      alert('Missing required fields: Site, Item, Quantity, or Rate.');
-      return;
-    }
-
-    const totalAmount = purchaseForm.qty * purchaseForm.rate;
-    const grandTotal = totalAmount + Number(purchaseForm.transportCharges || 0) + Number(purchaseForm.loadingCharges || 0) + Number(purchaseForm.otherCharges || 0);
-
-    const dataToSave = {
-      ...purchaseForm,
-      totalAmount,
-      grandTotal,
-      purchaseVoucherNo: purchaseForm.purchaseVoucherNo || getNextVoucherNo('PUR')
-    };
-
-    if (isEditingPurchase === 'new') {
-      addMaterialPurchase(dataToSave);
-    } else if (isEditingPurchase) {
-      updateMaterialPurchase(isEditingPurchase, dataToSave);
-    }
-    setIsEditingPurchase(null);
-  };
-
-  const handleSaveIssue = () => {
-    if (!issueForm.projectId || !issueForm.itemId || !issueForm.qty || !issueForm.issuedTo) {
-      alert('Missing core parameters for issue entry.');
-      return;
-    }
-
-    // Verify stock balance before issuing
-    const currentSiteBal = inventoryBalances.find(b => b.projectId === issueForm.projectId && b.itemId === issueForm.itemId);
-    const avail = currentSiteBal?.availableBalance || 0;
-    if (issueForm.qty > avail) {
-      const confirmProceed = confirm(`Warning: Available site balance is only ${avail} units. You are issuing ${issueForm.qty} units. Do you wish to override and proceed?`);
-      if (!confirmProceed) return;
-    }
-
-    const dataToSave = {
-      ...issueForm,
-      voucherNo: issueForm.voucherNo || getNextVoucherNo('ISS')
-    };
-
-    if (isEditingIssue === 'new') {
-      addMaterialIssue(dataToSave);
-    } else if (isEditingIssue) {
-      updateMaterialIssue(isEditingIssue, dataToSave);
-    }
-    setIsEditingIssue(null);
-  };
-
-  const handleSaveReturn = () => {
-    if (!returnForm.projectId || !returnForm.itemId || !returnForm.qty || !returnForm.returnedBy) {
-      alert('Missing core parameters for return entry.');
-      return;
-    }
-
-    const dataToSave = {
-      ...returnForm,
-      voucherNo: returnForm.voucherNo || getNextVoucherNo('RET')
-    };
-
-    if (isEditingReturn === 'new') {
-      addMaterialReturn(dataToSave);
-    } else if (isEditingReturn) {
-      updateMaterialReturn(isEditingReturn, dataToSave);
-    }
-    setIsEditingReturn(null);
-  };
-
-  // ----------------------------------------------------
-  // EXPORTS
-  // ----------------------------------------------------
-  const exportPDFLedger = () => {
-    if (!ledgerProjectId || !ledgerItemId) return;
-    const doc = new jsPDF();
+  // --- KPI CALCULATIONS ---
+  const kpis = useMemo(() => {
+    const totalReceiptsQty = materialIssues.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+    const totalReturnsQty = materialReturns.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+    const totalBalanceQty = Math.max(0, totalReceiptsQty - totalReturnsQty);
+    const totalTransferCount = materialTransfers.length;
+    const totalLossQty = materialLosses.reduce((sum, l) => sum + Number(l.qty || 0), 0);
     
-    const proj = projects.find(p => p.id === ledgerProjectId);
-    const item = materialItems.find(i => i.id === ledgerItemId);
+    // Company Purchases total (Grand Expense)
+    const companyPurchasesTotal = materialPurchases.reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
+    // Equipment purchase cost
+    const equipmentCostTotal = assets.reduce((sum, a) => sum + Number(a.purchaseCost || 0), 0);
 
-    doc.setFontSize(14);
-    doc.text(`MATERIAL LEDGER - ${proj?.name || 'Site'}`, 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Material Item: ${item?.itemName || 'Item'} (${item?.unit || ''})`, 14, 22);
-    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 14, 27);
+    // Outstanding supplier totals
+    const supplierPurchasesMap: { [supplier: string]: number } = {};
+    materialPurchases.forEach(p => {
+      supplierPurchasesMap[p.supplierName] = (supplierPurchasesMap[p.supplierName] || 0) + Number(p.totalAmount || 0);
+    });
+    const supplierPaymentsMap: { [supplier: string]: number } = {};
+    supplierPayments.forEach(pay => {
+      supplierPaymentsMap[pay.supplierName] = (supplierPaymentsMap[pay.supplierName] || 0) + Number(pay.amountPaid || 0);
+    });
+    
+    let totalOutstanding = 0;
+    const allSuppliers = Array.from(new Set([...Object.keys(supplierPurchasesMap), ...Object.keys(supplierPaymentsMap)]));
+    allSuppliers.forEach(supplier => {
+      const pur = supplierPurchasesMap[supplier] || 0;
+      const pay = supplierPaymentsMap[supplier] || 0;
+      totalOutstanding += Math.max(0, pur - pay);
+    });
 
-    const rows = materialLedger.map((l, index) => [
-      index + 1,
-      l.date,
-      l.voucherNo,
-      l.type,
-      l.qtyIn || '-',
-      l.qtyOut || '-',
-      l.runningBalance,
-      l.description
-    ]);
+    return {
+      totalReceiptsQty,
+      totalReturnsQty,
+      totalBalanceQty,
+      totalTransferCount,
+      totalLossQty,
+      companyPurchasesTotal,
+      equipmentCostTotal,
+      totalOutstanding
+    };
+  }, [materialIssues, materialReturns, materialTransfers, materialLosses, materialPurchases, supplierPayments, assets]);
+
+  // Generator Helpers for Unique IDs
+  const getNextVoucherNo = (type: 'REC' | 'RET' | 'PUR') => {
+    const year = new Date().getFullYear();
+    const count = type === 'REC' ? materialIssues.length : type === 'RET' ? materialReturns.length : materialPurchases.length;
+    return `${type}-${year}-${String(count + 1).padStart(4, '0')}`;
+  };
+
+  // --- COMPACT ROW EDIT TRIGGERS & SAVERS ---
+  const saveEntry = (type: 'master' | 'receipt' | 'return' | 'transfer' | 'loss' | 'purchase' | 'equipment' | 'payment') => {
+    const creator = user?.name || user?.username || 'Admin';
+    const todayStr = new Date().toISOString().substring(0, 10);
+
+    const executeActualSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
+      if (type === 'master') {
+        if (editTargetId === 'new') {
+          addMaterialItem(masterForm);
+        } else if (editTargetId) {
+          updateMaterialItem(editTargetId, masterForm);
+        }
+      } 
+      else if (type === 'receipt') {
+        const dataToSave = { ...receiptForm, voucherNo: receiptForm.voucherNo || getNextVoucherNo('REC') };
+        if (editTargetId === 'new') {
+          addMaterialIssue(dataToSave as any);
+        } else if (editTargetId) {
+          updateMaterialIssue(editTargetId, dataToSave as any);
+        }
+        if (bypassCheck && overrideReason) {
+          addOverrideLog(
+            creator,
+            'Client Material Receipt',
+            `Voucher: ${dataToSave.voucherNo}, Date: ${dataToSave.issueDate}, Qty: ${dataToSave.qty}`,
+            overrideReason
+          );
+        }
+      } 
+      else if (type === 'return') {
+        const dataToSave = { ...returnForm, condition: 'Good' as any, voucherNo: returnForm.voucherNo || getNextVoucherNo('RET') };
+        if (editTargetId === 'new') {
+          addMaterialReturn(dataToSave as any);
+        } else if (editTargetId) {
+          updateMaterialReturn(editTargetId, dataToSave as any);
+        }
+        if (bypassCheck && overrideReason) {
+          addOverrideLog(
+            creator,
+            'Client Material Return',
+            `Voucher: ${dataToSave.voucherNo}, Date: ${dataToSave.returnDate}, Qty: ${dataToSave.qty}`,
+            overrideReason
+          );
+        }
+      } 
+      else if (type === 'transfer') {
+        const list = [...materialTransfers];
+        if (editTargetId === 'new') {
+          list.push({ ...transferForm, id: crypto.randomUUID(), createdBy: creator, createdDate: todayStr });
+        } else if (editTargetId) {
+          const index = list.findIndex(t => t.id === editTargetId);
+          if (index > -1) list[index] = { ...list[index], ...transferForm };
+        }
+        setMaterialTransfers(list);
+      } 
+      else if (type === 'loss') {
+        const list = [...materialLosses];
+        if (editTargetId === 'new') {
+          list.push({ ...lossForm, id: crypto.randomUUID(), createdBy: creator, createdDate: todayStr });
+        } else if (editTargetId) {
+          const index = list.findIndex(l => l.id === editTargetId);
+          if (index > -1) list[index] = { ...list[index], ...lossForm };
+        }
+        setMaterialLosses(list);
+      } 
+      else if (type === 'purchase') {
+        const totalAmount = Number(purchaseForm.qty) * Number(purchaseForm.rate);
+        const dataToSave = {
+          ...purchaseForm,
+          totalAmount,
+          grandTotal: totalAmount,
+          invoiceDate: purchaseForm.purchaseDate,
+          purchaseVoucherNo: purchaseForm.invoiceNumber || getNextVoucherNo('PUR'),
+          supplierMobile: '-',
+          transportCharges: 0,
+          loadingCharges: 0,
+          otherCharges: 0
+        };
+        if (editTargetId === 'new') {
+          addMaterialPurchase(dataToSave);
+        } else if (editTargetId) {
+          updateMaterialPurchase(editTargetId, dataToSave);
+        }
+        if (bypassCheck && overrideReason) {
+          addOverrideLog(
+            creator,
+            'Material Purchase',
+            `Invoice: ${dataToSave.invoiceNumber}, Supplier: ${dataToSave.supplierName}, Date: ${dataToSave.purchaseDate}`,
+            overrideReason
+          );
+        }
+      } 
+      else if (type === 'equipment') {
+        const dataToSave = {
+          ...equipmentForm,
+          category: 'Other' as any, // standard equipment mapping
+          brand: equipmentForm.brand || 'Consolidated',
+          purchaseCost: Number(equipmentForm.purchaseCost),
+          createdDate: todayStr,
+          createdBy: creator
+        };
+        if (editTargetId === 'new') {
+          addAsset(dataToSave as any);
+        } else if (editTargetId) {
+          updateAsset(editTargetId, dataToSave as any);
+        }
+      } 
+      else if (type === 'payment') {
+        const list = [...supplierPayments];
+        if (editTargetId === 'new') {
+          list.push({ ...paymentForm, id: crypto.randomUUID() });
+        } else if (editTargetId) {
+          const index = list.findIndex(p => p.id === editTargetId);
+          if (index > -1) list[index] = { ...list[index], ...paymentForm };
+        }
+        setSupplierPayments(list);
+        if (bypassCheck && overrideReason) {
+          addOverrideLog(
+            creator,
+            'Supplier Payment',
+            `Ref: ${paymentForm.invoiceReference}, Supplier: ${paymentForm.supplierName}, Amount Paid: Rs ${paymentForm.amountPaid.toLocaleString()}`,
+            overrideReason
+          );
+        }
+      }
+      setEditTargetId(null);
+    };
+
+    if (type === 'master') {
+      if (!masterForm.itemName) return alert('Material Item Name is mandatory.');
+    } 
+    else if (type === 'receipt') {
+      if (!receiptForm.projectId || !receiptForm.itemId || !receiptForm.qty) return alert('Site, Item, and Quantity are mandatory.');
+      const dataToSave = { ...receiptForm, voucherNo: receiptForm.voucherNo || getNextVoucherNo('REC') };
+      
+      const countMatches = checkMaterialIssueDuplicate(
+        materialIssues,
+        {
+          voucherNo: dataToSave.voucherNo,
+          issueDate: dataToSave.issueDate,
+          projectId: dataToSave.projectId,
+          itemId: dataToSave.itemId
+        },
+        editTargetId === 'new' ? undefined : editTargetId || undefined
+      );
+
+      if (countMatches.length > 0) {
+        setDupModuleTitle('Client Material Receipt');
+        setDupWarningText('Warning: A duplicate receipt record with the exact same Date, Site, Item and Voucher Number exists.');
+        setDupData(countMatches);
+        setPendingSaveFn(() => (reason?: string) => executeActualSave(true, reason || 'No details'));
+        setDupModalOpen(true);
+        return;
+      }
+    } 
+    else if (type === 'return') {
+      if (!returnForm.projectId || !returnForm.itemId || !returnForm.qty) return alert('Site, Item, and Quantity are mandatory.');
+      const dataToSave = { ...returnForm, condition: 'Good' as any, voucherNo: returnForm.voucherNo || getNextVoucherNo('RET') };
+      
+      const countMatches = checkMaterialReturnDuplicate(
+        materialReturns,
+        {
+          voucherNo: dataToSave.voucherNo,
+          returnDate: dataToSave.returnDate,
+          projectId: dataToSave.projectId,
+          itemId: dataToSave.itemId
+        },
+        editTargetId === 'new' ? undefined : editTargetId || undefined
+      );
+
+      if (countMatches.length > 0) {
+        setDupModuleTitle('Client Material Return');
+        setDupWarningText('Warning: A duplicate return record with the exact same Date, Site, Item and Voucher Number exists.');
+        setDupData(countMatches);
+        setPendingSaveFn(() => (reason?: string) => executeActualSave(true, reason || 'No details'));
+        setDupModalOpen(true);
+        return;
+      }
+    } 
+    else if (type === 'transfer') {
+      if (!transferForm.fromProjectId || !transferForm.toProjectId || !transferForm.itemId || !transferForm.qty) return alert('Items, From Site, To Site and Quantity are mandatory.');
+      if (transferForm.fromProjectId === transferForm.toProjectId) return alert('Source and Destination sites must be different.');
+    } 
+    else if (type === 'loss') {
+      if (!lossForm.projectId || !lossForm.itemId || !lossForm.qty || !lossForm.reason) return alert('Site, Item, Quantity and Reason are mandatory.');
+    } 
+    else if (type === 'purchase') {
+      if (!purchaseForm.supplierName || !purchaseForm.projectId || !purchaseForm.itemId || !purchaseForm.qty || !purchaseForm.rate) return alert('Missing required Corporate invoice fields.');
+      
+      const countMatches = checkMaterialPurchaseDuplicate(
+        materialPurchases,
+        {
+          invoiceNumber: purchaseForm.invoiceNumber,
+          supplierName: purchaseForm.supplierName,
+          purchaseDate: purchaseForm.purchaseDate
+        },
+        editTargetId === 'new' ? undefined : editTargetId || undefined
+      );
+
+      if (countMatches.length > 0) {
+        setDupModuleTitle('Material Purchase');
+        setDupWarningText('Warning: A raw invoice purchase already exists with this Supplier Name, Invoice Number and Date.');
+        setDupData(countMatches);
+        setPendingSaveFn(() => (reason?: string) => executeActualSave(true, reason || 'No details'));
+        setDupModalOpen(true);
+        return;
+      }
+    } 
+    else if (type === 'equipment') {
+      if (!equipmentForm.name || !equipmentForm.assetCode || !equipmentForm.purchaseCost || !equipmentForm.currentSiteId) return alert('Asset name, code, cost, and allocation site are mandatory.');
+    } 
+    else if (type === 'payment') {
+      if (!paymentForm.supplierName || !paymentForm.amountPaid || !paymentForm.paymentDate) return alert('Supplier name, payment amount and date are mandatory.');
+      
+      const countMatches = checkSupplierPaymentDuplicate(
+        supplierPayments as any,
+        {
+          invoiceReference: paymentForm.invoiceReference || '',
+          supplierName: paymentForm.supplierName,
+          amountPaid: Number(paymentForm.amountPaid),
+          paymentDate: paymentForm.paymentDate
+        },
+        editTargetId === 'new' ? undefined : editTargetId || undefined
+      );
+
+      if (countMatches.length > 0) {
+        setDupModuleTitle('Supplier Payment');
+        setDupWarningText('Warning: A payment reference for this supplier with the same Amount, Date and Invoice Reference already exists.');
+        setDupData(countMatches);
+        setPendingSaveFn(() => (reason?: string) => executeActualSave(true, reason || 'No details'));
+        setDupModalOpen(true);
+        return;
+      }
+    }
+
+    executeActualSave();
+  };
+
+  // Delete Action safety wrapper
+  const removeRecord = (type: 'master' | 'receipt' | 'return' | 'transfer' | 'loss' | 'purchase' | 'equipment' | 'payment', id: string) => {
+    if (type === 'master') {
+      if (!canDeleteMasterItem(id)) {
+        return alert("Operational Security: This material master item possesses active transactions in your historical logs (Receipts, Returns, Transfers, Losses, or Company Purchases) and cannot be deleted.");
+      }
+      if (confirm("Delete this master item?")) deleteMaterialItem(id);
+    } else if (type === 'receipt') {
+      if (confirm("Delete this receipt registration?")) deleteMaterialIssue(id);
+    } else if (type === 'return') {
+      if (confirm("Delete this return record?")) deleteMaterialReturn(id);
+    } else if (type === 'transfer') {
+      if (confirm("Delete this transfer entry?")) setMaterialTransfers(prev => prev.filter(t => t.id !== id));
+    } else if (type === 'loss') {
+      if (confirm("Delete this loss/damage record?")) setMaterialLosses(prev => prev.filter(l => l.id !== id));
+    } else if (type === 'purchase') {
+      if (confirm("Delete this company purchase invoice?")) deleteMaterialPurchase(id);
+    } else if (type === 'equipment') {
+      if (confirm("Delete this company asset permanently?")) deleteAsset(id);
+    } else if (type === 'payment') {
+      if (confirm("Delete this payment record?")) setSupplierPayments(prev => prev.filter(p => p.id !== id));
+    }
+  };
+
+  // --- MASTER REPORT EXPORT SUITE ---
+  const triggerPDFReport = (reportType: string) => {
+    const doc = new jsPDF();
+    const companyTitle = "M/S LABOUR CONTRACTOR & CO.";
+    const reportDate = `Generated on: ${new Date().toLocaleDateString()}`;
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(31, 41, 55);
+    doc.text(companyTitle, 14, 15);
+    doc.setFontSize(11);
+    doc.setFont("Helvetica", "normal");
+    doc.text(reportType.toUpperCase(), 14, 21);
+    doc.setFontSize(9);
+    doc.text(reportDate, 14, 26);
+    doc.line(14, 29, 196, 29);
+
+    let headers: string[][] = [[]];
+    let rows: any[][] = [];
+
+    if (reportType === 'Client Material Receipt Report') {
+      headers = [['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Received', 'UoM', 'Received From', 'Remarks']];
+      rows = materialIssues.map(m => [
+        m.voucherNo, m.issueDate, getProjectName(m.projectId), getItemName(m.itemId), m.qty, getItemUnit(m.itemId), m.issuedTo, m.remarks || '-'
+      ]);
+    } 
+    else if (reportType === 'Client Material Return Report') {
+      headers = [['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Returned', 'UoM', 'Returned To', 'Remarks']];
+      rows = materialReturns.map(m => [
+        m.voucherNo, m.returnDate, getProjectName(m.projectId), getItemName(m.itemId), m.qty, getItemUnit(m.itemId), m.returnedBy, m.remarks || '-'
+      ]);
+    } 
+    else if (reportType === 'Material Reconciliation Report') {
+      headers = [['Project Site', 'Material Item', 'Received (Qty)', 'Returned (Qty)', 'Net Balance', 'Unit']];
+      rows = reconciliationBalances.map(b => [
+        getProjectName(b.projectId), getItemName(b.itemId), b.received, b.returned, b.balance, getItemUnit(b.itemId)
+      ]);
+    } 
+    else if (reportType === 'Site-wise Material Balance Report') {
+      headers = [['Project Site', 'Material Item', 'Received (Qty)', 'Returned (Qty)', 'Current Site Balance', 'Unit']];
+      rows = reconciliationBalances
+        .filter(b => filterProject === 'all' || b.projectId === filterProject)
+        .map(b => [
+          getProjectName(b.projectId), getItemName(b.itemId), b.received, b.returned, b.balance, getItemUnit(b.itemId)
+        ]);
+    } 
+    else if (reportType === 'Material Transfer Report') {
+      headers = [['Transfer Date', 'Material Item', 'Qty', 'Unit', 'From Project Site', 'To Project Site', 'Remarks']];
+      rows = materialTransfers.map(t => [
+        t.transferDate, getItemName(t.itemId), t.qty, getItemUnit(t.itemId), getProjectName(t.fromProjectId), getProjectName(t.toProjectId), t.remarks || '-'
+      ]);
+    } 
+    else if (reportType === 'Loss & Damage Report') {
+      headers = [['Loss Date', 'Project Site', 'Material Item', 'Qty Lost', 'Reason', 'Responsible Person', 'Recovery (INR)', 'Remarks']];
+      rows = materialLosses.map(l => [
+        l.date, getProjectName(l.projectId), getItemName(l.itemId), l.qty, l.reason, l.responsiblePerson, l.recoveryAmount ? `Rs ${l.recoveryAmount}` : '-', l.remarks || '-'
+      ]);
+    } 
+    else if (reportType === 'Purchase Register') {
+      headers = [['Purchase Date', 'Supplier Name', 'Invoice No', 'Project Site', 'Material Item', 'Qty', 'Rate', 'Total Amount']];
+      rows = materialPurchases.map(p => [
+        p.purchaseDate, p.supplierName, p.invoiceNumber || '-', getProjectName(p.projectId), getItemName(p.itemId), p.qty, `Rs ${p.rate}`, `Rs ${(p.qty * p.rate).toLocaleString()}`
+      ]);
+    } 
+    else if (reportType === 'Equipment Purchase Report') {
+      headers = [['Purchase Date', 'Asset Code', 'Asset Name', 'Supplier/Brand', 'Cost (INR)', 'Allocated Site', 'Status']];
+      rows = assets.map(a => [
+        a.purchaseDate, a.assetCode, a.name, a.brand, `Rs ${a.purchaseCost.toLocaleString()}`, getProjectName(a.currentSiteId), a.status
+      ]);
+    } 
+    else if (reportType === 'Supplier Outstanding Statement') {
+      headers = [['Supplier Name', 'Total Invoice Amount', 'Total Safe Payments', 'Current Outstanding']];
+      // Compute outstanding on the fly
+      const suppliers = Array.from(new Set([...materialPurchases.map(p => p.supplierName), ...supplierPayments.map(p => p.supplierName)]));
+      rows = suppliers.map(sup => {
+        const pur = materialPurchases.filter(p => p.supplierName === sup).reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
+        const pay = supplierPayments.filter(p => p.supplierName === sup).reduce((sum, p) => sum + Number(p.amountPaid || 0), 0);
+        return [sup, `Rs ${pur.toLocaleString()}`, `Rs ${pay.toLocaleString()}`, `Rs ${Math.max(0, pur - pay).toLocaleString()}`];
+      });
+    }
 
     autoTable(doc, {
       startY: 33,
-      head: [['Sr No', 'Date', 'Voucher No', 'Transaction Type', 'Qty Received', 'Qty Issued', 'Running Balance', 'Details']],
+      head: headers,
       body: rows,
       theme: 'grid',
-      headStyles: { fillColor: [44, 62, 80], fontSize: 8 },
-      bodyStyles: { fontSize: 8 }
+      headStyles: { fillColor: [44, 62, 80], halign: 'left' },
+      styles: { fontSize: 8, cellPadding: 2 }
     });
 
-    doc.save(`Ledger_${proj?.name || 'Site'}_${item?.itemName || 'Item'}.pdf`);
+    doc.save(`${reportType.replace(/\s+/g, '_').toLowerCase()}.pdf`);
   };
 
-  // CSV Export for Site Balances Grid
-  const exportSiteBalancesCSV = () => {
-    let csvContent = 'data:text/csv;charset=utf-8,';
-    csvContent += 'Site Name,Material Name,Category,Unit,Total Purchased,Total Issued,Total Returned,Net Consumption,Running Balance\n';
+  // Specific supplier chronological log data source
+  const activeSupplierLedgerData = useMemo(() => {
+    if (!selectedLedgerSupplier) return [];
+    
+    const logs: any[] = [];
+    materialPurchases
+      .filter(p => p.supplierName === selectedLedgerSupplier)
+      .forEach(p => {
+        logs.push({
+          date: p.purchaseDate,
+          type: 'Invoice Bill',
+          ref: p.invoiceNumber || p.purchaseVoucherNo,
+          project: getProjectName(p.projectId),
+          debit: p.totalAmount, // Purchase adds to what we owe (liability increases)
+          credit: 0,
+          details: `Purchased Item: ${getItemName(p.itemId)} (${p.qty} Qty @ Rs ${p.rate})`
+        });
+      });
 
-    inventoryBalances.forEach(b => {
-      const proj = projects.find(p => p.id === b.projectId);
-      const item = materialItems.find(i => i.id === b.itemId);
-      if (proj && item) {
-        csvContent += `"${proj.name}","${item.itemName}","${item.category}","${item.unit}",${b.purchased},${b.issued},${b.totalReturned},${b.netConsumption},${b.availableBalance}\n`;
-      }
+    supplierPayments
+      .filter(pay => pay.supplierName === selectedLedgerSupplier)
+      .forEach(pay => {
+        logs.push({
+          date: pay.paymentDate,
+          type: 'Cash/JV Payment',
+          ref: pay.invoiceReference || 'PAY-REF',
+          project: '-',
+          debit: 0,
+          credit: pay.amountPaid, // Payment reduces what we owe
+          details: `Payment reference mode: ${pay.paymentMode} (${pay.remarks || 'No remarks'})`
+        });
+      });
+
+    // Chronological order sorting
+    logs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let balance = 0;
+    return logs.map(l => {
+      // Outstanding balance accumulates purchase bills and decreases with clear payments
+      balance += (l.debit - l.credit);
+      return { ...l, runningOutstanding: balance };
     });
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Site_wise_Stock_Balances_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  }, [selectedLedgerSupplier, materialPurchases, supplierPayments]);
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f7f6] text-[11px] font-sans overflow-hidden">
-      {/* Sub Tabs/Toolbar Navigation */}
-      <div className="flex items-center space-x-1 border-b border-[#b2c0cc] bg-white px-2 py-1 print:hidden">
-        <button 
-          onClick={() => { setActiveTab('dashboard'); setIsEditingMaster(null); }}
-          className={`px-3 py-1 border-r border-[#b2c0cc] font-semibold flex items-center gap-1 ${activeTab === 'dashboard' ? 'text-[#0056b3] bg-[#e1edf7]' : 'text-gray-600 hover:text-black'}`}
-        >
-          <Grid size={12} /> Dashboard & Balances
-        </button>
-        <button 
-          onClick={() => { setActiveTab('master'); setIsEditingMaster(null); }}
-          className={`px-3 py-1 border-r border-[#b2c0cc] font-semibold flex items-center gap-1 ${activeTab === 'master' ? 'text-[#0056b3] bg-[#e1edf7]' : 'text-gray-600 hover:text-black'}`}
-        >
-          <Building2 size={12} /> Material Master
-        </button>
-        <button 
-          onClick={() => { setActiveTab('purchase'); setIsEditingMaster(null); }}
-          className={`px-3 py-1 border-r border-[#b2c0cc] font-semibold flex items-center gap-1 ${activeTab === 'purchase' ? 'text-[#0056b3] bg-[#e1edf7]' : 'text-gray-600 hover:text-black'}`}
-        >
-          <ShoppingCart size={12} /> Purchases (Inward)
-        </button>
-        <button 
-          onClick={() => { setActiveTab('issue'); setIsEditingMaster(null); }}
-          className={`px-3 py-1 border-r border-[#b2c0cc] font-semibold flex items-center gap-1 ${activeTab === 'issue' ? 'text-[#0056b3] bg-[#e1edf7]' : 'text-gray-600 hover:text-black'}`}
-        >
-          <Send size={12} /> Material Issues
-        </button>
-        <button 
-          onClick={() => { setActiveTab('return'); setIsEditingMaster(null); }}
-          className={`px-3 py-1 border-r border-[#b2c0cc] font-semibold flex items-center gap-1 ${activeTab === 'return' ? 'text-[#0056b3] bg-[#e1edf7]' : 'text-gray-600 hover:text-black'}`}
-        >
-          <RotateCcw size={12} /> Returns (Outward)
-        </button>
-        <button 
-          onClick={() => { setActiveTab('ledger'); setIsEditingMaster(null); }}
-          className={`px-3 py-1 font-semibold flex items-center gap-1 ${activeTab === 'ledger' ? 'text-[#0056b3] bg-[#e1edf7]' : 'text-gray-600 hover:text-black'}`}
-        >
-          <TrendingUp size={12} /> Material Ledger Reports
-        </button>
+    <div className="h-full flex flex-col bg-[#e0ebf5]">
+      {/* Top Professional SAP header */}
+      <div className="bg-[#1a365d] text-white px-4 py-2 border-b border-[#0d233e] flex flex-wrap items-center justify-between shadow-xs">
+        <div className="flex items-center space-x-2">
+          <Building2 size={24} className="text-blue-300" />
+          <div>
+            <h1 className="text-sm font-bold tracking-tight uppercase">Labour Contractor ERP</h1>
+            <p className="text-[10px] text-blue-200">Material Transits, Client Reconciliations & Corporate Assets</p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2 mt-1 sm:mt-0 text-[11px] bg-blue-900/40 px-2 py-0.5 border border-blue-700/50 rounded">
+          <span className="font-semibold text-emerald-400">● SECURE SHELL</span>
+          <span className="text-gray-300">|</span>
+          <span className="font-mono text-gray-200">{user?.name || user?.username || 'Administrator'}</span>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-3">
+      {/* Primary ERP Navigation Toolbar */}
+      <div className="bg-[#f0f4f8] flex flex-wrap border-b border-[#cbd5e1] overflow-x-auto text-[11px]">
+        {[
+          { tab: 'dashboard', icon: <TrendingUp size={12} />, label: 'Dashboard ERP' },
+          { tab: 'master', icon: <Grid size={12} />, label: 'Material Catalog' },
+          { tab: 'receipt', icon: <Plus size={12} />, label: 'Client Receipts' },
+          { tab: 'return', icon: <RotateCcw size={12} />, label: 'Client Returns' },
+          { tab: 'reconciliation', icon: <FileSpreadsheet size={12} />, label: 'Reconciliations' },
+          { tab: 'transfer', icon: <ArrowLeftRight size={12} />, label: 'Site Transfers' },
+          { tab: 'loss_damage', icon: <AlertTriangle size={12} />, label: 'Loss & Damage' },
+          { tab: 'company_purchase', icon: <ShoppingCart size={12} />, label: 'Company Purchases' },
+          { tab: 'equipment', icon: <Wrench size={12} />, label: 'Equipment & Machinery' },
+          { tab: 'supplier_ledger', icon: <DollarSign size={12} />, label: 'Supplier Ledger' },
+          { tab: 'reports', icon: <Printer size={12} />, label: 'ERP Reports Console' }
+        ].map(item => (
+          <button
+            key={item.tab}
+            onClick={() => { setActiveTab(item.tab as any); setEditTargetId(null); }}
+            className={`px-3 py-2 border-r border-[#cbd5e1] font-bold flex items-center gap-1 cursor-pointer transition ${activeTab === item.tab ? 'text-[#1a365d] bg-white border-b-2 border-b-[#1a365d]' : 'text-gray-600 hover:text-black hover:bg-slate-100'}`}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* =========================================================================
-            1. DASHBOARD & BALANCES VIEW
+            1. KEY DASHBOARD PANELS
             ========================================================================= */}
         {activeTab === 'dashboard' && (
           <div className="space-y-4">
-            {/* KPI Cards Strip */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            {/* Real-time KPI Card Deck */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-white p-3 border border-[#b2c0cc] shadow-xs flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">Master Catalog Items</span>
-                  <div className="text-lg font-bold text-slate-800">{materialItems.length} Items</div>
+                  <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Client Mat Received</span>
+                  <div className="text-xl font-extrabold text-blue-900">{kpis.totalReceiptsQty.toLocaleString()} Qty</div>
                 </div>
-                <div className="p-2 bg-blue-50 text-blue-600 rounded">
-                  <Grid size={18} />
-                </div>
+                <div className="p-2 bg-blue-50 text-blue-700 rounded"><Plus size={20} /></div>
               </div>
 
               <div className="bg-white p-3 border border-[#b2c0cc] shadow-xs flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">Total Purchased Volume</span>
-                  <div className="text-lg font-bold text-emerald-800">
-                    {materialPurchases.reduce((sum, p) => sum + (p.qty || 0), 0).toLocaleString()} Qty
-                  </div>
+                  <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Client Mat Returned</span>
+                  <div className="text-xl font-extrabold text-[#7c3aed]">{kpis.totalReturnsQty.toLocaleString()} Qty</div>
                 </div>
-                <div className="p-2 bg-emerald-50 text-emerald-600 rounded">
-                  <ShoppingCart size={18} />
-                </div>
+                <div className="p-2 bg-purple-50 text-purple-700 rounded"><RotateCcw size={20} /></div>
               </div>
 
               <div className="bg-white p-3 border border-[#b2c0cc] shadow-xs flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">Total Issued Volume</span>
-                  <div className="text-lg font-bold text-[#b88c00]">
-                    {materialIssues.reduce((sum, i) => sum + (i.qty || 0), 0).toLocaleString()} Qty
-                  </div>
+                  <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Net Stock Balance</span>
+                  <div className="text-xl font-extrabold text-emerald-800">{kpis.totalBalanceQty.toLocaleString()} Qty</div>
+                  <span className="text-[8px] text-gray-400">Available client assets</span>
                 </div>
-                <div className="p-2 bg-yellow-50 text-[#b58105] rounded">
-                  <Send size={18} />
-                </div>
+                <div className="p-2 bg-emerald-50 text-emerald-700 rounded"><FileSpreadsheet size={20} /></div>
               </div>
 
               <div className="bg-white p-3 border border-[#b2c0cc] shadow-xs flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">Total Returned Volume</span>
-                  <div className="text-lg font-bold text-violet-800">
-                    {materialReturns.reduce((sum, r) => sum + (r.qty || 0), 0).toLocaleString()} Qty
-                  </div>
+                  <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Site Transfers</span>
+                  <div className="text-xl font-extrabold text-indigo-800">{kpis.totalTransferCount} Transits</div>
                 </div>
-                <div className="p-2 bg-violet-50 text-violet-600 rounded">
-                  <RotateCcw size={18} />
-                </div>
+                <div className="p-2 bg-indigo-50 text-indigo-700 rounded"><ArrowLeftRight size={20} /></div>
               </div>
 
               <div className="bg-white p-3 border border-[#b2c0cc] shadow-xs flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">Low Stock Warnings</span>
-                  <div className="text-lg font-bold text-red-600">
-                    {inventoryBalances.filter(b => b.availableBalance <= 15).length} Alerts
-                  </div>
+                  <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Registered Loss/Damaged</span>
+                  <div className="text-xl font-extrabold text-red-700">{kpis.totalLossQty} Qty</div>
                 </div>
-                <div className="p-2 bg-red-50 text-red-600 rounded animate-pulse">
-                  <AlertTriangle size={18} />
+                <div className="p-2 bg-red-50 text-red-600 rounded"><AlertTriangle size={20} /></div>
+              </div>
+
+              <div className="bg-white p-3 border border-[#b2c0cc] shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Company Purchases</span>
+                  <div className="text-xl font-extrabold text-sky-800">₹{kpis.companyPurchasesTotal.toLocaleString('en-IN')}</div>
                 </div>
+                <div className="p-2 bg-sky-50 text-sky-700 rounded"><ShoppingCart size={20} /></div>
+              </div>
+
+              <div className="bg-[#FAF9F6] p-3 border border-[#b2c0cc] shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Corporate Asset Investment</span>
+                  <div className="text-xl font-extrabold text-amber-800">₹{kpis.equipmentCostTotal.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="p-2 bg-amber-50 text-amber-700 rounded"><Wrench size={20} /></div>
+              </div>
+
+              <div className="bg-white p-3 border border-red-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] text-red-500 uppercase font-bold tracking-wide">Supplier Outstanding Balance</span>
+                  <div className="text-xl font-extrabold text-red-900">₹{kpis.totalOutstanding.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="p-2 bg-red-100 text-red-800 rounded"><DollarSign size={20} /></div>
               </div>
             </div>
 
-            {/* Main dashboard list layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-              {/* Balances List Table (3/4 Width) */}
-              <div className="lg:col-span-3 bg-white border border-[#b2c0cc]">
-                <div className="bg-[#eef2f6] px-2 py-1.5 border-b border-[#b2c0cc] flex items-center justify-between">
-                  <span className="font-semibold text-[11px] text-[#0056b3]">Site-wise Current Material Stock Balances</span>
-                  <button onClick={exportSiteBalancesCSV} className="sap-btn-xs text-[10px] bg-slate-100 hover:bg-slate-200 border border-gray-400 font-semibold px-2 py-0.5 rounded flex items-center gap-1">
-                    <FileSpreadsheet size={10} /> Export Stock Sheet (CSV)
-                  </button>
-                </div>
-
-                <div className="p-2 bg-slate-50 border-b border-[#d1dce6] flex gap-2">
-                  <div className="flex items-center space-x-1">
-                    <span className="font-semibold text-gray-700">Filter Project:</span>
-                    <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="sap-input">
-                      <option value="all">All Project Sites</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <span className="font-semibold text-gray-700">Filter Material:</span>
-                    <select value={filterItem} onChange={(e) => setFilterItem(e.target.value)} className="sap-input">
-                      <option value="all">All Items</option>
-                      {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="sap-table w-full">
-                    <thead>
-                      <tr>
-                        <th>Site Name</th>
-                        <th>Material Item</th>
-                        <th>Category</th>
-                        <th className="text-right">Total Inward (A)</th>
-                        <th className="text-right">Total Issued (B)</th>
-                        <th className="text-right">Returned Good (C)</th>
-                        <th className="text-right">Net Consumption (B - Total Returned)</th>
-                        <th className="text-right">Available Stock (A + C - B)</th>
-                        <th>Unit</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inventoryBalances
-                        .filter(b => {
-                          const mProj = filterProject === 'all' || b.projectId === filterProject;
-                          const mItem = filterItem === 'all' || b.itemId === filterItem;
-                          return mProj && mItem;
-                        })
-                        .map((b, idx) => {
-                          const proj = projects.find(p => p.id === b.projectId);
-                          const item = materialItems.find(i => i.id === b.itemId);
-                          const isLow = b.availableBalance <= 15;
-                          if (!proj || !item) return null;
-
-                          return (
-                            <tr key={idx} className={isLow ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
-                              <td className="font-medium text-slate-800">{proj.name}</td>
-                              <td className="font-bold text-slate-900">{item.itemName}</td>
-                              <td>{item.category}</td>
-                              <td className="text-right font-mono text-emerald-700 font-bold">{b.purchased}</td>
-                              <td className="text-right font-mono text-amber-700 font-bold">{b.issued}</td>
-                              <td className="text-right font-mono text-slate-700">{b.returnedGood}</td>
-                              <td className="text-right font-mono text-rose-700">{b.netConsumption}</td>
-                              <td className={`text-right font-mono font-bold ${isLow ? 'text-red-600 animate-pulse' : 'text-blue-700'}`}>{b.availableBalance}</td>
-                              <td className="text-gray-500 font-medium">{item.unit}</td>
-                              <td>
-                                {isLow ? (
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-700 font-bold flex items-center gap-1 w-fit">
-                                    <AlertTriangle size={10} /> Low Stock
-                                  </span>
-                                ) : (
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-700 font-medium w-fit block">
-                                    In Stock
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      {inventoryBalances.length === 0 && (
-                        <tr>
-                          <td colSpan={10} className="text-center py-8 text-gray-500">
-                            No active material transactions mapped to generate balances. Populate Purchases, Issues or Returns first.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+            {/* Overall Live Reconciliation Balancing Statements inside Dashboard */}
+            <div className="bg-white border border-[#b2c0cc] rounded-xs shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] font-bold text-slate-800 flex justify-between items-center text-xs">
+                <span>Site-wise Active Client Material Balances Summary</span>
+                <span className="text-[10px] text-gray-500 lowercase italic">Calculated live: receipts - returns</span>
               </div>
-
-              {/* Sidebar alerts and notifications panels (1/4 Width) */}
-              <div className="space-y-3">
-                {/* Condition-wise Return Analysis Summary */}
-                <div className="bg-white border border-[#b2c0cc] p-3">
-                  <div className="border-b border-[#b2c0cc] pb-1.5 mb-2 flex items-center gap-1">
-                    <RotateCcw size={12} className="text-violet-600" />
-                    <span className="font-bold text-[11px] text-[#0056b3]">Return Condition Analysis</span>
-                  </div>
-                  <div className="space-y-2">
-                    {(() => {
-                      const good = materialReturns.filter(r => r.condition === 'Good').reduce((sum, r) => sum + (r.qty || 0), 0);
-                      const damaged = materialReturns.filter(r => r.condition === 'Damaged').reduce((sum, r) => sum + (r.qty || 0), 0);
-                      const scrap = materialReturns.filter(r => r.condition === 'Scrap').reduce((sum, r) => sum + (r.qty || 0), 0);
-                      const total = good + damaged + scrap || 1;
-
-                      return (
-                        <>
-                          <div>
-                            <div className="flex justify-between text-[10px] font-semibold text-slate-700">
-                              <span>Good / Reusable Asset</span>
-                              <span>{good} qty ({Math.round(good/total*100)}%)</span>
-                            </div>
-                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-0.5">
-                              <div className="bg-green-500 h-full" style={{ width: `${good/total*100}%` }}></div>
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between text-[10px] font-semibold text-slate-700">
-                              <span>Damaged Materials</span>
-                              <span>{damaged} qty ({Math.round(damaged/total*100)}%)</span>
-                            </div>
-                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-0.5">
-                              <div className="bg-amber-500 h-full" style={{ width: `${damaged/total*100}%` }}></div>
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between text-[10px] font-semibold text-slate-700">
-                              <span>Scrap Write-offs</span>
-                              <span>{scrap} qty ({Math.round(scrap/total*100)}%)</span>
-                            </div>
-                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-0.5">
-                              <div className="bg-red-500 h-full" style={{ width: `${scrap/total*100}%` }}></div>
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {/* Info Note block */}
-                <div className="bg-blue-55/40 border border-blue-200 p-3 rounded">
-                  <div className="font-bold text-blue-900 mb-1 flex items-center gap-1">
-                    <Info size={12} /> ERP Inventory Controls
-                  </div>
-                  <p className="text-blue-800 leading-relaxed text-[10.5px]">
-                    Site balance values are auto-computed dynamically. Register a Material Purchase (Inward) to increase site supply. Record Material Issues to subtract and allocate stock to sub-contractors or building phases. Returns add reusable materials back into live site stock registers.
-                  </p>
-                </div>
+              <div className="p-3">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 uppercase text-[9px] border-b border-gray-300">
+                      <th className="py-2 px-3">Project Site</th>
+                      <th className="py-2 px-3">Material Item</th>
+                      <th className="py-2 px-3 text-right">Inward Receipts</th>
+                      <th className="py-2 px-3 text-right">Outward Returns</th>
+                      <th className="py-2 px-3 text-right">Net Material Balance</th>
+                      <th className="py-2 px-3">Unit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {reconciliationBalances.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="py-2 px-3 font-semibold text-gray-800">{getProjectName(item.projectId)}</td>
+                        <td className="py-2 px-3 font-bold text-slate-900">{getItemName(item.itemId)}</td>
+                        <td className="py-2 px-3 text-right font-mono text-blue-700">{item.received}</td>
+                        <td className="py-2 px-3 text-right font-mono text-purple-700">{item.returned}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">{item.balance}</td>
+                        <td className="py-2 px-3 text-gray-500">{getItemUnit(item.itemId)}</td>
+                      </tr>
+                    ))}
+                    {reconciliationBalances.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="text-center py-6 text-gray-400 font-medium">
+                          No active client receipts or returns logged to populate the balance matrix.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
         {/* =========================================================================
-            2. MATERIAL MASTER CATALOG
+            2. MASTER MATERIAL MASTER CATALOG
             ========================================================================= */}
         {activeTab === 'master' && (
-          <div className="space-y-3">
-            {/* Master Creation Trigger Form */}
-            {isEditingMaster && (
-              <div className="bg-white border border-[#b2c0cc] p-3">
-                <div className="font-semibold text-[#0056b3] border-b border-[#b2c0cc] pb-2 mb-3">
-                  {isEditingMaster === 'new' ? 'Register New Material Master Item' : 'Edit Material Master Item'}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="space-y-4">
+            {editTargetId && (
+              <div className="bg-white border border-[#b2c0cc] p-4 rounded shadow-xs space-y-3">
+                <h3 className="font-semibold text-[#1a365d] border-b pb-1 text-xs">
+                  {editTargetId === 'new' ? 'Add New Item to Master Catalog' : 'Modify Item Details'}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Item Code (Optional)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. CMT-OPC43"
-                      className="sap-input w-full"
-                      value={masterForm.itemCode}
-                      onChange={(e) => setMasterForm({ ...masterForm, itemCode: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Item Code (ID) *</label>
+                    <input type="text" placeholder="e.g. CMT-OPC" className="w-full p-2 border rounded bg-[#fcfdfe]" value={masterForm.itemCode} onChange={e => setMasterForm({ ...masterForm, itemCode: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Item Name *</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. OPC 43 Portland Cement"
-                      className="sap-input w-full"
-                      value={masterForm.itemName}
-                      onChange={(e) => setMasterForm({ ...masterForm, itemName: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Material Item Name *</label>
+                    <input type="text" placeholder="e.g. Portland Cement Grade-43" className="w-full p-2 border rounded" value={masterForm.itemName} onChange={e => setMasterForm({ ...masterForm, itemName: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Category *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={masterForm.category}
-                      onChange={(e) => setMasterForm({ ...masterForm, category: e.target.value })}
-                    >
+                    <label className="block text-gray-700 font-bold mb-1">Item Category *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={masterForm.category} onChange={e => setMasterForm({ ...masterForm, category: e.target.value })}>
                       {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Unit of Measure *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={masterForm.unit}
-                      onChange={(e) => setMasterForm({ ...masterForm, unit: e.target.value })}
-                    >
+                    <label className="block text-gray-700 font-bold mb-1">Unit of Measure *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={masterForm.unit} onChange={e => setMasterForm({ ...masterForm, unit: e.target.value })}>
                       {ITEM_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Description / Spec</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. UltraTech Grade 43 Cement"
-                      className="sap-input w-full"
-                      value={masterForm.description}
-                      onChange={(e) => setMasterForm({ ...masterForm, description: e.target.value })}
-                    />
-                  </div>
                 </div>
-
-                <div className="flex justify-end gap-2 mt-4">
-                  <button onClick={() => setIsEditingMaster(null)} className="sap-btn bg-slate-200 hover:bg-slate-300 border border-gray-400">Cancel</button>
-                  <button onClick={handleSaveMaster} className="sap-btn">Save Item</button>
+                <div className="text-xs">
+                  <label className="block text-gray-700 font-bold mb-1 font-mono">Remarks / Technical Specifications</label>
+                  <input type="text" placeholder="..." className="w-full p-2 border rounded" value={masterForm.description} onChange={e => setMasterForm({ ...masterForm, description: e.target.value })} />
+                </div>
+                <div className="flex justify-end space-x-2 text-xs pt-2">
+                  <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border rounded">Cancel</button>
+                  <button onClick={() => saveEntry('master')} className="px-3 py-1.5 bg-[#1a365d] text-white hover:bg-slate-800 rounded">Save Material specifications</button>
                 </div>
               </div>
             )}
 
-            {/* List Table Grid of Master Items */}
-            <div className="bg-white border border-[#b2c0cc]">
-              <div className="bg-[#eef2f6] px-2 py-1.5 border-b border-[#b2c0cc] flex items-center justify-between">
-                <span className="font-semibold text-[#0056b3]">Registered Material Master Items</span>
-                {!isEditingMaster && (
-                  <button 
-                    onClick={() => {
-                      setMasterForm({ itemCode: '', itemName: '', category: 'Civil', unit: 'Bag', description: '' });
-                      setIsEditingMaster('new');
-                    }}
-                    className="sap-btn-xs"
-                  >
-                    <Plus size={10} className="mr-0.5" /> Append Material Item
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-slate-800">Master Material Specifications List</span>
+                {!editTargetId && (
+                  <button onClick={() => { setMasterForm({ itemCode: '', itemName: '', category: 'Civil', unit: 'Bag', description: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800 transition flex items-center gap-1">
+                    <Plus size={11} /> Append Material Item specifications
                   </button>
                 )}
               </div>
-
-              {/* Simple Filter */}
-              <div className="p-2 bg-slate-50 border-b border-[#d1dce6] flex gap-3">
-                <div className="flex items-center space-x-1 flex-1 max-w-sm">
-                  <Search size={12} className="text-gray-500" />
-                  <input 
-                    type="text" 
-                    placeholder="Search material items by name/code..." 
-                    className="sap-input w-full"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+              <div className="p-3 border-b border-gray-200">
+                <div className="relative max-w-md text-xs">
+                  <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                  <input type="text" placeholder="Search catalog by material name or code..." className="pl-9 pr-3 py-2 border rounded w-full" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                 </div>
               </div>
-
-              <div className="overflow-x-auto">
-                <table className="sap-table w-full">
-                  <thead>
-                    <tr>
-                      <th className="w-12 text-center">Sr.</th>
-                      <th>Item Code</th>
-                      <th>Item Name</th>
-                      <th>Category</th>
-                      <th>Standard Unit</th>
-                      <th>Specification / Description</th>
-                      <th>Created By</th>
-                      <th>Created Date</th>
-                      <th className="w-24 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {materialItems
-                      .filter(item => {
-                        const sQuery = searchQuery.toLowerCase();
-                        return (
-                          item.itemName.toLowerCase().includes(sQuery) ||
-                          (item.itemCode || '').toLowerCase().includes(sQuery) ||
-                          item.category.toLowerCase().includes(sQuery)
-                        );
-                      })
-                      .map((item, index) => (
-                        <tr key={item.id} className="hover:bg-slate-50">
-                          <td className="text-center font-mono">{index + 1}</td>
-                          <td className="font-mono font-semibold text-[#0056b3]">{item.itemCode || 'N/A'}</td>
-                          <td className="font-bold text-slate-900">{item.itemName}</td>
-                          <td>
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 font-semibold border border-slate-300">
-                              {item.category}
-                            </span>
-                          </td>
-                          <td className="font-semibold text-slate-700">{item.unit}</td>
-                          <td className="text-gray-500">{item.description || '-'}</td>
-                          <td>{item.createdBy || 'System'}</td>
-                          <td className="font-mono text-gray-500">{item.createdDate}</td>
-                          <td className="text-center">
-                            <div className="flex justify-center gap-1.5">
-                              <button 
-                                onClick={() => {
-                                  setMasterForm({
-                                    itemCode: item.itemCode || '',
-                                    itemName: item.itemName,
-                                    category: item.category,
-                                    unit: item.unit,
-                                    description: item.description || ''
-                                  });
-                                  setIsEditingMaster(item.id);
-                                }}
-                                className="text-slate-600 hover:text-[#0056b3] tooltip"
-                                title="Edit Material Item"
-                              >
-                                <Edit size={12} />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (confirm(`Delete '${item.itemName}' from the material master catalog? This is permanent.`)) {
-                                    deleteMaterialItem(item.id);
-                                  }
-                                }}
-                                className="text-slate-500 hover:text-red-500 tooltip"
-                                title="Delete from Master"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    {materialItems.length === 0 && (
-                      <tr>
-                        <td colSpan={9} className="text-center py-8 text-gray-500">
-                          The Material Master Catalog is currently empty. Click "Append Material Item" to start.
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px] tracking-wider">
+                    <th className="py-2 px-3">Item Code</th>
+                    <th className="py-2 px-3">Item Description</th>
+                    <th className="py-2 px-3">Assigned Category</th>
+                    <th className="py-2 px-3">Standard UoM</th>
+                    <th className="py-2 px-3">Specifications/Remarks</th>
+                    <th className="py-2 px-3 text-center">Manage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materialItems
+                    .filter(i => i.itemName.toLowerCase().includes(searchQuery.toLowerCase()) || (i.itemCode || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map(item => (
+                      <tr key={item.id} className="hover:bg-slate-50/50">
+                        <td className="py-2 px-3 font-mono font-semibold text-blue-700">{item.itemCode || '-'}</td>
+                        <td className="py-2 px-3 font-bold text-gray-900">{item.itemName}</td>
+                        <td className="py-2 px-3 text-gray-600">{item.category}</td>
+                        <td className="py-2 px-3 font-mono text-gray-500">{item.unit}</td>
+                        <td className="py-2 px-3 text-gray-400 italic">{item.description || '-'}</td>
+                        <td className="py-2 px-3">
+                          <div className="flex justify-center items-center space-x-2">
+                            <button onClick={() => { setMasterForm({ itemCode: item.itemCode || '', itemName: item.itemName, category: item.category, unit: item.unit, description: item.description || '' }); setEditTargetId(item.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                            <button onClick={() => removeRecord('master', item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                          </div>
                         </td>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
         {/* =========================================================================
-            3. PURCHASES (INWARD TRANSACTIONS)
+            3. CLIENT MATERIAL RECEIPTS
             ========================================================================= */}
-        {activeTab === 'purchase' && (
-          <div className="space-y-3">
-            {/* Purchase creation form */}
-            {isEditingPurchase && (
-              <div className="bg-white border border-[#b2c0cc] p-3">
-                <div className="font-semibold text-[#0056b3] border-b border-[#b2c0cc] pb-2 mb-3">
-                  {isEditingPurchase === 'new' ? 'Add Material Purchase Record' : 'Edit Material Purchase Record'}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {activeTab === 'receipt' && (
+          <div className="space-y-4">
+            {editTargetId && (
+              <div className="bg-white border border-[#b2c0cc] p-4 shadow-xs space-y-3 rounded">
+                <h3 className="font-semibold text-xs text-[#1a365d] border-b pb-1">Register Client Supplied Influx Goods</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Purchase Date *</label>
-                    <input 
-                      type="date" 
-                      className="sap-input w-full"
-                      value={purchaseForm.purchaseDate}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Receipt Date *</label>
+                    <input type="date" className="w-full p-2 border rounded" value={receiptForm.issueDate} onChange={e => setReceiptForm({ ...receiptForm, issueDate: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Voucher No (Auto)</label>
-                    <input 
-                      type="text" 
-                      disabled 
-                      className="sap-input w-full bg-slate-100 font-mono text-gray-500"
-                      value={purchaseForm.purchaseVoucherNo || getNextVoucherNo('PUR')}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Project Site Name *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={purchaseForm.projectId}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, projectId: e.target.value })}
-                    >
-                      <option value="">-- Select Site --</option>
+                    <label className="block text-gray-700 font-bold mb-1">Allocated Project Site *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={receiptForm.projectId} onChange={e => setReceiptForm({ ...receiptForm, projectId: e.target.value })}>
+                      <option value="">-- Choose Project --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Material Item *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={purchaseForm.itemId}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, itemId: e.target.value })}
-                    >
-                      <option value="">-- Select Material --</option>
+                    <label className="block text-gray-700 font-bold mb-1">Material Item Specification *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={receiptForm.itemId} onChange={e => setReceiptForm({ ...receiptForm, itemId: e.target.value })}>
+                      <option value="">-- Choose item --</option>
                       {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
                     </select>
                   </div>
-
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Qty Purchased *</label>
-                    <input 
-                      type="number" 
-                      className="sap-input w-full font-mono text-right"
-                      value={purchaseForm.qty || ''}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, qty: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Quantity Received *</label>
+                    <input type="number" min="0" className="w-full p-2 border rounded" value={receiptForm.qty} onChange={e => setReceiptForm({ ...receiptForm, qty: Number(e.target.value) })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Rate per unit *</label>
-                    <input 
-                      type="number" 
-                      className="sap-input w-full font-mono text-right"
-                      value={purchaseForm.rate || ''}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, rate: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Tower (Optional)</label>
+                    <input type="text" placeholder="e.g. Tower B" className="w-full p-2 border rounded" value={receiptForm.tower} onChange={e => setReceiptForm({ ...receiptForm, tower: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Computed Material Amount</label>
-                    <input 
-                      type="text" 
-                      disabled 
-                      className="sap-input w-full font-mono bg-slate-100 text-right text-slate-700 font-bold"
-                      value={(purchaseForm.qty * purchaseForm.rate).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Floor (Optional)</label>
+                    <input type="text" placeholder="e.g. 14th Floor" className="w-full p-2 border rounded" value={receiptForm.floor} onChange={e => setReceiptForm({ ...receiptForm, floor: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Supplier Name *</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. UltraTech Distributors"
-                      className="sap-input w-full"
-                      value={purchaseForm.supplierName}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Supplier Mobile</label>
-                    <input 
-                      type="text" 
-                      placeholder="10-digit mobile"
-                      className="sap-input w-full"
-                      value={purchaseForm.supplierMobile}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, supplierMobile: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Delivered By (Client Representative) *</label>
+                    <input type="text" placeholder="Name/Agency" className="w-full p-2 border rounded" value={receiptForm.issuedTo} onChange={e => setReceiptForm({ ...receiptForm, issuedTo: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">GST Registration No</label>
-                    <input 
-                      type="text" 
-                      placeholder="15-character GSTIN"
-                      className="sap-input w-full uppercase font-mono"
-                      value={purchaseForm.gstNo}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, gstNo: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Transport Charges</label>
-                    <input 
-                      type="number" 
-                      className="sap-input w-full font-mono text-right"
-                      value={purchaseForm.transportCharges || ''}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, transportCharges: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Loading/Unloading fees</label>
-                    <input 
-                      type="number" 
-                      className="sap-input w-full font-mono text-right"
-                      value={purchaseForm.loadingCharges || ''}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, loadingCharges: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Other Surcharge</label>
-                    <input 
-                      type="number" 
-                      className="sap-input w-full font-mono text-right"
-                      value={purchaseForm.otherCharges || ''}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, otherCharges: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Supplier Invoice Number</label>
-                    <input 
-                      type="text" 
-                      placeholder="Inv-99831/25"
-                      className="sap-input w-full font-mono"
-                      value={purchaseForm.invoiceNumber}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Invoice Date</label>
-                    <input 
-                      type="date" 
-                      className="sap-input w-full"
-                      value={purchaseForm.invoiceDate}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, invoiceDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Remarks/Allocation</label>
-                    <input 
-                      type="text" 
-                      placeholder="Cement for Tower A basement slab"
-                      className="sap-input w-full"
-                      value={purchaseForm.remarks}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, remarks: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Client Delivery Challan (Voucher No) *</label>
+                    <input type="text" placeholder="e.g. CH-238491" className="w-full p-2 border rounded font-mono" value={receiptForm.voucherNo} onChange={e => setReceiptForm({ ...receiptForm, voucherNo: e.target.value })} />
                   </div>
                 </div>
-
-                <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
-                  <div className="text-[12px] font-bold text-slate-800">
-                    Grand Total Composed: <span className="text-[#0056b3] text-sm">
-                      {((purchaseForm.qty * purchaseForm.rate) + 
-                        Number(purchaseForm.transportCharges || 0) + 
-                        Number(purchaseForm.loadingCharges || 0) + 
-                        Number(purchaseForm.otherCharges || 0)).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setIsEditingPurchase(null)} className="sap-btn bg-slate-200 hover:bg-slate-300 border border-gray-400">Cancel</button>
-                    <button onClick={handleSavePurchase} className="sap-btn">Save Purchase Voucher</button>
-                  </div>
+                <div className="text-xs">
+                  <label className="block text-gray-700 font-bold mb-1">Remarks</label>
+                  <input type="text" placeholder="Type comments..." className="w-full p-2 border rounded" value={receiptForm.remarks} onChange={e => setReceiptForm({ ...receiptForm, remarks: e.target.value })} />
+                </div>
+                <div className="flex justify-end space-x-2 text-xs pt-2">
+                  <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
+                  <button onClick={() => saveEntry('receipt')} className="px-3 py-1.5 bg-[#1a365d] text-white hover:bg-slate-800 rounded">Save Receipt Entry</button>
                 </div>
               </div>
             )}
 
-            {/* List and registers of purchases */}
-            <div className="bg-white border border-[#b2c0cc]">
-              <div className="bg-[#eef2f6] px-2 py-1.5 border-b border-[#b2c0cc] flex items-center justify-between">
-                <span className="font-semibold text-[#0056b3]">Registered Material Purchase Vouchers (Inward Master Register)</span>
-                {!isEditingPurchase && (
-                  <button 
-                    onClick={() => {
-                      setPurchaseForm({
-                        purchaseDate: new Date().toISOString().split('T')[0],
-                        purchaseVoucherNo: getNextVoucherNo('PUR'),
-                        supplierName: '',
-                        supplierMobile: '',
-                        gstNo: '',
-                        projectId: projects[0]?.id || '',
-                        itemId: materialItems[0]?.id || '',
-                        qty: 0,
-                        rate: 0,
-                        transportCharges: 0,
-                        loadingCharges: 0,
-                        otherCharges: 0,
-                        invoiceNumber: '',
-                        invoiceDate: new Date().toISOString().split('T')[0],
-                        remarks: ''
-                      });
-                      setIsEditingPurchase('new');
-                    }}
-                    className="sap-btn-xs"
-                  >
-                    <Plus size={10} className="mr-0.5" /> Direct Purchase Receipt
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-slate-800">Historical Log of Client-Supplied Material Receipts</span>
+                {!editTargetId && (
+                  <button onClick={() => { setReceiptForm({ voucherNo: '', issueDate: new Date().toISOString().split('T')[0], projectId: '', tower: '', floor: '', itemId: '', qty: 0, issuedTo: '', remarks: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800">
+                    <Plus size={11} className="inline mr-1" /> Register Influx Material
                   </button>
                 )}
               </div>
-
-              {/* Registers Table */}
-              <div className="overflow-x-auto">
-                <table className="sap-table w-full">
-                  <thead>
-                    <tr>
-                      <th>Voucher No</th>
-                      <th>Date</th>
-                      <th>Site Address</th>
-                      <th>Material Item</th>
-                      <th className="text-right">Qty</th>
-                      <th>Unit</th>
-                      <th className="text-right">Rate</th>
-                      <th className="text-right">Add-on (Transport+unloading)</th>
-                      <th className="text-right">Total Amount Paid</th>
-                      <th>Supplier Details</th>
-                      <th>Invoice No & Date</th>
-                      <th>Actions</th>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px]">
+                    <th className="py-2 px-3">Date</th>
+                    <th className="py-2 px-3">Challan / Voucher</th>
+                    <th className="py-2 px-3">Project Site</th>
+                    <th className="py-2 px-3">Location Target</th>
+                    <th className="py-2 px-3">Material Name</th>
+                    <th className="py-2 px-3 text-right">Qty Received</th>
+                    <th className="py-2 px-3 font-semibold">Unit</th>
+                    <th className="py-2 px-3">Received From</th>
+                    <th className="py-2 px-3">Audit Stamp</th>
+                    <th className="py-2 px-3 text-center">Manage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materialIssues.map(row => (
+                    <tr key={row.id} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 font-mono text-gray-600">{row.issueDate}</td>
+                      <td className="py-2 px-3 font-mono font-bold text-blue-700">{row.voucherNo}</td>
+                      <td className="py-2 px-3 font-semibold text-gray-800">{getProjectName(row.projectId)}</td>
+                      <td className="py-2 px-3 text-gray-500 font-mono text-[10px]">{row.tower || row.floor ? `${row.tower || ''} ${row.floor ? `(F: ${row.floor})` : ''}` : '-'}</td>
+                      <td className="py-2 px-3 font-bold text-gray-900">{getItemName(row.itemId)}</td>
+                      <td className="py-2 px-3 text-right font-mono font-extrabold text-blue-800">{row.qty}</td>
+                      <td className="py-2 px-3 text-gray-400 font-mono text-[10px]">{getItemUnit(row.itemId)}</td>
+                      <td className="py-2 px-3 text-gray-600 font-medium">{row.issuedTo}</td>
+                      <td className="py-2 px-3 text-gray-400 font-mono text-[9px] uppercase">
+                        By {row.createdBy || 'System'} at {row.createdDate || '-'}
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex justify-center items-center space-x-2">
+                          <button onClick={() => { setReceiptForm({ voucherNo: row.voucherNo, issueDate: row.issueDate, projectId: row.projectId, tower: row.tower || '', floor: row.floor || '', itemId: row.itemId, qty: row.qty, issuedTo: row.issuedTo, remarks: row.remarks || '' }); setEditTargetId(row.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                          <button onClick={() => removeRecord('receipt', row.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {materialPurchases.map(p => {
-                      const proj = projects.find(pr => pr.id === p.projectId);
-                      const item = materialItems.find(it => it.id === p.itemId);
-                      return (
-                        <tr key={p.id} className="hover:bg-slate-50">
-                          <td className="font-mono font-bold text-[#0056b3]">{p.purchaseVoucherNo}</td>
-                          <td className="font-mono text-gray-600">{p.purchaseDate}</td>
-                          <td className="font-semibold text-slate-800">{proj?.name || 'Unknown Site'}</td>
-                          <td className="font-bold text-slate-900">{item?.itemName || 'Deleted material'}</td>
-                          <td className="text-right font-mono font-semibold text-slate-800">{p.qty}</td>
-                          <td className="text-gray-500 font-medium">{item?.unit}</td>
-                          <td className="text-right font-mono text-gray-600">₹{p.rate}</td>
-                          <td className="text-right font-mono text-gray-500">₹{p.transportCharges + p.loadingCharges + p.otherCharges}</td>
-                          <td className="text-right font-mono font-bold text-emerald-800">₹{p.grandTotal.toLocaleString('en-IN')}</td>
-                          <td>
-                            <div className="text-[10.5px]">
-                              <p className="font-semibold text-slate-800">{p.supplierName}</p>
-                              <p className="text-gray-500 font-mono text-[9.5px]">Mob: {p.supplierMobile} {p.gstNo ? `| GST: ${p.gstNo}` : ''}</p>
-                            </div>
-                          </td>
-                          <td className="font-mono text-gray-500 text-[10px]">
-                            {p.invoiceNumber ? `${p.invoiceNumber} (${p.invoiceDate})` : '-'}
-                          </td>
-                          <td>
-                            <div className="flex gap-1.5 justify-center">
-                              <button 
-                                onClick={() => {
-                                  setPurchaseForm({
-                                    purchaseDate: p.purchaseDate,
-                                    purchaseVoucherNo: p.purchaseVoucherNo,
-                                    supplierName: p.supplierName,
-                                    supplierMobile: p.supplierMobile,
-                                    gstNo: p.gstNo || '',
-                                    projectId: p.projectId,
-                                    itemId: p.itemId,
-                                    qty: p.qty,
-                                    rate: p.rate,
-                                    transportCharges: p.transportCharges,
-                                    loadingCharges: p.loadingCharges,
-                                    otherCharges: p.otherCharges,
-                                    invoiceNumber: p.invoiceNumber || '',
-                                    invoiceDate: p.invoiceDate || '',
-                                    remarks: p.remarks || ''
-                                  });
-                                  setIsEditingPurchase(p.id);
-                                }}
-                                className="text-slate-600 hover:text-[#0056b3]"
-                              >
-                                <Edit size={11} />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (confirm("Delete this purchase receipt? Running balances across sites will update automatically.")) {
-                                    deleteMaterialPurchase(p.id);
-                                  }
-                                }}
-                                className="text-slate-500 hover:text-red-500"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {materialPurchases.length === 0 && (
-                      <tr>
-                        <td colSpan={12} className="text-center py-8 text-gray-500">
-                          No inward purchase vouchers registered in ERP database. Check "Direct Purchase Receipt" to add inventory.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                  {materialIssues.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="text-center py-8 text-gray-400 font-semibold uppercase text-[10px]">No active materials registered as received yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
         {/* =========================================================================
-            4. ISSUES (OUTWARD TRANSACTIONS)
-            ========================================================================= */}
-        {activeTab === 'issue' && (
-          <div className="space-y-3">
-            {/* Issue Creation Form */}
-            {isEditingIssue && (
-              <div className="bg-white border border-[#b2c0cc] p-3">
-                <div className="font-semibold text-[#0056b3] border-b border-[#b2c0cc] pb-2 mb-3">
-                  {isEditingIssue === 'new' ? 'Issue Materials from Site Stock' : 'Edit Allocation Voucher'}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Issue Date *</label>
-                    <input 
-                      type="date" 
-                      className="sap-input w-full"
-                      value={issueForm.issueDate}
-                      onChange={(e) => setIssueForm({ ...issueForm, issueDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Allocation Voucher No (Auto)</label>
-                    <input 
-                      type="text" 
-                      disabled 
-                      className="sap-input w-full bg-slate-100 font-mono text-gray-500"
-                      value={issueForm.voucherNo || getNextVoucherNo('ISS')}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Project Site Area *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={issueForm.projectId}
-                      onChange={(e) => setIssueForm({ ...issueForm, projectId: e.target.value })}
-                    >
-                      <option value="">-- Select Site --</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Material to Dispatch *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={issueForm.itemId}
-                      onChange={(e) => setIssueForm({ ...issueForm, itemId: e.target.value })}
-                    >
-                      <option value="">-- Select Material --</option>
-                      {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Tower (Optional)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Tower B"
-                      className="sap-input w-full"
-                      value={issueForm.tower}
-                      onChange={(e) => setIssueForm({ ...issueForm, tower: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Floor (Optional)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. 5th Floor"
-                      className="sap-input w-full"
-                      value={issueForm.floor}
-                      onChange={(e) => setIssueForm({ ...issueForm, floor: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Quantity to Issue *</label>
-                    <input 
-                      type="number" 
-                      className="sap-input w-full font-mono text-right"
-                      value={issueForm.qty || ''}
-                      onChange={(e) => setIssueForm({ ...issueForm, qty: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Issued To (Recipient Name) *</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Rajesh Kumar (Subconst.)"
-                      className="sap-input w-full"
-                      value={issueForm.issuedTo}
-                      onChange={(e) => setIssueForm({ ...issueForm, issuedTo: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="md:col-span-4">
-                    <label className="block text-gray-700 font-semibold mb-1">Remarks / Remarks</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Columns concreting, floor mix ratio 1:2:4"
-                      className="sap-input w-full"
-                      value={issueForm.remarks}
-                      onChange={(e) => setIssueForm({ ...issueForm, remarks: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 mt-4">
-                  <button onClick={() => setIsEditingIssue(null)} className="sap-btn bg-slate-200 hover:bg-slate-300 border border-gray-400">Cancel</button>
-                  <button onClick={handleSaveIssue} className="sap-btn">Disburse Assets</button>
-                </div>
-              </div>
-            )}
-
-            {/* List and registry table of issues */}
-            <div className="bg-white border border-[#b2c0cc]">
-              <div className="bg-[#eef2f6] px-2 py-1.5 border-b border-[#b2c0cc] flex items-center justify-between">
-                <span className="font-semibold text-[#0056b3]">Registered Material Issue Logs (Outward Site Allocation Ledger)</span>
-                {!isEditingIssue && (
-                  <button 
-                    onClick={() => {
-                      setIssueForm({
-                        voucherNo: getNextVoucherNo('ISS'),
-                        issueDate: new Date().toISOString().split('T')[0],
-                        projectId: projects[0]?.id || '',
-                        tower: '',
-                        floor: '',
-                        itemId: materialItems[0]?.id || '',
-                        qty: 0,
-                        issuedTo: '',
-                        remarks: ''
-                      });
-                      setIsEditingIssue('new');
-                    }}
-                    className="sap-btn-xs"
-                  >
-                    <Plus size={10} className="mr-0.5" /> Register Outward Issue
-                  </button>
-                )}
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="sap-table w-full">
-                  <thead>
-                    <tr>
-                      <th>Voucher No</th>
-                      <th>Issue Date</th>
-                      <th>Site Location</th>
-                      <th>Location Sub-Phase</th>
-                      <th>Allocated Material</th>
-                      <th className="text-right">Qty Issued</th>
-                      <th>UoM</th>
-                      <th>Disbursed Recipient</th>
-                      <th>Remarks & Target Specs</th>
-                      <th className="w-20 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {materialIssues.map(i => {
-                      const proj = projects.find(p => p.id === i.projectId);
-                      const item = materialItems.find(it => it.id === i.itemId);
-                      return (
-                        <tr key={i.id} className="hover:bg-slate-50">
-                          <td className="font-mono font-bold text-[#0056b3]">{i.voucherNo}</td>
-                          <td className="font-mono text-gray-600">{i.issueDate}</td>
-                          <td className="font-semibold text-slate-800">{proj?.name || 'Deleted Project'}</td>
-                          <td>
-                            {i.tower || i.floor ? (
-                              <span className="text-[10px] bg-slate-100 border px-1.5 py-0.5 rounded text-slate-700">
-                                {i.tower || ''} {i.floor ? `| ${i.floor}` : ''}
-                              </span>
-                            ) : '-'}
-                          </td>
-                          <td className="font-bold text-slate-900">{item?.itemName || 'Deleted material'}</td>
-                          <td className="text-right font-mono font-bold text-amber-700">{i.qty}</td>
-                          <td className="text-gray-500">{item?.unit}</td>
-                          <td className="font-semibold text-slate-800">{i.issuedTo}</td>
-                          <td className="text-gray-500">{i.remarks || '-'}</td>
-                          <td className="text-center">
-                            <div className="flex gap-1.5 justify-center">
-                              <button 
-                                onClick={() => {
-                                  setIssueForm({
-                                    voucherNo: i.voucherNo,
-                                    issueDate: i.issueDate,
-                                    projectId: i.projectId,
-                                    tower: i.tower || '',
-                                    floor: i.floor || '',
-                                    itemId: i.itemId,
-                                    qty: i.qty,
-                                    issuedTo: i.issuedTo,
-                                    remarks: i.remarks || ''
-                                  });
-                                  setIsEditingIssue(i.id);
-                                }}
-                                className="text-slate-600 hover:text-[#0056b3]"
-                              >
-                                <Edit size={11} />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (confirm("Cancel this outward material issue entry? Site stock balances will update immediately.")) {
-                                    deleteMaterialIssue(i.id);
-                                  }
-                                }}
-                                className="text-slate-500 hover:text-red-500"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {materialIssues.length === 0 && (
-                      <tr>
-                        <td colSpan={10} className="text-center py-8 text-gray-500">
-                          No material issue records found. Click "Register Outward Issue" to allocate stock.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            5. RETURNS (INDWARD TRANSACTIONS FROM OUTWARD WORK)
+            4. CLIENT MATERIAL RETURNS
             ========================================================================= */}
         {activeTab === 'return' && (
-          <div className="space-y-3">
-            {/* Returns Entry Forms */}
-            {isEditingReturn && (
-              <div className="bg-white border border-[#b2c0cc] p-3">
-                <div className="font-semibold text-[#0056b3] border-b border-[#b2c0cc] pb-2 mb-3">
-                  {isEditingReturn === 'new' ? 'Register Return Entry' : 'Edit Return Record'}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="space-y-4">
+            {editTargetId && (
+              <div className="bg-white border border-[#b2c0cc] p-4 shadow-xs space-y-3 rounded">
+                <h3 className="font-semibold text-xs text-[#1a365d] border-b pb-1">Register Client Goods Return Dispatch</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Return Date *</label>
-                    <input 
-                      type="date" 
-                      className="sap-input w-full"
-                      value={returnForm.returnDate}
-                      onChange={(e) => setReturnForm({ ...returnForm, returnDate: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Return Date *</label>
+                    <input type="date" className="w-full p-2 border rounded" value={returnForm.returnDate} onChange={e => setReturnForm({ ...returnForm, returnDate: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Reference / Return Voucher No</label>
-                    <input 
-                      type="text" 
-                      disabled 
-                      className="sap-input w-full bg-slate-100 font-mono text-gray-500"
-                      value={returnForm.voucherNo || getNextVoucherNo('RET')}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Site Returning From *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={returnForm.projectId}
-                      onChange={(e) => setReturnForm({ ...returnForm, projectId: e.target.value })}
-                    >
-                      <option value="">-- Select Site --</option>
+                    <label className="block text-gray-700 font-bold mb-1">Allocated Project Site *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={returnForm.projectId} onChange={e => setReturnForm({ ...returnForm, projectId: e.target.value })}>
+                      <option value="">-- Choose Project --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Returned Material Item *</label>
-                    <select 
-                      className="sap-input w-full"
-                      value={returnForm.itemId}
-                      onChange={(e) => setReturnForm({ ...returnForm, itemId: e.target.value })}
-                    >
-                      <option value="">-- Select Material --</option>
+                    <label className="block text-gray-700 font-bold mb-1">Material Item *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={returnForm.itemId} onChange={e => setReturnForm({ ...returnForm, itemId: e.target.value })}>
+                      <option value="">-- Choose item --</option>
                       {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
                     </select>
                   </div>
-
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Tower (Optional)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Tower B"
-                      className="sap-input w-full"
-                      value={returnForm.tower}
-                      onChange={(e) => setReturnForm({ ...returnForm, tower: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Quantity Returned *</label>
+                    <input type="number" min="0" className="w-full p-2 border rounded" value={returnForm.qty} onChange={e => setReturnForm({ ...returnForm, qty: Number(e.target.value) })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Floor (Optional)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. 5th Floor"
-                      className="sap-input w-full"
-                      value={returnForm.floor}
-                      onChange={(e) => setReturnForm({ ...returnForm, floor: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Returned To (Client Security/Supervisor) *</label>
+                    <input type="text" placeholder="Receiver Name" className="w-full p-2 border rounded" value={returnForm.returnedBy} onChange={e => setReturnForm({ ...returnForm, returnedBy: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Quantity Returned *</label>
-                    <input 
-                      type="number" 
-                      className="sap-input w-full font-mono text-right"
-                      value={returnForm.qty || ''}
-                      onChange={(e) => setReturnForm({ ...returnForm, qty: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Condition of Returned Material *</label>
-                    <select 
-                      className="sap-input w-full font-semibold"
-                      value={returnForm.condition}
-                      onChange={(e) => setReturnForm({ ...returnForm, condition: e.target.value as 'Good' | 'Damaged' | 'Scrap' })}
-                    >
-                      {RETURN_CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-1">Returned By (Worker / Subconst.) *</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Rajkumar Tiles"
-                      className="sap-input w-full"
-                      value={returnForm.returnedBy}
-                      onChange={(e) => setReturnForm({ ...returnForm, returnedBy: e.target.value })}
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-gray-700 font-semibold mb-1">Remarks</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Leftover tiles from lobby, reusable"
-                      className="sap-input w-full"
-                      value={returnForm.remarks}
-                      onChange={(e) => setReturnForm({ ...returnForm, remarks: e.target.value })}
-                    />
+                    <label className="block text-gray-700 font-bold mb-1">Outward Return Challan No *</label>
+                    <input type="text" placeholder="e.g. CH-RET-231" className="w-full p-2 border rounded font-mono" value={returnForm.voucherNo} onChange={e => setReturnForm({ ...returnForm, voucherNo: e.target.value })} />
                   </div>
                 </div>
-
-                <div className="flex justify-end gap-2 mt-4">
-                  <button onClick={() => setIsEditingReturn(null)} className="sap-btn bg-slate-200 hover:bg-slate-300 border border-gray-400">Cancel</button>
-                  <button onClick={handleSaveReturn} className="sap-btn">Save Return Voucher</button>
+                <div className="text-xs">
+                  <label className="block text-gray-700 font-bold mb-1">Remarks / Justification</label>
+                  <input type="text" placeholder="..." className="w-full p-2 border rounded" value={returnForm.remarks} onChange={e => setReturnForm({ ...returnForm, remarks: e.target.value })} />
+                </div>
+                <div className="flex justify-end space-x-2 text-xs pt-2">
+                  <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
+                  <button onClick={() => saveEntry('return')} className="px-3 py-1.5 bg-[#1a365d] text-white hover:bg-slate-800 rounded">Save Return entry</button>
                 </div>
               </div>
             )}
 
-            {/* Past Returns Table Register */}
-            <div className="bg-white border border-[#b2c0cc]">
-              <div className="bg-[#eef2f6] px-2 py-1.5 border-b border-[#b2c0cc] flex items-center justify-between">
-                <span className="font-semibold text-[#0056b3]">Registered Material Returns (Inward Re-entry Registrar)</span>
-                {!isEditingReturn && (
-                  <button 
-                    onClick={() => {
-                      setReturnForm({
-                        voucherNo: getNextVoucherNo('RET'),
-                        returnDate: new Date().toISOString().split('T')[0],
-                        projectId: projects[0]?.id || '',
-                        tower: '',
-                        floor: '',
-                        itemId: materialItems[0]?.id || '',
-                        qty: 0,
-                        returnedBy: '',
-                        condition: 'Good',
-                        remarks: ''
-                      });
-                      setIsEditingReturn('new');
-                    }}
-                    className="sap-btn-xs"
-                  >
-                    <Plus size={10} className="mr-0.5" /> Direct Stock Return Entry
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-slate-800">Historical Log of Materials Returned to Client</span>
+                {!editTargetId && (
+                  <button onClick={() => { setReturnForm({ voucherNo: '', returnDate: new Date().toISOString().split('T')[0], projectId: '', itemId: '', qty: 0, returnedBy: '', remarks: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800">
+                    <Plus size={11} className="inline mr-1" /> Register Material Return
                   </button>
                 )}
               </div>
-
-              <div className="overflow-x-auto">
-                <table className="sap-table w-full">
-                  <thead>
-                    <tr>
-                      <th>Voucher / Ref No</th>
-                      <th>Return Date</th>
-                      <th>Source Site</th>
-                      <th>Location details</th>
-                      <th>Material Item</th>
-                      <th className="text-right">Qty Returned</th>
-                      <th>Unit</th>
-                      <th>Condition</th>
-                      <th>Returned By</th>
-                      <th>Remarks / Justification</th>
-                      <th className="w-20 text-center">Actions</th>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px]">
+                    <th className="py-2 px-3">Date</th>
+                    <th className="py-2 px-3">Return Challan</th>
+                    <th className="py-2 px-3">Project Site</th>
+                    <th className="py-2 px-3">Material Item Name</th>
+                    <th className="py-2 px-3 text-right">Qty Returned</th>
+                    <th className="py-2 px-3">Unit</th>
+                    <th className="py-2 px-3">Returned To</th>
+                    <th className="py-2 px-3">Remarks</th>
+                    <th className="py-2 px-3">Audit Details</th>
+                    <th className="py-2 px-3 text-center">Manage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materialReturns.map(row => (
+                    <tr key={row.id} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 font-mono text-gray-600">{row.returnDate}</td>
+                      <td className="py-2 px-3 font-mono font-bold text-purple-700">{row.voucherNo}</td>
+                      <td className="py-2 px-3 font-semibold text-gray-800">{getProjectName(row.projectId)}</td>
+                      <td className="py-2 px-3 font-bold text-gray-900">{getItemName(row.itemId)}</td>
+                      <td className="py-2 px-3 text-right font-mono font-extrabold text-purple-700">{row.qty}</td>
+                      <td className="py-2 px-3 text-gray-400 font-mono text-[10px]">{getItemUnit(row.itemId)}</td>
+                      <td className="py-2 px-3 text-gray-600 font-medium">{row.returnedBy}</td>
+                      <td className="py-2 px-3 text-gray-400 italic">{row.remarks || '-'}</td>
+                      <td className="py-2 px-3 text-gray-400 font-mono text-[9px] uppercase">
+                        By {row.createdBy || 'System'} at {row.createdDate || '-'}
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex justify-center items-center space-x-2">
+                          <button onClick={() => { setReturnForm({ voucherNo: row.voucherNo, returnDate: row.returnDate, projectId: row.projectId, itemId: row.itemId, qty: row.qty, returnedBy: row.returnedBy, remarks: row.remarks || '' }); setEditTargetId(row.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                          <button onClick={() => removeRecord('return', row.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {materialReturns.map(r => {
-                      const proj = projects.find(p => p.id === r.projectId);
-                      const item = materialItems.find(it => it.id === r.itemId);
-                      return (
-                        <tr key={r.id} className="hover:bg-slate-50">
-                          <td className="font-mono font-bold text-[#0056b3]">{r.voucherNo || 'RET-FreeHand'}</td>
-                          <td className="font-mono text-gray-600">{r.returnDate}</td>
-                          <td className="font-semibold text-slate-800">{proj?.name || 'Deleted site'}</td>
-                          <td>{r.tower || r.floor ? `${r.tower || ''} ${r.floor || ''}` : '-'}</td>
-                          <td className="font-bold text-slate-900">{item?.itemName || 'Deleted item'}</td>
-                          <td className="text-right font-mono font-bold text-slate-800">{r.qty}</td>
-                          <td className="text-gray-500">{item?.unit}</td>
-                          <td>
-                            {r.condition === 'Good' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-800 font-bold">Good</span>}
-                            {r.condition === 'Damaged' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold">Damaged</span>}
-                            {r.condition === 'Scrap' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-800 font-bold">Scrap</span>}
-                          </td>
-                          <td className="font-medium text-slate-700">{r.returnedBy}</td>
-                          <td className="text-gray-500">{r.remarks || '-'}</td>
-                          <td className="text-center">
-                            <div className="flex gap-1.5 justify-center">
-                              <button 
-                                onClick={() => {
-                                  setReturnForm({
-                                    voucherNo: r.voucherNo || '',
-                                    returnDate: r.returnDate,
-                                    projectId: r.projectId,
-                                    tower: r.tower || '',
-                                    floor: r.floor || '',
-                                    itemId: r.itemId,
-                                    qty: r.qty,
-                                    returnedBy: r.returnedBy,
-                                    condition: r.condition,
-                                    remarks: r.remarks || ''
-                                  });
-                                  setIsEditingReturn(r.id);
-                                }}
-                                className="text-slate-600 hover:text-[#0056b3]"
-                              >
-                                <Edit size={11} />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (confirm("Delete this material return entry permanently?")) {
-                                    deleteMaterialReturn(r.id);
-                                  }
-                                }}
-                                className="text-slate-500 hover:text-red-500"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {materialReturns.length === 0 && (
-                      <tr>
-                        <td colSpan={11} className="text-center py-8 text-gray-500">
-                          No outward material returns registered in ERP yet. Use "Direct Stock Return Entry" to register.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                  {materialReturns.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="text-center py-8 text-gray-400 font-semibold uppercase text-[10px]">No active outward returns saved in log registry.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
         {/* =========================================================================
-            6. CHRONOLOGICAL SITE-WISE MATERIAL LEDGER
+            5. MATERIAL RECONCILIATION SUMMARY TAB
             ========================================================================= */}
-        {activeTab === 'ledger' && (
-          <div className="space-y-3">
-            <div className="bg-white border border-[#b2c0cc] p-3">
-              <div className="font-semibold text-[#0056b3] border-b border-[#b2c0cc] pb-2 mb-3">
-                Generate Chronological Site-wise Material Ledger Statement
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1">Target Project Site Asset *</label>
-                  <select 
-                    className="sap-input w-full"
-                    value={ledgerProjectId}
-                    onChange={(e) => setLedgerProjectId(e.target.value)}
-                  >
-                    <option value="">-- Select Project Site --</option>
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1">Target Material Item *</label>
-                  <select 
-                    className="sap-input w-full"
-                    value={ledgerItemId}
-                    onChange={(e) => setLedgerItemId(e.target.value)}
-                  >
-                    <option value="">-- Select Material Item --</option>
-                    {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <button 
-                    onClick={exportPDFLedger}
-                    disabled={!ledgerProjectId || !ledgerItemId || materialLedger.length === 0}
-                    className="sap-btn w-full flex items-center justify-center gap-1.5 disabled:opacity-55 disabled:cursor-not-allowed"
-                  >
-                    <Printer size={13} /> Export PDF Ledger Statement
-                  </button>
-                </div>
-              </div>
+        {activeTab === 'reconciliation' && (
+          <div className="space-y-4">
+            <div className="bg-slate-50 p-4 border border-blue-200 text-xs rounded shadow-xs space-y-2">
+              <h3 className="font-extrabold text-blue-900 flex items-center gap-1">
+                <Info size={14} /> Labour Contractor Reconciliation Protocol
+              </h3>
+              <p className="text-slate-700 leading-relaxed font-sans">
+                Below is a dynamic, automated listing of client-supplied construction material balances calculated live across our operational sites. This helps ensure precise audits of client assets, materials left on site, and returned packaging units.
+                <strong> Formulas used: Material Balance = Gross Receipts - Gross Returns.</strong>
+              </p>
             </div>
 
-            {/* Ledger Results */}
-            {ledgerProjectId && ledgerItemId ? (
-              <div className="bg-white border border-[#b2c0cc]">
-                <div className="bg-[#eef2f6] px-2 py-1.5 border-b border-[#b2c0cc] flex items-center justify-between">
-                  <span className="font-semibold text-[#0056b3]">
-                    Chronological Ledger Trace (Site: {' '}
-                    <strong className="text-slate-800">
-                      {projects.find(p => p.id === ledgerProjectId)?.name}
-                    </strong> 
-                    {' '}| Item: {' '}
-                    <strong className="text-slate-800">
-                      {materialItems.find(i => i.id === ledgerItemId)?.itemName}
-                    </strong>
-                    )
-                  </span>
-                </div>
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-[#1a365d]">Item-wise Global Balancing Statements</span>
+                <span className="text-slate-500 font-mono text-[10px]">Aggregated across all active projects</span>
+              </div>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px]">
+                    <th className="py-2 px-3">Material Item</th>
+                    <th className="py-2 px-3 text-right">Gross Receipts Volume</th>
+                    <th className="py-2 px-3 text-right">Gross Returns Volume</th>
+                    <th className="py-2 px-3 text-right">Total Net Balance Inventory</th>
+                    <th className="py-2 px-3">UoM</th>
+                    <th className="py-2 px-3">Operational Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {itemWiseSummary.map((item, index) => (
+                    <tr key={index} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 font-bold text-gray-900">{getItemName(item.itemId)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-blue-700 font-semibold">{item.received}</td>
+                      <td className="py-2 px-3 text-right font-mono text-purple-700 font-semibold">{item.returned}</td>
+                      <td className="py-2 px-3 text-right font-mono font-extrabold text-emerald-800 bg-emerald-50/20">{item.balance}</td>
+                      <td className="py-2 px-3 text-gray-400 font-semibold">{getItemUnit(item.itemId)}</td>
+                      <td className="py-2 px-3">
+                        {item.balance > 0 ? (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-bold">In-Transit / Site stock</span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] bg-green-100 text-green-800 font-bold">Perfect Reconciliation</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {itemWiseSummary.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center py-6 text-gray-400">No active master inventory items possess transits to balance yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
-                <div className="overflow-x-auto">
-                  <table className="sap-table w-full">
+        {/* =========================================================================
+            6. MATERIAL SITE TRANSFERS
+            ========================================================================= */}
+        {activeTab === 'transfer' && (
+          <div className="space-y-4">
+            {editTargetId && (
+              <div className="bg-white border border-[#b2c0cc] p-4 shadow-xs space-y-3 rounded">
+                <h3 className="font-semibold text-xs text-[#1a365d] border-b pb-1">Record Site-to-Site Transit Dispatch</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-sans">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Transfer Date *</label>
+                    <input type="date" className="w-full p-2 border rounded" value={transferForm.transferDate} onChange={e => setTransferForm({ ...transferForm, transferDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Source Complex (From Site) *</label>
+                    <select className="w-full p-2 border rounded bg-white font-semibold" value={transferForm.fromProjectId} onChange={e => setTransferForm({ ...transferForm, fromProjectId: e.target.value })}>
+                      <option value="">-- Choose Origin site --</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Destination Complex (To Site) *</label>
+                    <select className="w-full p-2 border rounded bg-white font-semibold" value={transferForm.toProjectId} onChange={e => setTransferForm({ ...transferForm, toProjectId: e.target.value })}>
+                      <option value="">-- Choose Destination site --</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Material Item *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={transferForm.itemId} onChange={e => setTransferForm({ ...transferForm, itemId: e.target.value })}>
+                      <option value="">-- Choose item --</option>
+                      {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Quantity Transferred *</label>
+                    <input type="number" min="0" className="w-full p-2 border rounded font-mono font-bold" value={transferForm.qty} onChange={e => setTransferForm({ ...transferForm, qty: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="text-xs">
+                  <label className="block text-gray-700 font-bold mb-1">Authorized Remarks / Gate Pass Ref</label>
+                  <input type="text" placeholder="e.g. Authorized by Project Coordinator" className="w-full p-2 border rounded" value={transferForm.remarks} onChange={e => setTransferForm({ ...transferForm, remarks: e.target.value })} />
+                </div>
+                <div className="flex justify-end space-x-2 text-xs pt-2">
+                  <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
+                  <button onClick={() => saveEntry('transfer')} className="px-3 py-1.5 bg-[#1a365d] text-white hover:bg-slate-800 rounded">Save Transfer</button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-slate-800">Operational Log of Material Site-to-Site Transfers</span>
+                {!editTargetId && (
+                  <button onClick={() => { setTransferForm({ transferDate: new Date().toISOString().split('T')[0], itemId: '', qty: 0, fromProjectId: '', toProjectId: '', remarks: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800">
+                    <Plus size={11} className="inline" /> Dispatch Material Transfer
+                  </button>
+                )}
+              </div>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px]">
+                    <th className="py-2 px-3">Date</th>
+                    <th className="py-2 px-3">Transferred Material Item</th>
+                    <th className="py-2 px-3 text-right">Transfer Quantity</th>
+                    <th className="py-2 px-3 font-semibold">UoM</th>
+                    <th className="py-2 px-3">Source Site (From)</th>
+                    <th className="py-2 px-3">Destination Site (To)</th>
+                    <th className="py-2 px-3">Gate Pass Details</th>
+                    <th className="py-2 px-3 font-semibold">Authorized Stamp</th>
+                    <th className="py-2 px-3 text-center">Manage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materialTransfers.map(row => (
+                    <tr key={row.id} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 font-mono text-gray-600">{row.transferDate}</td>
+                      <td className="py-2 px-3 font-bold text-slate-900">{getItemName(row.itemId)}</td>
+                      <td className="py-2 px-3 text-right font-mono font-extrabold text-blue-700">{row.qty}</td>
+                      <td className="py-2 px-3 text-gray-400 font-mono text-[10px]">{getItemUnit(row.itemId)}</td>
+                      <td className="py-2 px-3 text-red-700 font-semibold">{getProjectName(row.fromProjectId)}</td>
+                      <td className="py-2 px-3 text-emerald-700 font-semibold">{getProjectName(row.toProjectId)}</td>
+                      <td className="py-2 px-3 text-gray-400 italic">{row.remarks || '-'}</td>
+                      <td className="py-2 px-3 text-gray-500 font-mono text-[8.5px] uppercase">
+                        By {row.createdBy} on {row.createdDate}
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex justify-center items-center space-x-2">
+                          <button onClick={() => { setTransferForm({ transferDate: row.transferDate, itemId: row.itemId, qty: row.qty, fromProjectId: row.fromProjectId, toProjectId: row.toProjectId, remarks: row.remarks || '' }); setEditTargetId(row.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                          <button onClick={() => removeRecord('transfer', row.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {materialTransfers.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="text-center py-8 text-gray-400 uppercase text-[10px] font-semibold">No material transfers completed yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            7. LOSS & DAMAGE REGISTER
+            ========================================================================= */}
+        {activeTab === 'loss_damage' && (
+          <div className="space-y-4">
+            {editTargetId && (
+              <div className="bg-white border border-[#b2c0cc] p-4 shadow-xs space-y-3 rounded">
+                <h3 className="font-semibold text-xs text-[#1a365d] border-b pb-1">Record Material Write-Off / Damage Entry</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-sans">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Accident / Incident Date *</label>
+                    <input type="date" className="w-full p-2 border rounded" value={lossForm.date} onChange={e => setLossForm({ ...lossForm, date: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Incident Project Site *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={lossForm.projectId} onChange={e => setLossForm({ ...lossForm, projectId: e.target.value })}>
+                      <option value="">-- Choose Project --</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Damaged/Lost Material Item *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={lossForm.itemId} onChange={e => setLossForm({ ...lossForm, itemId: e.target.value })}>
+                      <option value="">-- Choose Item --</option>
+                      {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Qty Damaged/Lost *</label>
+                    <input type="number" min="0" className="w-full p-2 border rounded font-bold text-red-700" value={lossForm.qty} onChange={e => setLossForm({ ...lossForm, qty: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Responsible Employee Name *</label>
+                    <input type="text" placeholder="Owner / Driver / Foreman" className="w-full p-2 border rounded font-semibold" value={lossForm.responsiblePerson} onChange={e => setLossForm({ ...lossForm, responsiblePerson: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Agreed Recovery Amount (INR / Optional)</label>
+                    <input type="number" min="0" placeholder="Rs 0.00" className="w-full p-2 border rounded" value={lossForm.recoveryAmount} onChange={e => setLossForm({ ...lossForm, recoveryAmount: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="text-xs">
+                  <label className="block text-gray-700 font-bold mb-1">Reason for Damage / Accident Log *</label>
+                  <input type="text" placeholder="e.g. Broken under heavy forklift movement" className="w-full p-2 border rounded text-red-800 font-semibold" value={lossForm.reason} onChange={e => setLossForm({ ...lossForm, reason: e.target.value })} />
+                </div>
+                <div className="text-xs">
+                  <label className="block text-gray-700 font-bold mb-1">Additional Comments / Remarks</label>
+                  <input type="text" className="w-full p-2 border rounded" value={lossForm.remarks} onChange={e => setLossForm({ ...lossForm, remarks: e.target.value })} />
+                </div>
+                <div className="flex justify-end space-x-2 text-xs pt-2">
+                  <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
+                  <button onClick={() => saveEntry('loss')} className="px-3 py-1.5 bg-red-600 text-white hover:bg-red-800 rounded">Save Loss Entry</button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-red-800 flex items-center gap-1">
+                  <AlertTriangle size={14} className="text-red-600 animate-pulse" /> Materials Loss & Damage Register
+                </span>
+                {!editTargetId && (
+                  <button onClick={() => { setLossForm({ date: new Date().toISOString().split('T')[0], projectId: '', itemId: '', qty: 0, reason: '', responsiblePerson: '', recoveryAmount: 0, remarks: '' }); setEditTargetId('new'); }} className="bg-red-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-red-800">
+                    <Plus size={11} /> File Damage Claim
+                  </button>
+                )}
+              </div>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px]">
+                    <th className="py-2 px-3">Incident Date</th>
+                    <th className="py-2 px-3">Project Site</th>
+                    <th className="py-2 px-3">Material Item Details</th>
+                    <th className="py-2 px-3 text-right text-red-700">Qty Damaged/Lost</th>
+                    <th className="py-2 px-3 font-semibold">Incident Reason</th>
+                    <th className="py-2 px-3">Responsible Rep</th>
+                    <th className="py-2 px-3 text-right">Penal Recovery Amt</th>
+                    <th className="py-2 px-3 font-semibold">Registered Stamp</th>
+                    <th className="py-2 px-3 text-center">Manage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materialLosses.map(row => (
+                    <tr key={row.id} className="hover:bg-red-50/40">
+                      <td className="py-2 px-3 font-mono text-gray-600">{row.date}</td>
+                      <td className="py-2 px-3 font-semibold text-gray-800">{getProjectName(row.projectId)}</td>
+                      <td className="py-2 px-3 font-bold text-slate-900">{getItemName(row.itemId)} <span className="text-gray-400 font-normal">({getItemUnit(row.itemId)})</span></td>
+                      <td className="py-2 px-3 text-right font-mono font-extrabold text-red-600 bg-red-50/10">{row.qty}</td>
+                      <td className="py-2 px-3 text-red-800 font-semibold">{row.reason}</td>
+                      <td className="py-2 px-3 font-medium text-[#1a365d]">{row.responsiblePerson}</td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">{row.recoveryAmount ? `₹${row.recoveryAmount.toLocaleString()}` : '-'}</td>
+                      <td className="py-2 px-3 text-gray-500 font-mono text-[8px] uppercase">By {row.createdBy} on {row.createdDate}</td>
+                      <td className="py-2 px-3">
+                        <div className="flex justify-center items-center space-x-2">
+                          <button onClick={() => { setLossForm({ date: row.date, projectId: row.projectId, itemId: row.itemId, qty: row.qty, reason: row.reason, responsiblePerson: row.responsiblePerson, recoveryAmount: row.recoveryAmount || 0, remarks: row.remarks || '' }); setEditTargetId(row.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                          <button onClick={() => removeRecord('loss', row.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {materialLosses.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="text-center py-8 text-gray-400 font-semibold uppercase text-[10px]">No material losses reported in register.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            8. COMPANY PURCHASES REGISTER
+            ========================================================================= */}
+        {activeTab === 'company_purchase' && (
+          <div className="space-y-4">
+            {editTargetId && (
+              <div className="bg-white border border-[#b2c0cc] p-4 shadow-xs space-y-3 rounded">
+                <h3 className="font-semibold text-xs text-[#1a365d] border-b pb-1">Register Company Capital Goods Purchases</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-sans">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Purchase Date *</label>
+                    <input type="date" className="w-full p-2 border rounded" value={purchaseForm.purchaseDate} onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Supplier Corp / Store *</label>
+                    <input type="text" placeholder="e.g. UltraTech Dealer Corp" className="w-full p-2 border rounded font-semibold" value={purchaseForm.supplierName} onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Purchase Site Allocation *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={purchaseForm.projectId} onChange={e => setPurchaseForm({ ...purchaseForm, projectId: e.target.value })}>
+                      <option value="">-- Choose Target Project Site --</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Inward Material item *</label>
+                    <select className="w-full p-2 border rounded bg-white font-semibold" value={purchaseForm.itemId} onChange={e => setPurchaseForm({ ...purchaseForm, itemId: e.target.value })}>
+                      <option value="">-- Select Master specifications --</option>
+                      {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Quantity Purchased *</label>
+                    <input type="number" min="0" className="w-full p-2 border rounded font-mono font-bold" value={purchaseForm.qty} onChange={e => setPurchaseForm({ ...purchaseForm, qty: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Rate base cost (INR) *</label>
+                    <input type="number" min="0" placeholder="Rs" className="w-full p-2 border rounded font-mono font-bold text-emerald-800" value={purchaseForm.rate} onChange={e => setPurchaseForm({ ...purchaseForm, rate: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Invoice Number *</label>
+                    <input type="text" placeholder="e.g. INV-92841" className="w-full p-2 border rounded font-mono font-semibold text-blue-900" value={purchaseForm.invoiceNumber} onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })} />
+                  </div>
+                </div>
+                <div className="text-xs">
+                  <label className="block text-gray-700 font-bold mb-1">Remarks / Quality verification specs</label>
+                  <input type="text" className="w-full p-2 border rounded" value={purchaseForm.remarks} onChange={e => setPurchaseForm({ ...purchaseForm, remarks: e.target.value })} />
+                </div>
+                <div className="flex justify-end space-x-2 text-xs pt-2">
+                  <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
+                  <button onClick={() => saveEntry('purchase')} className="px-3 py-1.5 bg-[#1a365d] text-white hover:bg-slate-800 rounded">Save Purchase Invoice</button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-slate-800">Historical Corporate Purchase Register</span>
+                {!editTargetId && (
+                  <button onClick={() => { setPurchaseForm({ purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', projectId: '', itemId: '', qty: 0, rate: 0, invoiceNumber: '', remarks: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800">
+                    <Plus size={11} className="inline" /> New Corporate Invoice Bill
+                  </button>
+                )}
+              </div>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px]">
+                    <th className="py-2 px-3">Purchase Date</th>
+                    <th className="py-2 px-3 font-semibold">Supplier Name</th>
+                    <th className="py-2 px-3 text-center">Invoice No</th>
+                    <th className="py-2 px-3">Allocated Site</th>
+                    <th className="py-2 px-3">Corporate Asset Description</th>
+                    <th className="py-2 px-3 text-right">Purchased Qty</th>
+                    <th className="py-2 px-3">UoM</th>
+                    <th className="py-2 px-3 text-right">Agreed Rate</th>
+                    <th className="py-2 px-3 text-right text-emerald-800">Gross Expense Amount</th>
+                    <th className="py-2 px-3 text-center">Manage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materialPurchases.map(row => (
+                    <tr key={row.id} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 font-mono text-gray-600">{row.purchaseDate}</td>
+                      <td className="py-2 px-3 font-bold text-gray-800">{row.supplierName}</td>
+                      <td className="py-2 px-3 font-mono text-center font-semibold text-blue-700">{row.invoiceNumber || '-'}</td>
+                      <td className="py-2 px-3 font-semibold text-gray-700">{getProjectName(row.projectId)}</td>
+                      <td className="py-2 px-3 text-slate-900">{getItemName(row.itemId)} <span className="text-gray-400 font-mono text-[9px]">({materialItems.find(it => it.id === row.itemId)?.category || 'Other'})</span></td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">{row.qty}</td>
+                      <td className="py-2 px-3 text-gray-500 font-mono text-[10px]">{getItemUnit(row.itemId)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-gray-600">₹{row.rate.toLocaleString('en-IN')}</td>
+                      <td className="py-2 px-3 text-right font-mono font-extrabold text-emerald-800 bg-emerald-50/10">₹{row.totalAmount.toLocaleString('en-IN')}</td>
+                      <td className="py-2 px-3">
+                        <div className="flex justify-center items-center space-x-2">
+                          <button onClick={() => { setPurchaseForm({ purchaseDate: row.purchaseDate, supplierName: row.supplierName, projectId: row.projectId, itemId: row.itemId, qty: row.qty, rate: row.rate, invoiceNumber: row.invoiceNumber || '', remarks: row.remarks || '' }); setEditTargetId(row.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                          <button onClick={() => removeRecord('purchase', row.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {materialPurchases.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="text-center py-8 text-gray-400 uppercase text-[10px] font-semibold">No direct corporate purchasing invoices logged.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            9. EQUIPMENT & MACHINERY ASSETS SUITE
+            ========================================================================= */}
+        {activeTab === 'equipment' && (
+          <div className="space-y-4">
+            {editTargetId && (
+              <div className="bg-white border border-[#b2c0cc] p-4 shadow-xs space-y-3 rounded">
+                <h3 className="font-semibold text-xs text-[#1a365d] border-b pb-1">Register Heavy Technical Asset & Machinery</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-sans">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Asset Category Name *</label>
+                    <input type="text" placeholder="e.g. Vibrator / Cutter Machine / Grinder" className="w-full p-2 border rounded font-semibold text-slate-800" value={equipmentForm.name} onChange={e => setEquipmentForm({ ...equipmentForm, name: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1 font-mono">Unique Asset Serialization Code *</label>
+                    <input type="text" placeholder="e.g. EQ-VIB-01" className="w-full p-2 border rounded font-mono font-semibold" value={equipmentForm.assetCode} onChange={e => setEquipmentForm({ ...equipmentForm, assetCode: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Acquisition Supplier / Brand *</label>
+                    <input type="text" placeholder="e.g. Bosch Power / Greaves" className="w-full p-2 border rounded" value={equipmentForm.brand} onChange={e => setEquipmentForm({ ...equipmentForm, brand: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Total Asset Cost (INR) *</label>
+                    <input type="number" min="0" placeholder="Rs" className="w-full p-2 border rounded font-bold font-mono text-emerald-800" value={equipmentForm.purchaseCost} onChange={e => setEquipmentForm({ ...equipmentForm, purchaseCost: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Purchase Date *</label>
+                    <input type="date" className="w-full p-2 border rounded" value={equipmentForm.purchaseDate} onChange={e => setEquipmentForm({ ...equipmentForm, purchaseDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Site Allocation *</label>
+                    <select className="w-full p-2 border rounded bg-white font-semibold" value={equipmentForm.currentSiteId} onChange={e => setEquipmentForm({ ...equipmentForm, currentSiteId: e.target.value })}>
+                      <option value="">-- Choose Allocation --</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Current Operational Status</label>
+                    <select className="w-full p-2 border rounded bg-white font-bold" value={equipmentForm.status} onChange={e => setEquipmentForm({ ...equipmentForm, status: e.target.value as any })}>
+                      {ASSET_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end space-x-2 text-xs pt-2">
+                  <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
+                  <button onClick={() => saveEntry('equipment')} className="px-3 py-1.5 bg-[#1a365d] text-white hover:bg-slate-800 rounded">Register Corporate Asset</button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-[#FAF9F6] border border-[#cbd5e1] p-3 text-xs italic text-gray-600 flex items-center gap-1.5 rounded">
+              <Hammer size={16} className="text-amber-800" />
+              <span>Track our highly durable corporate asset inventory securely (Vibrators, Cutter Machines, Drills, Generators, etc). Group acquisitions are synced.</span>
+            </div>
+
+            <div className="bg-white border border-[#b2c0cc] shadow-xs">
+              <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
+                <span className="font-extrabold text-slate-800">Corporate Assets & Heavy Machinery Inventory</span>
+                {!editTargetId && (
+                  <button onClick={() => { setEquipmentForm({ purchaseDate: new Date().toISOString().split('T')[0], name: '', assetCode: '', brand: '', purchaseCost: 0, currentSiteId: '', status: 'Available', remarks: '' }); setEditTargetId('new'); }} className="bg-[#1a365d] text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-slate-800">
+                    <Plus size={11} /> Register Asset Allocation
+                  </button>
+                )}
+              </div>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 border-b uppercase text-[9px]">
+                    <th className="py-2 px-3">Asset Code</th>
+                    <th className="py-2 px-3">Asset Classification</th>
+                    <th className="py-2 px-3">Acquisition Brand</th>
+                    <th className="py-2 px-3">Date Purchased</th>
+                    <th className="py-2 px-3 text-right">Capital Cost</th>
+                    <th className="py-2 px-3">Assigned Site</th>
+                    <th className="py-2 px-3 text-center">Status</th>
+                    <th className="py-2 px-3 text-center font-semibold">Manage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {assets.map(asset => (
+                    <tr key={asset.id} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 font-mono font-bold text-blue-800">{asset.assetCode}</td>
+                      <td className="py-2 px-3 font-extrabold text-slate-900">{asset.name}</td>
+                      <td className="py-2 px-3 font-medium text-slate-600">{asset.brand}</td>
+                      <td className="py-2 px-3 font-mono text-gray-500">{asset.purchaseDate}</td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-800">₹{asset.purchaseCost.toLocaleString('en-IN')}</td>
+                      <td className="py-2 px-3 font-semibold text-[#1a365d]">{getProjectName(asset.currentSiteId)}</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${asset.status === 'Available' ? 'bg-green-100 text-green-800' : asset.status === 'In Use' ? 'bg-indigo-100 text-indigo-800' : 'bg-red-100 text-red-800'}`}>
+                          {asset.status}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <div className="flex justify-center items-center space-x-2">
+                          <button onClick={() => { setEquipmentForm({ purchaseDate: asset.purchaseDate, name: asset.name, assetCode: asset.assetCode, brand: asset.brand, purchaseCost: asset.purchaseCost, currentSiteId: asset.currentSiteId, status: asset.status, remarks: asset.remarks || '' }); setEditTargetId(asset.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                          <button onClick={() => removeRecord('equipment', asset.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {assets.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="text-center py-8 text-gray-400 font-semibold uppercase text-[10px]">No active heavy equipment acquisitions mapped.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            10. SUPPLIER LEDGER WORKSPACE
+            ========================================================================= */}
+        {activeTab === 'supplier_ledger' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white border border-[#b2c0cc] p-4 flex flex-col justify-between space-y-3 rounded">
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-[11px] text-[#1a365d] uppercase tracking-wide">Record Supplier Payment Receipt</h4>
+                  <p className="text-[10px] text-gray-500">Record payments to suppliers against active purchases</p>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <label className="block text-gray-600 font-bold mb-0.5">Supplier Name *</label>
+                    <input type="text" placeholder="e.g. UltraTech Dealer Corp" className="w-full p-2 border rounded font-semibold" value={paymentForm.supplierName} onChange={e => setPaymentForm({ ...paymentForm, supplierName: e.target.value })} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-gray-600 font-bold mb-0.5">Payment Date *</label>
+                      <input type="date" className="w-full p-2 border rounded" value={paymentForm.paymentDate} onChange={e => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 font-bold mb-0.5">Amount Paid *</label>
+                      <input type="number" min="0" placeholder="Rs" className="w-full p-2 border rounded font-bold font-mono text-emerald-800" value={paymentForm.amountPaid} onChange={e => setPaymentForm({ ...paymentForm, amountPaid: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-gray-600 font-bold mb-0.5">Mode *</label>
+                      <select className="w-full p-2 border rounded bg-white font-semibold" value={paymentForm.paymentMode} onChange={e => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })}>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="Cash">Cash Handover</option>
+                        <option value="Cheque">Cheque Draft</option>
+                        <option value="UPI">UPI Digital Payment</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 font-bold mb-0.5 font-mono">Invoice Reference</label>
+                      <input type="text" placeholder="e.g. INV-92841" className="w-full p-2 border rounded" value={paymentForm.invoiceReference} onChange={e => setPaymentForm({ ...paymentForm, invoiceReference: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 font-mono mb-0.5">Payment remarks</label>
+                    <input type="text" className="w-full p-2 border rounded" value={paymentForm.remarks} onChange={e => setPaymentForm({ ...paymentForm, remarks: e.target.value })} />
+                  </div>
+                </div>
+                <button onClick={() => { setEditTargetId('new'); saveEntry('payment'); }} className="w-full bg-emerald-600 hover:bg-emerald-800 text-white font-extrabold text-xs py-2 rounded shadow-xs mt-2">
+                  Post Supplier Payment Voucher
+                </button>
+              </div>
+
+              <div className="md:col-span-2 bg-white border border-[#b2c0cc] p-4 flex flex-col justify-between rounded shadow-xs">
+                <div className="space-y-1 border-b pb-2 mb-3">
+                  <h4 className="font-extrabold text-xs text-[#1a365d]">Supplier Outstanding Balance Sheet</h4>
+                  <p className="text-[10px] text-gray-500">Live summary of accumulated invoice bills, past payments and current outstanding balance liabilities.</p>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[300px]">
+                  <table className="w-full text-left text-xs">
                     <thead>
-                      <tr>
-                        <th className="w-12 text-center">Sr. No</th>
-                        <th>Transaction Date</th>
-                        <th>Voucher No</th>
-                        <th>Transaction Type</th>
-                        <th className="text-right">Quantity Inward (+)</th>
-                        <th className="text-right">Quantity Outward (-)</th>
-                        <th className="text-right">Site Running Balance</th>
-                        <th>Transaction Audit Details</th>
+                      <tr className="bg-slate-50 text-slate-500 border-b uppercase text-[8.5px]">
+                        <th className="py-2 px-3">Supplier Name Location</th>
+                        <th className="py-2 px-3 text-right">Sum Invoice Purchases</th>
+                        <th className="py-2 px-3 text-right">Sum Payments Handover</th>
+                        <th className="py-2 px-3 text-right text-red-700">Net Outstanding Balance</th>
+                        <th className="py-2 px-3 text-center">Audit Statement</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {materialLedger.map((l, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="text-center font-mono">{idx + 1}</td>
-                          <td className="font-mono text-gray-600">{l.date}</td>
-                          <td className="font-mono font-semibold text-[#0056b3]">{l.voucherNo}</td>
-                          <td>
-                            {l.type === 'Purchase' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-medium">Purchase Inflow</span>}
-                            {l.type === 'Issue' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-medium">Site Dispatch</span>}
-                            {l.type === 'Return' && <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-800 font-medium font-bold">Return entry</span>}
-                          </td>
-                          <td className="text-right font-mono text-emerald-600 font-medium">{l.qtyIn || '-'}</td>
-                          <td className="text-right font-mono text-amber-600 font-medium">{l.qtyOut || '-'}</td>
-                          <td className="text-right font-mono font-bold text-blue-700">{l.runningBalance}</td>
-                          <td>
-                            <span className="text-slate-700">{l.description}</span>
-                          </td>
-                        </tr>
-                      ))}
-                      {materialLedger.length === 0 && (
-                        <tr>
-                          <td colSpan={8} className="text-center py-8 text-gray-500">
-                            No ledger transactions recorded for this combination of Site and Material.
-                          </td>
-                        </tr>
-                      )}
+                    <tbody className="divide-y divide-gray-100">
+                      {Array.from(new Set([...materialPurchases.map(p => p.supplierName), ...supplierPayments.map(p => p.supplierName)]))
+                        .map((supplier, idx) => {
+                          const purTotal = materialPurchases.filter(p => p.supplierName === supplier).reduce((sum, p) => sum + Number(p.totalAmount || 0), 0);
+                          const payTotal = supplierPayments.filter(p => p.supplierName === supplier).reduce((sum, p) => sum + Number(p.amountPaid || 0), 0);
+                          const oust = Math.max(0, purTotal - payTotal);
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-100/40">
+                              <td className="py-2 px-3 font-semibold text-gray-800">{supplier}</td>
+                              <td className="py-2 px-3 text-right font-mono text-gray-600">₹{purTotal.toLocaleString('en-IN')}</td>
+                              <td className="py-2 px-3 text-right font-mono text-emerald-700">₹{payTotal.toLocaleString('en-IN')}</td>
+                              <td className="py-2 px-3 text-right font-mono font-extrabold text-red-700 bg-red-50/10">₹{oust.toLocaleString('en-IN')}</td>
+                              <td className="py-2 px-3 text-center">
+                                <button onClick={() => setSelectedLedgerSupplier(supplier)} className="text-[10px] bg-slate-100 hover:bg-[#1a365d] hover:text-white px-2 py-0.5 border rounded">
+                                  Select Ledger
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
               </div>
-            ) : (
-              <div className="bg-white border border-[#b2c0cc] p-8 text-center text-gray-500">
-                Please select a high-level Project Site and Material Item from the selects above to load the running balance audit trace.
+            </div>
+
+            {/* Selected Supplier detailed Ledger list */}
+            {selectedLedgerSupplier && (
+              <div className="bg-white border border-[#b2c0cc] rounded shadow-xs">
+                <div className="bg-[#1a365d] px-3 py-2 text-white flex justify-between items-center text-xs font-sans">
+                  <span className="font-extrabold">CHRONOLOGICAL LEDGER STATEMENT: <strong className="text-emerald-300 uppercase underline">{selectedLedgerSupplier}</strong></span>
+                  <button onClick={() => setSelectedLedgerSupplier('')} className="text-gray-300 hover:text-white font-bold">Close Statement</button>
+                </div>
+                <div className="p-3">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 border-b uppercase text-[9px] tracking-wider">
+                        <th className="py-2 px-3">Posting Date</th>
+                        <th className="py-2 px-3">Transaction Voucher Type</th>
+                        <th className="py-2 px-3">Allocation Project</th>
+                        <th className="py-2 px-3">Reference Ref</th>
+                        <th className="py-2 px-3 text-right">Debit Owed Bill (+)</th>
+                        <th className="py-2 px-3 text-right">Credit Payment Made (-)</th>
+                        <th className="py-2 px-3 text-right text-red-700">Cumulative Liability Outstanding Balance</th>
+                        <th className="py-2 px-3">Details / audit comments</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {activeSupplierLedgerData.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/40">
+                          <td className="py-2 px-3 font-mono text-gray-500">{row.date}</td>
+                          <td className="py-2 px-3 font-bold text-slate-800">{row.type}</td>
+                          <td className="py-2 px-3 font-semibold text-gray-600">{row.project}</td>
+                          <td className="py-2 px-3 font-mono text-blue-800 font-bold">{row.ref}</td>
+                          <td className="py-2 px-3 text-right font-mono text-red-600">{row.debit > 0 ? `₹${row.debit.toLocaleString('en-IN')}` : '-'}</td>
+                          <td className="py-2 px-3 text-right font-mono text-emerald-700">{row.credit > 0 ? `₹${row.credit.toLocaleString('en-IN')}` : '-'}</td>
+                          <td className="py-2 px-3 text-right font-mono font-extrabold text-red-700 bg-red-50/10">₹{row.runningOutstanding.toLocaleString('en-IN')}</td>
+                          <td className="py-2 px-3 text-gray-500 italic">{row.details}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
         )}
+
+        {/* =========================================================================
+            11. PDF REPORTS GENERATION PANEL
+            ========================================================================= */}
+        {activeTab === 'reports' && (
+          <div className="space-y-4">
+            <div className="bg-white border border-[#b2c0cc] p-4 rounded shadow-xs space-y-4 font-sans">
+              <div className="border-b pb-2">
+                <h3 className="font-extrabold text-[#1a365d] text-sm flex items-center gap-1.5">
+                  <Printer size={18} /> Administrative Report Download Console
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">Please choose from the certified audit listings below to download standard structural PDF document sheets.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {[
+                  { title: "Client Material Receipt Report", desc: "Detailed chronological record of materials supplied by client." },
+                  { title: "Client Material Return Report", desc: "Detailed records of raw/scrap materials returned to clients." },
+                  { title: "Material Reconciliation Report", desc: "Comparative item-wise inward vs returned balance matrix." },
+                  { title: "Site-wise Material Balance Report", desc: "Balance sheet filtered for site locations." },
+                  { title: "Material Transfer Report", desc: "Complete log of project-to-project material transits." },
+                  { title: "Loss & Damage Report", desc: "Filing statements of broken components, write-offs and penalties." },
+                  { title: "Purchase Register", desc: "Inward invoice tracker for consumables and safety items purchased." },
+                  { title: "Equipment Purchase Report", desc: "Heavy mechanical asset register tracker." },
+                  { title: "Supplier Outstanding Statement", desc: "Outstanding bills statement group sheets with payments." }
+                ].map((rep, idx) => (
+                  <div key={idx} className="bg-slate-50 p-3 border border-[#cbd5e1] hover:border-slate-400/80 transition flex flex-col justify-between space-y-2 rounded-xs shadow-xs">
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900">{idx + 1}. {rep.title}</h4>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-normal font-sans">{rep.desc}</p>
+                    </div>
+                    <button
+                      onClick={() => triggerPDFReport(rep.title)}
+                      className="w-fit text-[10px] bg-[#1a365d] hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded flex items-center gap-1"
+                    >
+                      <Printer size={11} /> Download PDF report
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      <DuplicateWarningModal
+        isOpen={dupModalOpen}
+        moduleName={dupModuleTitle}
+        warningText={dupWarningText}
+        duplicates={dupData}
+        currentUser={user}
+        onCancel={() => {
+          setDupModalOpen(false);
+          setPendingSaveFn(null);
+        }}
+        onSaveAnyway={(reason) => {
+          setDupModalOpen(false);
+          if (pendingSaveFn) {
+            pendingSaveFn(reason);
+            setPendingSaveFn(null);
+          }
+        }}
+        onViewExisting={(record) => {
+          setDupModalOpen(false);
+          // Set edit state using the record properties
+          setEditTargetId(record.id);
+          if (dupModuleTitle === 'Client Material Receipt') {
+            setReceiptForm({
+              projectId: record.projectId || '',
+              itemId: record.itemId || '',
+              qty: Number(record.qty || 0),
+              issuedTo: record.issuedTo || '',
+              remarks: record.remarks || '',
+              voucherNo: record.voucherNo || '',
+              issueDate: record.issueDate || '',
+              tower: record.tower || '',
+              floor: record.floor || ''
+            });
+            setActiveTab('receipt');
+          } else if (dupModuleTitle === 'Client Material Return') {
+            setReturnForm({
+              projectId: record.projectId || '',
+              itemId: record.itemId || '',
+              qty: Number(record.qty || 0),
+              returnedBy: record.returnedBy || '',
+              remarks: record.remarks || '',
+              voucherNo: record.voucherNo || '',
+              returnDate: record.returnDate || ''
+            });
+            setActiveTab('return');
+          } else if (dupModuleTitle === 'Material Purchase') {
+            setPurchaseForm({
+              projectId: record.projectId || '',
+              itemId: record.itemId || '',
+              qty: record.qty?.toString() || '',
+              rate: record.rate?.toString() || '',
+              supplierName: record.supplierName || '',
+              invoiceNumber: record.invoiceNumber || '',
+              remarks: record.remarks || '',
+              purchaseDate: record.purchaseDate || ''
+            });
+            setActiveTab('company_purchase');
+          } else if (dupModuleTitle === 'Supplier Payment') {
+            setPaymentForm({
+              supplierName: record.supplierName || '',
+              paymentDate: record.paymentDate || '',
+              amountPaid: record.amountPaid?.toString() || '',
+              paymentMode: record.paymentMode || 'Cash',
+              invoiceReference: record.invoiceReference || '',
+              remarks: record.remarks || ''
+            });
+            setActiveTab('supplier_ledger');
+          }
+        }}
+      />
     </div>
   );
 };

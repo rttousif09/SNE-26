@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -29,6 +29,9 @@ interface AppState {
   workerLedger: WorkerLedgerEntry[];
   workerHolds: WorkerHold[];
   workerRecoveryAuditTrail: WorkerRecoveryAuditTrail[];
+  attendance: Attendance[];
+  trackedBills: TrackedBill[];
+  billTimelines: BillTimelineEntry[];
 }
 
 interface AppContextType extends AppState {
@@ -106,6 +109,11 @@ interface AppContextType extends AppState {
   updateWorkerHold: (id: string, hold: Partial<WorkerHold>) => Promise<void>;
   deleteWorkerHold: (id: string) => Promise<void>;
   addWorkerRecoveryAudit: (audit: Omit<WorkerRecoveryAuditTrail, 'id'>) => Promise<void>;
+  addAttendance: (att: Omit<Attendance, 'id'>) => Promise<void>;
+  addTrackedBill: (bill: Omit<TrackedBill, 'id'>) => Promise<void>;
+  updateTrackedBill: (id: string, bill: Partial<TrackedBill>) => Promise<void>;
+  deleteTrackedBill: (id: string) => Promise<void>;
+  addBillTimeline: (timeline: Omit<BillTimelineEntry, 'id'>) => Promise<void>;
 }
 
 const initialState: AppState = {
@@ -171,6 +179,9 @@ const initialState: AppState = {
   workerLedger: [],
   workerHolds: [],
   workerRecoveryAuditTrail: [],
+  attendance: [],
+  trackedBills: [],
+  billTimelines: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -221,6 +232,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     workerLedger: [],
     workerHolds: [],
     workerRecoveryAuditTrail: [],
+    attendance: [],
+    trackedBills: [],
+    billTimelines: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
@@ -229,7 +243,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const [
           pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes, assetsRes, assetTransfersRes, assetMaintenancesRes,
-          wlRes, whRes, wratRes, asaRes
+          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes
         ] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
@@ -256,7 +270,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/worker-ledger').then(r => r.json()).catch(() => []),
           fetch('/api/worker-holds').then(r => r.json()).catch(() => []),
           fetch('/api/worker-recovery-audit').then(r => r.json()).catch(() => []),
-          fetch('/api/advance-sheet-approvals').then(r => r.json()).catch(() => [])
+          fetch('/api/advance-sheet-approvals').then(r => r.json()).catch(() => []),
+          fetch('/api/attendance').then(r => r.json()).catch(() => []),
+          fetch('/api/tracked-bills').then(r => r.json()).catch(() => []),
+          fetch('/api/bill-timelines').then(r => r.json()).catch(() => [])
         ]);
 
         const stateObj: AppState = {
@@ -285,7 +302,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           assetMaintenances: assetMaintenancesRes || [],
           workerLedger: wlRes || [],
           workerHolds: whRes || [],
-          workerRecoveryAuditTrail: wratRes || []
+          workerRecoveryAuditTrail: wratRes || [],
+          attendance: attRes || [],
+          trackedBills: tbRes || [],
+          billTimelines: tlRes || []
         };
         setState(stateObj);
 
@@ -312,6 +332,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('assets', assetsRes || []).catch(() => {});
         await saveAllToStore('assetTransfers', assetTransfersRes || []).catch(() => {});
         await saveAllToStore('assetMaintenances', assetMaintenancesRes || []).catch(() => {});
+        await saveAllToStore('attendance', attRes || []).catch(() => {});
+        await saveAllToStore('trackedBills', tbRes || []).catch(() => {});
+        await saveAllToStore('billTimelines', tlRes || []).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -341,6 +364,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const workerHolds = await getAllFromStore('workerHolds').catch(() => []);
           const workerRecoveryAuditTrail = await getAllFromStore('workerRecoveryAuditTrail').catch(() => []);
           const advanceSheetApprovals = await getAllFromStore('advanceSheetApprovals').catch(() => []);
+          const attendance = await getAllFromStore('attendance').catch(() => []);
+          const trackedBills = await getAllFromStore('trackedBills').catch(() => []);
+          const billTimelines = await getAllFromStore('billTimelines').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
@@ -350,7 +376,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                             materialItems.length === 0 && materialIssues.length === 0 && materialReturns.length === 0 && materialPurchases.length === 0 &&
                             labourPlannings.length === 0 && workerTransfers.length === 0 && assets.length === 0 &&
                             assetTransfers.length === 0 && assetMaintenances.length === 0 &&
-                            workerLedger.length === 0 && workerHolds.length === 0 && workerRecoveryAuditTrail.length === 0;
+                            workerLedger.length === 0 && workerHolds.length === 0 && workerRecoveryAuditTrail.length === 0 && attendance.length === 0 &&
+                            trackedBills.length === 0 && billTimelines.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -381,7 +408,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               assetMaintenances,
               workerLedger,
               workerHolds,
-              workerRecoveryAuditTrail
+              workerRecoveryAuditTrail,
+              attendance,
+              trackedBills,
+              billTimelines
             });
           }
         } catch (e) {
@@ -419,6 +449,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await saveAllToStore('workerPayments', backupState.workerPayments || []);
       await saveAllToStore('approvals', backupState.approvals || []);
       await saveAllToStore('paymentSheetApprovals', backupState.paymentSheetApprovals || []);
+      await saveAllToStore('attendance', backupState.attendance || []);
+      await saveAllToStore('trackedBills', backupState.trackedBills || []).catch(() => {});
+      await saveAllToStore('billTimelines', backupState.billTimelines || []).catch(() => {});
 
       setState(backupState);
       return true;
@@ -1631,6 +1664,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addAttendance = async (att: Omit<Attendance, 'id'>) => {
+    const id = generateId();
+    const newAtt: Attendance = { ...att, id };
+    setState(s => {
+      const updated = [...s.attendance, newAtt];
+      saveAllToStore('attendance', updated).catch(console.error);
+      return { ...s, attendance: updated };
+    });
+    try {
+      await fetch('/api/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAtt)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addTrackedBill = async (bill: Omit<TrackedBill, 'id'>) => {
+    const newBill = { ...bill, id: generateId() };
+    setState(s => ({ ...s, trackedBills: [...s.trackedBills, newBill] }));
+    try {
+      await fetch('/api/tracked-bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newBill)
+      });
+      await saveAllToStore('trackedBills', [...state.trackedBills, newBill]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateTrackedBill = async (id: string, bill: Partial<TrackedBill>) => {
+    setState(s => {
+      const updated = s.trackedBills.map(tb => tb.id === id ? { ...tb, ...bill } : tb);
+      saveAllToStore('trackedBills', updated).catch(() => {});
+      return { ...s, trackedBills: updated };
+    });
+    try {
+      const existing = state.trackedBills.find(tb => tb.id === id);
+      if (existing) {
+        const merged = { ...existing, ...bill };
+        await fetch(`/api/tracked-bills/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteTrackedBill = async (id: string) => {
+    setState(s => {
+      const filteredBills = s.trackedBills.filter(tb => tb.id !== id);
+      const filteredTimelines = s.billTimelines.filter(tl => tl.billId !== id);
+      saveAllToStore('trackedBills', filteredBills).catch(() => {});
+      saveAllToStore('billTimelines', filteredTimelines).catch(() => {});
+      return { ...s, trackedBills: filteredBills, billTimelines: filteredTimelines };
+    });
+    try {
+      await fetch(`/api/tracked-bills/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addBillTimeline = async (timeline: Omit<BillTimelineEntry, 'id'>) => {
+    const newTimeline = { ...timeline, id: generateId() };
+    setState(s => {
+      const updated = [...s.billTimelines, newTimeline];
+      saveAllToStore('billTimelines', updated).catch(() => {});
+      return { ...s, billTimelines: updated };
+    });
+    try {
+      await fetch('/api/bill-timelines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTimeline)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -1707,7 +1828,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addWorkerHold,
       updateWorkerHold,
       deleteWorkerHold,
-      addWorkerRecoveryAudit
+      addWorkerRecoveryAudit,
+      addAttendance,
+      addTrackedBill,
+      updateTrackedBill,
+      deleteTrackedBill,
+      addBillTimeline
     }}>
       {children}
     </AppContext.Provider>

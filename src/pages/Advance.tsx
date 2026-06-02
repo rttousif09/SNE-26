@@ -3,18 +3,26 @@ import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { Save, Edit, X, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { checkWorkerAdvanceDuplicate, addOverrideLog } from '../lib/duplicateChecker';
+import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 
 export const Advance: React.FC = () => {
   const { user, advances, projects, workers, addAdvance, updateAdvance, deleteAdvance, advanceSheetApprovals, addAdvanceSheetApproval } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
+  
+  // Duplicate verification states
+  const [dupModalOpen, setDupModalOpen] = useState(false);
+  const [dupData, setDupData] = useState<any[]>([]);
+  const [pendingSaveFn, setPendingSaveFn] = useState<((overrideReason?: string) => void) | null>(null);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sheetMonth, setSheetMonth] = useState('');
   const [sheetRemarks, setSheetRemarks] = useState('');
   const [formData, setFormData] = useState({
     workerId: '', amount: '', paidBy: 'Saddam Hussain', paidByDetails: '', remarks: '', date: '',
-    isDeducted: false, deductionMonth: '', deductionAmount: '',
+    isDeducted: false, deductionMonth: '', deductionAmount: '', deductionDetails: '',
     receiptProof: '', receiptFileName: '', receiptFileType: ''
   });
 
@@ -29,6 +37,7 @@ export const Advance: React.FC = () => {
       isDeducted: advance.isDeducted || false,
       deductionMonth: advance.deductionMonth || '',
       deductionAmount: advance.deductionAmount?.toString() || '',
+      deductionDetails: advance.deductionDetails || '',
       receiptProof: advance.receiptProof || '',
       receiptFileName: advance.receiptFileName || '',
       receiptFileType: advance.receiptFileType || ''
@@ -40,7 +49,7 @@ export const Advance: React.FC = () => {
     setEditingId(null);
     setFormData({ 
       workerId: '', amount: '', paidBy: 'Saddam Hussain', paidByDetails: '', remarks: '', date: '',
-      isDeducted: false, deductionMonth: '', deductionAmount: '',
+      isDeducted: false, deductionMonth: '', deductionAmount: '', deductionDetails: '',
       receiptProof: '', receiptFileName: '', receiptFileType: '' 
     });
   };
@@ -94,18 +103,48 @@ export const Advance: React.FC = () => {
       isDeducted: formData.isDeducted,
       deductionMonth: formData.isDeducted ? formData.deductionMonth : undefined,
       deductionAmount: formData.isDeducted && formData.deductionAmount ? Number(formData.deductionAmount) : undefined,
+      deductionDetails: formData.isDeducted ? formData.deductionDetails : undefined,
       receiptProof: formData.receiptProof,
       receiptFileName: formData.receiptFileName,
       receiptFileType: formData.receiptFileType
     };
 
-    if (editingId) {
-      updateAdvance(editingId, payload);
-    } else {
-      addAdvance(payload);
+    const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
+      if (editingId) {
+        updateAdvance(editingId, payload);
+      } else {
+        addAdvance(payload);
+      }
+      
+      if (bypassCheck && overrideReason) {
+        addOverrideLog(
+          user?.username || 'Unknown',
+          'Worker Advance',
+          `Worker: ${workers.find(w => w.id === formData.workerId)?.name || 'Unknown'} (ID: ${formData.workerId}), Date: ${formData.date}, Amount: Rs ${Number(formData.amount).toLocaleString()}`,
+          overrideReason
+        );
+      }
+      handleCancel();
+    };
+
+    const countMatches = checkWorkerAdvanceDuplicate(
+      advances,
+      {
+        workerId: formData.workerId,
+        date: formData.date,
+        amount: Number(formData.amount)
+      },
+      editingId || undefined
+    );
+
+    if (countMatches.length > 0) {
+      setDupData(countMatches);
+      setPendingSaveFn(() => (reason?: string) => onProceedSave(true, reason || 'No details'));
+      setDupModalOpen(true);
+      return;
     }
-    
-    handleCancel();
+
+    onProceedSave();
   };
 
   const getWorkerDetails = (id: string) => {
@@ -199,12 +238,21 @@ export const Advance: React.FC = () => {
             {formData.isDeducted && (
               <>
                 <div className="flex items-center">
-                  <label className="w-32 text-gray-700">Deduction Month:</label>
+                  <label className="w-32 text-gray-700">Deduction Month *:</label>
                   <input required type="month" className="sap-input flex-1" value={formData.deductionMonth} onChange={e => setFormData({...formData, deductionMonth: e.target.value})} />
                 </div>
                 <div className="flex items-center">
-                  <label className="w-32 text-gray-700">Deduct Amount:</label>
+                  <label className="w-32 text-gray-700">Deduct Amount *:</label>
                   <input required type="number" className="sap-input flex-1" value={formData.deductionAmount} onChange={e => setFormData({...formData, deductionAmount: e.target.value})} />
+                </div>
+                <div className="flex items-start col-span-2">
+                  <label className="w-32 text-gray-700 pt-1">Deduction Details:</label>
+                  <textarea 
+                    className="sap-input flex-1 h-14 resize-none p-1.5" 
+                    value={formData.deductionDetails} 
+                    onChange={e => setFormData({...formData, deductionDetails: e.target.value})} 
+                    placeholder="Provide details: which month's payment deduction, how much payment got, payment ID, etc."
+                  />
                 </div>
               </>
             )}
@@ -265,7 +313,7 @@ export const Advance: React.FC = () => {
               {filteredAdvances.map((advance, idx) => {
                 const worker = getWorkerDetails(advance.workerId);
                 const deductionText = advance.isDeducted 
-                  ? `Yes (${advance.deductionMonth}, ₹${advance.deductionAmount})`
+                  ? `Yes (${advance.deductionMonth}, ₹${advance.deductionAmount}${advance.deductionDetails ? `: ${advance.deductionDetails}` : ''})`
                   : 'No';
                 return (
                   <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={advance.id} className="hover:bg-[#e6f2ff] cursor-default">
@@ -379,6 +427,29 @@ export const Advance: React.FC = () => {
           setDeleteId(null);
         }}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <DuplicateWarningModal
+        isOpen={dupModalOpen}
+        moduleName="Worker Advance"
+        warningText="Warning: An advance record for this worker may already exist on the same date and amount. Please review before saving."
+        duplicates={dupData}
+        currentUser={user}
+        onCancel={() => {
+          setDupModalOpen(false);
+          setPendingSaveFn(null);
+        }}
+        onSaveAnyway={(reason) => {
+          setDupModalOpen(false);
+          if (pendingSaveFn) {
+            pendingSaveFn(reason);
+            setPendingSaveFn(null);
+          }
+        }}
+        onViewExisting={(record) => {
+          setDupModalOpen(false);
+          handleEdit(record);
+        }}
       />
     </div>
   );

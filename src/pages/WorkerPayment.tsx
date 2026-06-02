@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { checkWorkerPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
+import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 
 export const WorkerPayment: React.FC = () => {
   const { 
@@ -22,6 +24,11 @@ export const WorkerPayment: React.FC = () => {
   
   const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
+  
+  // Duplicate verification state
+  const [dupModalOpen, setDupModalOpen] = useState(false);
+  const [dupData, setDupData] = useState<any[]>([]);
+  const [pendingSaveFn, setPendingSaveFn] = useState<((overrideReason?: string) => void) | null>(null);
   
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
@@ -266,13 +273,43 @@ export const WorkerPayment: React.FC = () => {
       paymentStatus: (formData.paymentStatus || 'Pending') as 'Pending' | 'Paid'
     };
 
-    if (editingId) {
-      updateWorkerPayment(editingId, paymentData);
-    } else {
-      addWorkerPayment(paymentData);
+    const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
+      if (editingId) {
+        updateWorkerPayment(editingId, paymentData);
+      } else {
+        addWorkerPayment(paymentData);
+      }
+      
+      if (bypassCheck && overrideReason) {
+        addOverrideLog(
+          user?.username || 'Unknown',
+          'Worker Payment',
+          `Worker: ${workers.find(w => w.id === formData.workerId)?.name || 'Unknown'} (ID: ${formData.workerId}), Period: ${formData.month}, Date: ${formData.date}, Net Amount: Rs ${netPayment.toLocaleString()}`,
+          overrideReason
+        );
+      }
+      handleCancel();
+    };
+
+    const countMatches = checkWorkerPaymentDuplicate(
+      workerPayments,
+      {
+         workerId: formData.workerId,
+         month: formData.month,
+         date: formData.date,
+         amount: netPayment
+      },
+      editingId || undefined
+    );
+
+    if (countMatches.length > 0) {
+      setDupData(countMatches);
+      setPendingSaveFn(() => (reason?: string) => onProceedSave(true, reason || 'No details'));
+      setDupModalOpen(true);
+      return;
     }
-    
-    handleCancel();
+
+    onProceedSave();
   };
 
   const handleSendToApproval = (e: React.FormEvent) => {
@@ -1189,6 +1226,50 @@ export const WorkerPayment: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Duplicate Verification Warning Modal */}
+      <DuplicateWarningModal
+        isOpen={dupModalOpen}
+        moduleName="Worker Payment"
+        warningText="Warning: A payment record for this worker may already exist. Please review before saving."
+        duplicates={dupData}
+        currentUser={user}
+        onCancel={() => {
+          setDupModalOpen(false);
+          setPendingSaveFn(null);
+        }}
+        onSaveAnyway={(reason) => {
+          setDupModalOpen(false);
+          if (pendingSaveFn) {
+            pendingSaveFn(reason);
+            setPendingSaveFn(null);
+          }
+        }}
+        onViewExisting={(record) => {
+          setDupModalOpen(false);
+          setEditingId(record.id);
+          // Load that record's data into formData
+          setFormData({
+            workerId: record.workerId,
+            month: record.month,
+            workAmount: String(record.workAmount || ''),
+            workDays: String(record.workDays || ''),
+            ratePerDay: String(record.ratePerDay || ''),
+            overtimeHours: String(record.overtimeHours || ''),
+            allowance: String(record.allowance || ''),
+            manualKharchi: '',
+            messDeduction: String(record.messDeduction || ''),
+            level: record.level || '',
+            supplyAmount: String(record.supplyAmount || ''),
+            date: record.date || new Date().toISOString().split('T')[0],
+            supplyDetails: record.supplyDetails ? JSON.parse(record.supplyDetails) : [],
+            recoveryAmount: String(record.recoveryAmount || ''),
+            otherDeduction: String(record.otherDeduction || ''),
+            otherDeductionDetails: record.otherDeductionDetails || '',
+            paymentStatus: record.paymentStatus || 'Pending'
+          });
+        }}
+      />
     </div>
   );
 };

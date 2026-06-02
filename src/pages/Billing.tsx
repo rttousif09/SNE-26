@@ -3,11 +3,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { checkBillingDuplicate, addOverrideLog } from '../lib/duplicateChecker';
+import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 
 export const Billing: React.FC = () => {
   const { user, billings, projects, addBilling, updateBilling, deleteBilling } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
+  
+  // Duplicate verification states
+  const [dupModalOpen, setDupModalOpen] = useState(false);
+  const [dupData, setDupData] = useState<any[]>([]);
+  const [pendingSaveFn, setPendingSaveFn] = useState<((overrideReason?: string) => void) | null>(null);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -244,12 +252,43 @@ export const Billing: React.FC = () => {
       hardCopyFileName: formData.hardCopyFileName || undefined,
       hardCopyFileType: formData.hardCopyFileType || undefined
     };
-    if (editingId) {
-      updateBilling(editingId, billingData);
-    } else {
-      addBilling(billingData);
+
+    const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
+      if (editingId) {
+        updateBilling(editingId, billingData);
+      } else {
+        addBilling(billingData);
+      }
+      
+      if (bypassCheck && overrideReason) {
+        addOverrideLog(
+          user?.username || 'Unknown',
+          'Billing Management',
+          `Bill No: ${formData.billNo}, Site: ${getProjectName(formData.projectId)}, Month/Period: ${formData.month}, Amount: Rs ${Number(formData.amount).toLocaleString()}`,
+          overrideReason
+        );
+      }
+      handleCancel();
+    };
+
+    const countMatches = checkBillingDuplicate(
+      billings,
+      {
+        billNo: formData.billNo,
+        projectId: formData.projectId,
+        month: formData.month
+      },
+      editingId || undefined
+    );
+
+    if (countMatches.length > 0) {
+      setDupData(countMatches);
+      setPendingSaveFn(() => (reason?: string) => onProceedSave(true, reason || 'No details'));
+      setDupModalOpen(true);
+      return;
     }
-    handleCancel();
+
+    onProceedSave();
   };
 
   const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || 'Unknown';
@@ -655,6 +694,29 @@ export const Billing: React.FC = () => {
           setDeleteId(null);
         }}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <DuplicateWarningModal
+        isOpen={dupModalOpen}
+        moduleName="Billing Management"
+        warningText="Warning: A billing entry already exists in the database for this Site, Billing Period and Bill Number. Overlap is prohibited."
+        duplicates={dupData}
+        currentUser={user}
+        onCancel={() => {
+          setDupModalOpen(false);
+          setPendingSaveFn(null);
+        }}
+        onSaveAnyway={(reason) => {
+          setDupModalOpen(false);
+          if (pendingSaveFn) {
+            pendingSaveFn(reason);
+            setPendingSaveFn(null);
+          }
+        }}
+        onViewExisting={(record) => {
+          setDupModalOpen(false);
+          handleEdit(record);
+        }}
       />
     </div>
   );

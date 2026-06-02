@@ -4,6 +4,7 @@ import { Plus, X, Save, Edit, Trash2, Search, Printer, FileSpreadsheet, Briefcas
 import { ConfirmModal } from '../components/ConfirmModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { LabourRequirementPlanning } from '../components/LabourRequirementPlanning';
+import { WorkerAttendanceLog } from '../components/WorkerAttendanceLog';
 
 export const Workers: React.FC = () => {
   const { 
@@ -26,7 +27,7 @@ export const Workers: React.FC = () => {
 
   const isReadOnly = user?.username === 'saddamsne';
 
-  const [activeView, setActiveView] = useState<'directory' | 'ledger' | 'planning' | 'transfers'>('directory');
+  const [activeView, setActiveView] = useState<'directory' | 'ledger' | 'planning' | 'transfers' | 'attendance'>('directory');
   
   // Directory Tab States
   const [isAdding, setIsAdding] = useState(false);
@@ -557,6 +558,13 @@ export const Workers: React.FC = () => {
           id="tab-workers-transfers"
         >
           <span>🔄 Transfer History</span>
+        </button>
+        <button
+          onClick={() => setActiveView('attendance')}
+          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'attendance' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
+          id="tab-workers-attendance"
+        >
+          <span>📅 Worker Attendance Log</span>
         </button>
       </div>
 
@@ -1479,6 +1487,10 @@ export const Workers: React.FC = () => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {activeView === 'attendance' && (
+        <WorkerAttendanceLog />
       )}
 
       {/* Roster delete validation modal */}

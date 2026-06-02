@@ -3,11 +3,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, RefreshCw, AlertCircle, ArrowUpRight, ArrowDownRight, Landmark, Printer, FileSpreadsheet, Download } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { checkClientPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
+import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 
 export const ClientPayment: React.FC = () => {
   const { user, clientPayments, billings, projects, addClientPayment, updateClientPayment, deleteClientPayment } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
+  
+  // Duplicate verification states
+  const [dupModalOpen, setDupModalOpen] = useState(false);
+  const [dupData, setDupData] = useState<any[]>([]);
+  const [pendingSaveFn, setPendingSaveFn] = useState<((overrideReason?: string) => void) | null>(null);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -39,18 +47,48 @@ export const ClientPayment: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingId) {
-      updateClientPayment(editingId, {
-        ...formData,
-        amountReceived: Number(formData.amountReceived)
-      });
-    } else {
-      addClientPayment({
-        ...formData,
-        amountReceived: Number(formData.amountReceived)
-      });
+    const payload = {
+      ...formData,
+      amountReceived: Number(formData.amountReceived)
+    };
+
+    const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
+      if (editingId) {
+        updateClientPayment(editingId, payload);
+      } else {
+        addClientPayment(payload);
+      }
+      
+      if (bypassCheck && overrideReason) {
+        addOverrideLog(
+          user?.username || 'Unknown',
+          'Client Payment',
+          `Client/Site: ${getProjectName(formData.projectId)}, Date: ${formData.date}, Amount: Rs ${Number(formData.amountReceived).toLocaleString()}`,
+          overrideReason
+        );
+      }
+      handleCancel();
+    };
+
+    const countMatches = checkClientPaymentDuplicate(
+      clientPayments,
+      {
+        projectId: formData.projectId,
+        amountReceived: Number(formData.amountReceived),
+        date: formData.date,
+        remarks: formData.remarks || ''
+      },
+      editingId || undefined
+    );
+
+    if (countMatches.length > 0) {
+      setDupData(countMatches);
+      setPendingSaveFn(() => (reason?: string) => onProceedSave(true, reason || 'No details'));
+      setDupModalOpen(true);
+      return;
     }
-    handleCancel();
+
+    onProceedSave();
   };
 
   const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || 'Unknown';
@@ -778,6 +816,29 @@ export const ClientPayment: React.FC = () => {
           setDeleteId(null);
         }}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <DuplicateWarningModal
+        isOpen={dupModalOpen}
+        moduleName="Client Payment"
+        warningText="Warning: A similar client payment record with the same Site, Date, and Amount may already exist. Please verify before proceeding."
+        duplicates={dupData}
+        currentUser={user}
+        onCancel={() => {
+          setDupModalOpen(false);
+          setPendingSaveFn(null);
+        }}
+        onSaveAnyway={(reason) => {
+          setDupModalOpen(false);
+          if (pendingSaveFn) {
+            pendingSaveFn(reason);
+            setPendingSaveFn(null);
+          }
+        }}
+        onViewExisting={(record) => {
+          setDupModalOpen(false);
+          handleEdit(record);
+        }}
       />
     </div>
   );
