@@ -269,21 +269,33 @@ export const Approvals: React.FC = () => {
     if (!noteModal) return;
     const { id, type, action } = noteModal;
     
+    const finalAmount = approvedAmount ? Number(approvedAmount) : undefined;
+    const updates: any = { 
+      status: action, 
+      approvalNotes: modalNotes 
+    };
+    
+    if (finalAmount !== undefined && action === 'Approved') {
+      updates.approvedAmount = finalAmount;
+      if (type === 'advance') {
+        updates.amount = finalAmount;
+      } else if (type === 'expense') {
+        // Expense uses crBalance or totalSpent normally, but we can save approvedAmount
+      } else {
+        // For sheets
+      }
+    }
+
     if (type === 'advance') {
-      const finalAmount = approvedAmount ? Number(approvedAmount) : undefined;
-      updateApproval(id, { 
-        status: action, 
-        approvalNotes: modalNotes,
-        ...(finalAmount !== undefined && action === 'Approved' ? { approvedAmount: finalAmount, amount: finalAmount } : {})
-      });
+      updateApproval(id, updates);
     } else if (type === 'sheet') {
-      updatePaymentSheetApproval(id, { status: action, approvalNotes: modalNotes });
+      updatePaymentSheetApproval(id, updates);
     } else if (type === 'kharchi') {
-      updateKharchiApproval(id, { status: action, approvalNotes: modalNotes });
+      updateKharchiApproval(id, updates);
     } else if (type === 'advanceSheet') {
-      updateAdvanceSheetApproval(id, { status: action, approvalNotes: modalNotes });
+      updateAdvanceSheetApproval(id, updates);
     } else if (type === 'expense') {
-      updateExpenseEntry(id, { status: action, approvalNotes: modalNotes });
+      updateExpenseEntry(id, updates);
     }
     
     setNoteModal(null);
@@ -657,7 +669,8 @@ export const Approvals: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-8">#</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Worker</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-36">Amount Details</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-24">Request Amount</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-green-50 w-24">Approved Amount</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Date</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
@@ -680,13 +693,11 @@ export const Approvals: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getWorkerName(app.workerId)}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans">{getProjectName(app.projectId)}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right leading-tight">
-                      <div className="flex flex-col font-sans whitespace-nowrap text-[10px]">
-                        <span className="text-gray-600 font-medium">Request Amount: ₹{(app.requestAmount || app.amount).toLocaleString('en-IN')}</span>
-                        <span className="text-gray-950 font-bold mt-0.5">
-                          Approved Amount: {app.status === 'Approved' ? `₹${(app.approvedAmount || app.requestAmount || app.amount).toLocaleString('en-IN')}` : app.status === 'Rejected' ? 'Rejected' : 'Pending'}
-                        </span>
-                      </div>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">
+                      ₹{(app.requestAmount || app.amount).toLocaleString('en-IN')}
+                    </td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
+                      {app.status === 'Approved' ? `₹${(app.approvedAmount || app.requestAmount || app.amount).toLocaleString('en-IN')}` : app.status === 'Rejected' ? 'Rejected' : '-'}
                     </td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{app.date}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-600">{app.remarks || '-'}</td>
@@ -781,7 +792,8 @@ export const Approvals: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-8">#</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project Site</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Payment Month</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Total Net Payment</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-24">Request Amount</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-green-50 w-24">Approved Amount</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Date Submitted</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
@@ -804,7 +816,10 @@ export const Approvals: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getProjectName(sheet.projectId)}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono font-bold">{sheet.month}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-950">₹{sheet.totalAmount.toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
+                      {sheet.status === 'Approved' ? `₹${(sheet.approvedAmount || sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}` : sheet.status === 'Rejected' ? 'Rejected' : '-'}
+                    </td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{sheet.date}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-600">{sheet.remarks || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center">
@@ -900,7 +915,8 @@ export const Approvals: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-8">#</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project Site</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Kharchi Month</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Total Kharchi</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-24">Request Amount</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-green-50 w-24">Approved Amount</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Date Submitted</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
@@ -923,7 +939,10 @@ export const Approvals: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getProjectName(sheet.projectId)}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono font-bold">{sheet.month}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-950">₹{sheet.totalAmount.toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
+                      {sheet.status === 'Approved' ? `₹${(sheet.approvedAmount || sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}` : sheet.status === 'Rejected' ? 'Rejected' : '-'}
+                    </td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{sheet.date}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-600">{sheet.remarks || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center">
@@ -1010,7 +1029,8 @@ export const Approvals: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-20">Type</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-32">Project</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-20">Month</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-gray-50 w-24">Total Amount (₹)</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-24">Request Amount</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-green-50 w-24">Approved Amount</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Owner Note</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-20 bg-gray-50">Status</th>
@@ -1031,7 +1051,10 @@ export const Approvals: React.FC = () => {
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800 tracking-tight">Advance Sheet</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{getProjectName(sheet.projectId)}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1">{sheet.month}</td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{sheet.totalAmount.toLocaleString('en-IN')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
+                    {sheet.status === 'Approved' ? `₹${(sheet.approvedAmount || sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}` : sheet.status === 'Rejected' ? 'Rejected' : '-'}
+                  </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700 italic">{sheet.remarks || '-'}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-amber-700 font-medium italic">{sheet.approvalNotes || '-'}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-center">
@@ -1120,7 +1143,8 @@ export const Approvals: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-12">Date</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-20">Type</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-32">Project</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-gray-50 w-24">Total Amount (₹)</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-24">Request Amount</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-green-50 w-24">Approved Amount</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Memo / Bank</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Owner Note</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-20 bg-gray-50">Status</th>
@@ -1139,7 +1163,10 @@ export const Approvals: React.FC = () => {
                   <td className="border border-[#8c9ba8] px-2 py-1">{exp.date.split('-').reverse().join('-')}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800 tracking-tight">Expense Entry</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{getProjectName(exp.projectId)}</td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{(exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(exp.requestAmount || exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
+                    {exp.status === 'Approved' ? `₹${(exp.approvedAmount || exp.requestAmount || exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}` : exp.status === 'Rejected' ? 'Rejected' : '-'}
+                  </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700 italic">{`${exp.description} ${exp.bank ? `(${exp.bank})` : ''}`}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-amber-700 font-medium italic">{exp.approvalNotes || '-'}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-center">
@@ -1225,7 +1252,8 @@ export const Approvals: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Type</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project Site</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Details</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-36">Amount Details</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-blue-50 w-24">Request Amount</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-green-50 w-24">Approved Amount</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Remarks</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Approval Notes / Justification</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Action By</th>
@@ -1249,13 +1277,11 @@ export const Approvals: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 font-bold text-[#0056b3]">{log.type}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{log.projectName}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono text-gray-700">{log.details}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right leading-tight">
-                      <div className="flex flex-col font-sans whitespace-nowrap text-[10px]">
-                        <span className="text-gray-600 font-medium font-mono">Request Amount: ₹{(log.requestAmount || log.amount).toLocaleString('en-IN')}</span>
-                        <span className="text-gray-950 font-bold mt-0.5 font-mono">
-                          Approved Amount: {log.status === 'Approved' ? `₹${(log.approvedAmount || log.requestAmount || log.amount).toLocaleString('en-IN')}` : log.status === 'Rejected' ? 'Rejected' : 'Pending'}
-                        </span>
-                      </div>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium font-mono text-gray-700 bg-blue-50/20">
+                      ₹{(log.requestAmount || log.amount).toLocaleString('en-IN')}
+                    </td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20 font-mono">
+                      {log.status === 'Approved' ? `₹${(log.approvedAmount || log.requestAmount || log.amount).toLocaleString('en-IN')}` : log.status === 'Rejected' ? 'Rejected' : '-'}
                     </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-600">{log.remarks || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-emerald-800 italic font-semibold">{log.approvalNotes || '-'}</td>
@@ -1304,7 +1330,7 @@ export const Approvals: React.FC = () => {
                 {noteModal.details}
               </div>
 
-              {noteModal.type === 'advance' && noteModal.action === 'Approved' && (
+              {noteModal.action === 'Approved' && (
                 <div className="mb-4">
                   <label className="block font-bold text-gray-700 mb-1">Approved Amount (Leave empty for requested amount):</label>
                   <input

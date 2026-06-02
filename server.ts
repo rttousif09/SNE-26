@@ -563,7 +563,24 @@ function initDbSchema() {
       remarks TEXT,
       FOREIGN KEY (billId) REFERENCES tracked_bills(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS financial_years (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      startDate TEXT NOT NULL,
+      endDate TEXT NOT NULL,
+      status TEXT NOT NULL,
+      totalBilling REAL DEFAULT 0,
+      totalReceipts REAL DEFAULT 0,
+      labourCost REAL DEFAULT 0,
+      materialCost REAL DEFAULT 0,
+      expenses REAL DEFAULT 0,
+      profitLoss REAL DEFAULT 0,
+      closedBy TEXT,
+      closedDate TEXT
+    );
   `);
+
 
   // Insert initial seed data if table is completely empty
   const countRow = db.prepare("SELECT COUNT(*) as count FROM projects").get() as { count: number };
@@ -2645,6 +2662,66 @@ async function startServer() {
     }
   });
 
+  // ------------------------------------
+  // Financial Years
+  // ------------------------------------
+  app.get("/api/financial-years", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM financial_years").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/financial-years", (req, res) => {
+    try {
+      const { id, name, startDate, endDate, status, totalBilling, totalReceipts, labourCost, materialCost, expenses, profitLoss, closedBy, closedDate } = req.body;
+      db.prepare(`
+        INSERT INTO financial_years (id, name, startDate, endDate, status, totalBilling, totalReceipts, labourCost, materialCost, expenses, profitLoss, closedBy, closedDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, name, startDate, endDate, status, 
+        parseFloat(totalBilling || 0), parseFloat(totalReceipts || 0), parseFloat(labourCost || 0), 
+        parseFloat(materialCost || 0), parseFloat(expenses || 0), parseFloat(profitLoss || 0), 
+        closedBy || null, closedDate || null
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/financial-years/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, startDate, endDate, status, totalBilling, totalReceipts, labourCost, materialCost, expenses, profitLoss, closedBy, closedDate } = req.body;
+      db.prepare(`
+        UPDATE financial_years
+        SET name=?, startDate=?, endDate=?, status=?, totalBilling=?, totalReceipts=?, labourCost=?, materialCost=?, expenses=?, profitLoss=?, closedBy=?, closedDate=?
+        WHERE id=?
+      `).run(
+        name, startDate, endDate, status, 
+        parseFloat(totalBilling || 0), parseFloat(totalReceipts || 0), parseFloat(labourCost || 0), 
+        parseFloat(materialCost || 0), parseFloat(expenses || 0), parseFloat(profitLoss || 0), 
+        closedBy || null, closedDate || null, 
+        id
+      );
+      res.json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/financial-years/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM financial_years WHERE id=?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // Serve frontend SPA files correctly in both Dev and Prod
 

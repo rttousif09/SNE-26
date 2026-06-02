@@ -59,7 +59,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
         { id: 'client-payment', label: '2) Client Payment' },
         { id: 'expenses', label: '3) Expenses Ledger' },
         { id: 'expenses-summary', label: '4) Expenses Summary Dashboard' },
-        { id: 'bill-tracking', label: '5) Bill Tracking Workflow' }
+        { id: 'bill-tracking', label: '5) Bill Tracking Workflow' },
+        { id: 'financial-year-archive', label: '6) FY Archive & Closing' }
       ]
     },
     {

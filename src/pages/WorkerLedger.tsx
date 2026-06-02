@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
+import { PDFExportButton } from '../components/PDFExportButton';
 import { 
   User, 
   Search, 
@@ -567,9 +568,24 @@ export const WorkerLedger: React.FC = () => {
                     <History size={12} className="text-[#0056b3]" />
                     <span>Chronological Transaction Ledger</span>
                   </span>
-                  <span className="font-mono text-[9px] text-gray-500 font-bold">
-                    ENTRIES: {ledgerEntries.length}
-                  </span>
+                  <div className="flex flex-row items-center gap-2">
+                    <span className="font-mono text-[9px] text-gray-500 font-bold">
+                      ENTRIES: {ledgerEntries.length}
+                    </span>
+                    <PDFExportButton
+                      title="Worker Ledger Report"
+                      subtitle={`Worker: ${activeWorker?.name} (${activeWorker?.workerId})`}
+                      headers={['Date', 'Voucher No', 'Description', 'Debit (Adv Given)', 'Credit (Adjusted)', 'Running Balance']}
+                      data={ledgerEntries.map(e => [
+                        e.date,
+                        e.voucherNo,
+                        e.description,
+                        e.debit ? e.debit.toString() : '-',
+                        e.credit ? e.credit.toString() : '-',
+                        e.runningBalance.toString()
+                      ])}
+                    />
+                  </div>
                 </div>
 
                 <table className="w-full border-collapse bg-white text-[10px]">

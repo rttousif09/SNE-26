@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -32,6 +32,7 @@ interface AppState {
   attendance: Attendance[];
   trackedBills: TrackedBill[];
   billTimelines: BillTimelineEntry[];
+  financialYears: FinancialYear[];
 }
 
 interface AppContextType extends AppState {
@@ -114,6 +115,9 @@ interface AppContextType extends AppState {
   updateTrackedBill: (id: string, bill: Partial<TrackedBill>) => Promise<void>;
   deleteTrackedBill: (id: string) => Promise<void>;
   addBillTimeline: (timeline: Omit<BillTimelineEntry, 'id'>) => Promise<void>;
+  addFinancialYear: (fy: Omit<FinancialYear, 'id'>) => Promise<void>;
+  updateFinancialYear: (id: string, fy: Partial<FinancialYear>) => Promise<void>;
+  deleteFinancialYear: (id: string) => Promise<void>;
 }
 
 const initialState: AppState = {
@@ -182,6 +186,7 @@ const initialState: AppState = {
   attendance: [],
   trackedBills: [],
   billTimelines: [],
+  financialYears: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -235,6 +240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     attendance: [],
     trackedBills: [],
     billTimelines: [],
+    financialYears: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
@@ -243,7 +249,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const [
           pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes, assetsRes, assetTransfersRes, assetMaintenancesRes,
-          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes
+          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes
         ] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
@@ -273,7 +279,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/advance-sheet-approvals').then(r => r.json()).catch(() => []),
           fetch('/api/attendance').then(r => r.json()).catch(() => []),
           fetch('/api/tracked-bills').then(r => r.json()).catch(() => []),
-          fetch('/api/bill-timelines').then(r => r.json()).catch(() => [])
+          fetch('/api/bill-timelines').then(r => r.json()).catch(() => []),
+          fetch('/api/financial-years').then(r => r.json()).catch(() => [])
         ]);
 
         const stateObj: AppState = {
@@ -305,7 +312,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           workerRecoveryAuditTrail: wratRes || [],
           attendance: attRes || [],
           trackedBills: tbRes || [],
-          billTimelines: tlRes || []
+          billTimelines: tlRes || [],
+          financialYears: fyRes || []
         };
         setState(stateObj);
 
@@ -335,6 +343,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('attendance', attRes || []).catch(() => {});
         await saveAllToStore('trackedBills', tbRes || []).catch(() => {});
         await saveAllToStore('billTimelines', tlRes || []).catch(() => {});
+        await saveAllToStore('financialYears', fyRes || []).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -367,6 +376,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const attendance = await getAllFromStore('attendance').catch(() => []);
           const trackedBills = await getAllFromStore('trackedBills').catch(() => []);
           const billTimelines = await getAllFromStore('billTimelines').catch(() => []);
+          const financialYears = await getAllFromStore('financialYears').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
@@ -377,7 +387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                             labourPlannings.length === 0 && workerTransfers.length === 0 && assets.length === 0 &&
                             assetTransfers.length === 0 && assetMaintenances.length === 0 &&
                             workerLedger.length === 0 && workerHolds.length === 0 && workerRecoveryAuditTrail.length === 0 && attendance.length === 0 &&
-                            trackedBills.length === 0 && billTimelines.length === 0;
+                            trackedBills.length === 0 && billTimelines.length === 0 && financialYears.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -411,7 +421,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               workerRecoveryAuditTrail,
               attendance,
               trackedBills,
-              billTimelines
+              billTimelines,
+              financialYears
             });
           }
         } catch (e) {
@@ -452,6 +463,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await saveAllToStore('attendance', backupState.attendance || []);
       await saveAllToStore('trackedBills', backupState.trackedBills || []).catch(() => {});
       await saveAllToStore('billTimelines', backupState.billTimelines || []).catch(() => {});
+      await saveAllToStore('financialYears', backupState.financialYears || []).catch(() => {});
 
       setState(backupState);
       return true;
@@ -1752,6 +1764,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addFinancialYear = async (fy: Omit<FinancialYear, 'id'>) => {
+    const newFy = { ...fy, id: generateId() };
+    setState(s => ({ ...s, financialYears: [...s.financialYears, newFy] }));
+    try {
+      await fetch('/api/financial-years', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newFy)
+      });
+      await saveAllToStore('financialYears', [...state.financialYears, newFy]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateFinancialYear = async (id: string, fy: Partial<FinancialYear>) => {
+    setState(s => {
+      const updated = s.financialYears.map(f => f.id === id ? { ...f, ...fy } : f);
+      saveAllToStore('financialYears', updated).catch(() => {});
+      return { ...s, financialYears: updated };
+    });
+    try {
+      const existing = state.financialYears.find(f => f.id === id);
+      if (existing) {
+        const merged = { ...existing, ...fy };
+        await fetch(`/api/financial-years/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteFinancialYear = async (id: string) => {
+    setState(s => {
+      const filtered = s.financialYears.filter(f => f.id !== id);
+      saveAllToStore('financialYears', filtered).catch(() => {});
+      return { ...s, financialYears: filtered };
+    });
+    try {
+      await fetch(`/api/financial-years/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -1833,7 +1895,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addTrackedBill,
       updateTrackedBill,
       deleteTrackedBill,
-      addBillTimeline
+      addBillTimeline,
+      addFinancialYear,
+      updateFinancialYear,
+      deleteFinancialYear
     }}>
       {children}
     </AppContext.Provider>

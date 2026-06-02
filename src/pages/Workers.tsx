@@ -5,6 +5,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { LabourRequirementPlanning } from '../components/LabourRequirementPlanning';
 import { WorkerAttendanceLog } from '../components/WorkerAttendanceLog';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 export const Workers: React.FC = () => {
   const { 
@@ -572,14 +573,30 @@ export const Workers: React.FC = () => {
         <div className="flex-1 overflow-y-auto pt-2 print:hidden">
           {/* Action and Search Panel */}
           <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1.5">
-            {!isReadOnly ? (
-              <button onClick={handleAddNewWorkerClick} className="sap-btn flex items-center space-x-1">
-                {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-                <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
-              </button>
-            ) : (
-              <div className="font-semibold text-gray-700 px-1 py-0.5">Workers Directory (Read Only)</div>
-            )}
+            <div className="flex items-center space-x-2">
+              {!isReadOnly ? (
+                <button onClick={handleAddNewWorkerClick} className="sap-btn flex items-center space-x-1">
+                  {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+                  <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
+                </button>
+              ) : (
+                <div className="font-semibold text-gray-700 px-1 py-0.5">Workers Directory (Read Only)</div>
+              )}
+              <PDFExportButton
+                title="Workers Directory Report"
+                headers={['EMP. ID', 'Worker Name', 'Category/Designation', 'Project Assg.', 'Joining Date']}
+                data={filteredWorkers.map(w => {
+                  const proj = projects.find(p => p.id === w.projectId);
+                  return [
+                    w.workerId,
+                    w.name,
+                    w.designation,
+                    proj ? proj.name : 'Unassigned',
+                    w.joiningDate
+                  ];
+                })}
+              />
+            </div>
             <div className="flex items-center space-x-1.5 pr-1">
               <span className="font-semibold text-gray-700">Project:</span>
               <select

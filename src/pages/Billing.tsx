@@ -5,6 +5,7 @@ import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip } from 'lucide
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkBillingDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 export const Billing: React.FC = () => {
   const { user, billings, projects, addBilling, updateBilling, deleteBilling } = useAppContext();
@@ -331,15 +332,45 @@ export const Billing: React.FC = () => {
 
   return (
     <div className="text-[11px]">
-      <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
-        {!isReadOnly ? (
-          <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
-            {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-            <span>{isAdding ? 'Cancel' : 'New Bill'}</span>
-          </button>
-        ) : (
-          <div className="font-semibold text-gray-700 px-1 py-0.5">Billing Directory (Read Only)</div>
-        )}
+      <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1 justify-between">
+        <div className="flex items-center space-x-2">
+          {!isReadOnly ? (
+            <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+              {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+              <span>{isAdding ? 'Cancel' : 'New Bill'}</span>
+            </button>
+          ) : (
+            <div className="font-semibold text-gray-700 px-1 py-0.5">Billing Directory (Read Only)</div>
+          )}
+          
+          <PDFExportButton
+            title="Billing List Report"
+            headers={['Bill No', 'Project', 'Work Nature', 'Month', 'Certify Date', 'Gross', 'TDS (-)', 'Retention (-)', 'GST (+)', 'Net Amount']}
+            data={billings.map(b => {
+              const netAmount = b.amount - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0);
+              return [
+                b.billNo,
+                getProjectName(b.projectId),
+                b.workNature,
+                b.month,
+                b.certifyDate,
+                `Rs. ${b.amount.toLocaleString('en-IN')}`,
+                `Rs. ${(b.tds ?? 0).toLocaleString('en-IN')}`,
+                `Rs. ${(b.retention ?? 0).toLocaleString('en-IN')}`,
+                `Rs. ${(b.gst ?? 0).toLocaleString('en-IN')}`,
+                `Rs. ${netAmount.toLocaleString('en-IN')}`
+              ];
+            })}
+            totals={[
+              '', '', '', '', 'Totals:', 
+              `Rs. ${overallTotals.gross.toLocaleString('en-IN')}`,
+              `Rs. ${overallTotals.tds.toLocaleString('en-IN')}`,
+              `Rs. ${overallTotals.retention.toLocaleString('en-IN')}`,
+              `Rs. ${overallTotals.gst.toLocaleString('en-IN')}`,
+              `Rs. ${overallTotals.net.toLocaleString('en-IN')}`
+            ]}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 mb-4 bg-gray-50 p-2 border border-[#8c9ba8]">

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { CheckCircle, AlertOctagon, UserCheck, Calendar, MapPin, Search } from 'lucide-react';
 import { checkAttendanceDuplicate } from '../lib/duplicateChecker';
+import { PDFExportButton } from './PDFExportButton';
 
 export const WorkerAttendanceLog: React.FC = () => {
   const { workers, projects, attendance, addAttendance, user } = useAppContext();
@@ -83,7 +84,25 @@ export const WorkerAttendanceLog: React.FC = () => {
           <UserCheck size={16} className="text-sky-300" />
           <h2 className="text-xs font-black tracking-wider uppercase font-mono">Roll-Call Attendance Portal</h2>
         </div>
-        <p className="text-[9px] text-slate-300 italic">Prevent duplicate submissions on the same date</p>
+        <div className="flex items-center space-x-2">
+          <p className="text-[9px] text-slate-300 italic mr-2">Prevent duplicate submissions on the same date</p>
+          <PDFExportButton
+            title="Attendance Log Report"
+            subtitle={`Date: ${selectedDate}`}
+            siteName={selectedProjectObj?.name || 'All'}
+            headers={['EMP. ID', 'Worker Name', 'Designation', 'Status']}
+            data={activeWorkers.map(w => [
+              w.workerId,
+              w.name,
+              w.designation,
+              selectedDateAttendanceMap[w.id] || 'Not Marked'
+            ])}
+            totals={[
+              '', 'Total Present:', '', 
+              activeWorkers.filter(w => selectedDateAttendanceMap[w.id]?.startsWith('Present')).length.toString()
+            ]}
+          />
+        </div>
       </div>
 
       {/* Inputs Filters Header bar */}

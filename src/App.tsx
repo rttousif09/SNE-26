@@ -26,6 +26,7 @@ import { Materials } from './pages/Materials';
 import { EquipmentAssetManagement } from './pages/EquipmentAssetManagement';
 import { WorkerLedger } from './pages/WorkerLedger';
 import { BillTracking } from './pages/BillTracking';
+import { FinancialYearArchive } from './pages/FinancialYearArchive';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -57,6 +58,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'expenses-summary': return <ExpensesSummary />;
       case 'site-monthly-summary': return <SiteMonthlySummary />;
       case 'bill-tracking': return <BillTracking />;
+      case 'financial-year-archive': return <FinancialYearArchive />;
       default: return <Dashboard />;
     }
   };
@@ -81,6 +83,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'expenses-summary': return 'Expenses Summary Dashboard';
       case 'site-monthly-summary': return 'Site Monthly Report';
       case 'bill-tracking': return 'Bill Tracking Workflow';
+      case 'financial-year-archive': return 'Financial Year Archive & Closing';
       default: return 'Overview';
     }
   };

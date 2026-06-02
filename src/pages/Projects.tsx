@@ -5,6 +5,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 export const Projects: React.FC = () => {
   const { user, projects, addProject, updateProject, deleteProject, billings, clientPayments, workerPayments, advances, expensesLedger } = useAppContext();
@@ -237,14 +238,30 @@ export const Projects: React.FC = () => {
   return (
     <div className="text-[11px]">
       <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
-        {!isReadOnly ? (
-          <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
-            {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-            <span>{isAdding ? 'Cancel' : 'New Project'}</span>
-          </button>
-        ) : (
-          <div className="font-semibold text-gray-700 px-1 py-0.5">Projects List (Read Only)</div>
-        )}
+        <div className="flex items-center space-x-2">
+          {!isReadOnly ? (
+            <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+              {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+              <span>{isAdding ? 'Cancel' : 'New Project'}</span>
+            </button>
+          ) : (
+            <div className="font-semibold text-gray-700 px-1 py-0.5">Projects List (Read Only)</div>
+          )}
+          <PDFExportButton
+            title="Projects List Report"
+            headers={['SN', 'Project Name', 'Client Name', 'Start Date', 'Completion Date', 'Address', 'Contact Info', 'Budget']}
+            data={filteredProjects.map((p, idx) => [
+              (idx + 1).toString(),
+              p.name,
+              p.clientName || '-',
+              p.startDate,
+              p.completionDate || '-',
+              p.address,
+              [p.pmContact ? `PM: ${p.pmContact}` : '', p.beContact ? `BE: ${p.beContact}` : ''].filter(Boolean).join(', ') || '-',
+              `Rs. ${Number(p.budget).toLocaleString('en-IN')}`
+            ])}
+          />
+        </div>
         <div className="flex items-center space-x-1.5 pr-1">
           <Search size={12} className="text-gray-600" />
           <span className="font-semibold text-gray-700">Search:</span>

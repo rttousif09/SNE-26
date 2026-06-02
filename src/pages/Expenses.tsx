@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import { checkExpenseDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 export const Expenses: React.FC = () => {
   const { 
@@ -785,14 +786,26 @@ export const Expenses: React.FC = () => {
             <span>Excel Export</span>
           </button>
           
-          <button 
-            onClick={() => window.print()} 
-            className="sap-btn flex items-center space-x-1 font-semibold bg-[#0369a1]/10 text-[#0369a1] border-[#0369a1]/50 hover:bg-[#0369a1] hover:text-white transition cursor-pointer" 
-            title="Save this ledger view as PDF or print physically"
-          >
-            <Printer size={12} />
-            <span>Print Sheet</span>
-          </button>
+          <PDFExportButton
+            title="Expenses & Cashflow Ledger"
+            siteName={projectIdFilter ? projects.find(p => p.id === projectIdFilter)?.name : 'All Projects'}
+            headers={['Date', 'Category', 'Description', 'Link Ref / Project', 'Spent (DR)', 'Credits Given (CR)', 'Net Avl Balance']}
+            data={filteredLedger.map(e => [
+              e.date.split('-').reverse().join('-'),
+              getCategoryLabel(e),
+              e.description,
+              getProjectName(e.projectId) || '-',
+              e.totalSpent > 0 ? `Rs. ${e.totalSpent.toLocaleString('en-IN')}` : '-',
+              e.crBalance > 0 ? `Rs. ${e.crBalance.toLocaleString('en-IN')}` : '-',
+              `Rs. ${e.avlBalance.toLocaleString('en-IN')}`
+            ])}
+            totals={[
+              '', '', '', 'Totals:',
+              `Rs. ${filteredLedger.reduce((sum, item) => sum + item.totalSpent, 0).toLocaleString('en-IN')}`,
+              `Rs. ${filteredLedger.reduce((sum, item) => sum + item.crBalance, 0).toLocaleString('en-IN')}`,
+              `Rs. ${filteredLedger.length > 0 ? filteredLedger[filteredLedger.length - 1].avlBalance.toLocaleString('en-IN') : 0}`
+            ]}
+          />
 
           <div className="flex items-center space-x-1 border border-[#8c9ba8] bg-white p-0.5 rounded shadow-sm text-[10px]">
             <span className="text-[9.5px] text-gray-500 font-bold px-1 select-none">Month Report:</span>

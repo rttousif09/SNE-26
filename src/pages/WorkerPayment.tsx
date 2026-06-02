@@ -5,6 +5,7 @@ import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkWorkerPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 export const WorkerPayment: React.FC = () => {
   const { 
@@ -724,6 +725,33 @@ export const WorkerPayment: React.FC = () => {
             </span>
 
             <div className="flex space-x-2 items-center">
+              <PDFExportButton
+                title={`${selectedCategory} Payment Sheet`}
+                subtitle={`Month: ${selectedMonth}`}
+                siteName={projects.find(p => p.id === selectedProject)?.name}
+                headers={['Sr No', 'ID No', 'Worker Name', 'Work Area', 'Gross Wages', 'Total Deductions', 'Net Payable', 'Status']}
+                data={filteredPayments.map(p => {
+                  const w = getWorkerDetails(p.workerId);
+                  const totalDed = p.messDeduction + p.kharchiDeduction + p.advanceDeduction + (p.recoveryAmount || 0) + (p.otherDeduction || 0);
+                  return [
+                    w.srNo,
+                    w.idNo,
+                    w.name,
+                    p.level || '-',
+                    `Rs. ${p.workAmount.toLocaleString('en-IN')}`,
+                    `Rs. ${totalDed.toLocaleString('en-IN')}`,
+                    `Rs. ${p.netPayment.toLocaleString('en-IN')}`,
+                    p.paymentStatus || 'Pending'
+                  ];
+                })}
+                totals={[
+                  '', '', '', 'Totals:', 
+                  `Rs. ${totals.gross.toLocaleString('en-IN')}`, 
+                  `Rs. ${(totals.mess + totals.kharchi + totals.advance + totals.recovery + totals.otherDeduction).toLocaleString('en-IN')}`, 
+                  `Rs. ${totals.net.toLocaleString('en-IN')}`, 
+                  ''
+                ]}
+              />
               {filteredPayments.length > 0 && (
                 <>
                   <button

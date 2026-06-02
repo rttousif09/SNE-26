@@ -182,6 +182,8 @@ export interface AdvanceSheetApproval {
   projectId: string;
   month: string; // YYYY-MM
   totalAmount: number;
+  requestAmount?: number;
+  approvedAmount?: number;
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
@@ -193,6 +195,8 @@ export interface KharchiApproval {
   projectId: string;
   month: string; // YYYY-MM
   totalAmount: number;
+  requestAmount?: number;
+  approvedAmount?: number;
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
@@ -204,6 +208,8 @@ export interface PaymentSheetApproval {
   projectId: string;
   month: string; // YYYY-MM
   totalAmount: number;
+  requestAmount?: number;
+  approvedAmount?: number;
   remarks: string;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
@@ -312,6 +318,8 @@ export interface ExpenseEntry {
   others: number;
   bank?: string;
   crBalance: number;
+  requestAmount?: number;
+  approvedAmount?: number;
   receiptProof?: string; // base64 string
   receiptFileName?: string;
   receiptFileType?: string;
@@ -477,6 +485,24 @@ export interface BillTimelineEntry {
   updateDate: string;
   updatedBy: string;
   remarks: string;
+}
+
+export type FinancialYearStatus = 'Active' | 'Closed' | 'Archived';
+
+export interface FinancialYear {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: FinancialYearStatus;
+  totalBilling: number;
+  totalReceipts: number;
+  labourCost: number;
+  materialCost: number;
+  expenses: number;
+  profitLoss: number;
+  closedBy?: string;
+  closedDate?: string;
 }
 
 

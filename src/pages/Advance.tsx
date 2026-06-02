@@ -5,6 +5,7 @@ import { Save, Edit, X, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkWorkerAdvanceDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 export const Advance: React.FC = () => {
   const { user, advances, projects, workers, addAdvance, updateAdvance, deleteAdvance, advanceSheetApprovals, addAdvanceSheetApproval } = useAppContext();
@@ -289,9 +290,33 @@ export const Advance: React.FC = () => {
 
       {selectedProject && (
         <>
-          <div className="mb-2 sap-panel p-1 inline-flex space-x-2">
-            <span className="font-semibold">Total Project Advance:</span>
-            <span className="font-bold text-red-700">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalAdvance)}</span>
+          <div className="mb-2 sap-panel p-1 flex justify-between items-center">
+            <div className="inline-flex space-x-2 items-center">
+              <span className="font-semibold">Total Project Advance:</span>
+              <span className="font-bold text-red-700">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalAdvance)}</span>
+            </div>
+            
+            <PDFExportButton
+              title="Advance Register Report"
+              siteName={projects.find(p => p.id === selectedProject)?.name}
+              headers={['Sr No', 'ID No', 'Name', 'Date', 'Paid By', 'Remarks', 'Deduction Info', 'Amount']}
+              data={filteredAdvances.map(a => {
+                const w = getWorkerDetails(a.workerId);
+                return [
+                  w.srNo,
+                  w.idNo,
+                  w.name,
+                  a.date,
+                  a.paidBy === 'Other' ? a.paidByDetails : a.paidBy,
+                  a.remarks,
+                  a.isDeducted ? `Yes (${a.deductionMonth}, ₹${a.deductionAmount})` : 'No',
+                  `Rs. ${Number(a.amount).toLocaleString('en-IN')}`
+                ];
+              })}
+              totals={[
+                '', '', '', '', '', '', 'Total Advance:', `Rs. ${totalAdvance.toLocaleString('en-IN')}`
+              ]}
+            />
           </div>
 
           <table className="w-full border-collapse border border-[#8c9ba8] bg-white">

@@ -8,6 +8,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Asset, AssetCategory, AssetStatus, AssetTransfer, AssetMaintenance } from '../types';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 const CATEGORIES: AssetCategory[] = [
   'Vibrator',
@@ -857,14 +858,21 @@ export const EquipmentAssetManagement: React.FC = () => {
                 <FileSpreadsheet size={11} className="text-emerald-700" />
                 <span>Export Excel</span>
               </button>
-              <button onClick={handleExportPDF} className="sap-btn bg-slate-50 text-slate-700 flex items-center space-x-1 p-1 hover:bg-slate-150 border" title="Export PDF report sheet">
-                <FileText size={11} className="text-red-700" />
-                <span>PDF Report</span>
-              </button>
-              <button onClick={handlePrint} className="sap-btn bg-slate-50 text-slate-700 flex items-center space-x-1 p-1 hover:bg-slate-150 border" title="Print screen register values">
-                <Printer size={11} />
-                <span>Print Register</span>
-              </button>
+              <PDFExportButton
+                title="Equipment & Capital Assets Register"
+                headers={['Code/ID', 'Asset Name', 'Category', 'Brand', 'Purch. Date', 'Cost', 'Current Location', 'Assigned To', 'Status']}
+                data={filteredAssets.map(a => [
+                  a.assetCode,
+                  a.name,
+                  a.category,
+                  a.brand,
+                  a.purchaseDate,
+                  `Rs. ${parseFloat(a.purchaseCost.toString()).toLocaleString('en-IN')}`,
+                  getProjectName(a.currentSiteId),
+                  a.assignedTo || '—',
+                  a.status
+                ])}
+              />
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { 
@@ -62,7 +62,7 @@ export const BillTracking: React.FC = () => {
   const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || 'General Site';
 
   // Seed data if empty (for beautiful display out of the box)
-  useMemo(() => {
+  useEffect(() => {
     if (trackedBills.length === 0 && projects.length > 0) {
       // Seed Demo Bills to show immediate functionality
       const today = new Date().toISOString().slice(0, 10);

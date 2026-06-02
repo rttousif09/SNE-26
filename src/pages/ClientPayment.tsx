@@ -5,6 +5,7 @@ import { Plus, X, Save, Edit, Trash2, RefreshCw, AlertCircle, ArrowUpRight, Arro
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkClientPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
+import { PDFExportButton } from '../components/PDFExportButton';
 
 export const ClientPayment: React.FC = () => {
   const { user, clientPayments, billings, projects, addClientPayment, updateClientPayment, deleteClientPayment } = useAppContext();
@@ -320,10 +321,32 @@ export const ClientPayment: React.FC = () => {
             <span>Export Excel (.CSV)</span>
           </button>
 
-          <button onClick={() => window.print()} className="sap-btn flex items-center space-x-1 font-semibold bg-[#0369a1]/10 text-[#0369a1] border-[#0369a1]/50 hover:bg-[#0369a1] hover:text-white transition cursor-pointer" title="Save this view as PDF file or print physically">
-            <Printer size={12} />
-            <span>Save PDF / Print</span>
-          </button>
+          <PDFExportButton
+            title="Client Payment Reconciliation Report"
+            siteName={selectedProjectId === 'all' ? 'All Projects' : projects.find(p => p.id === selectedProjectId)?.name}
+            headers={['Project Site', 'Gross Work', 'TDS', 'Retention', 'Net Bill', 'Amounts Received', 'Balance']}
+            data={filteredProjectSummary.map(summary => {
+              const bl = adjustmentMode === 'net' ? summary.netBalance : summary.grossBalance;
+              return [
+                summary.name,
+                `Rs. ${summary.grossWork.toLocaleString('en-IN')}`,
+                `Rs. ${summary.tds.toLocaleString('en-IN')}`,
+                `Rs. ${summary.retention.toLocaleString('en-IN')}`,
+                `Rs. ${summary.netBillExclGst.toLocaleString('en-IN')}`,
+                `Rs. ${summary.received.toLocaleString('en-IN')}`,
+                `Rs. ${bl.toLocaleString('en-IN')}`
+              ];
+            })}
+            totals={[
+              'Totals:',
+              `Rs. ${displayTotals.grossWork.toLocaleString('en-IN')}`,
+              `Rs. ${displayTotals.tds.toLocaleString('en-IN')}`,
+              `Rs. ${displayTotals.retention.toLocaleString('en-IN')}`,
+              `Rs. ${displayTotals.netBillExclGst.toLocaleString('en-IN')}`,
+              `Rs. ${displayTotals.received.toLocaleString('en-IN')}`,
+              `Rs. ${(adjustmentMode === 'net' ? displayTotals.netBalance : displayTotals.grossBalance).toLocaleString('en-IN')}`
+            ]}
+          />
         </div>
 
         {/* Dropdown project selector & Toggle option for Adjustment Base */}

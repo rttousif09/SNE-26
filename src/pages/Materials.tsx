@@ -14,6 +14,7 @@ import {
   addOverrideLog 
 } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
+import { exportToPDF, downloadPDF, formatCurrency } from '../lib/pdfGenerator';
 
 // Reusable standard lists
 const ITEM_CATEGORIES = [
@@ -508,44 +509,29 @@ export const Materials: React.FC = () => {
 
   // --- MASTER REPORT EXPORT SUITE ---
   const triggerPDFReport = (reportType: string) => {
-    const doc = new jsPDF();
-    const companyTitle = "M/S LABOUR CONTRACTOR & CO.";
-    const reportDate = `Generated on: ${new Date().toLocaleDateString()}`;
-
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(15);
-    doc.setTextColor(31, 41, 55);
-    doc.text(companyTitle, 14, 15);
-    doc.setFontSize(11);
-    doc.setFont("Helvetica", "normal");
-    doc.text(reportType.toUpperCase(), 14, 21);
-    doc.setFontSize(9);
-    doc.text(reportDate, 14, 26);
-    doc.line(14, 29, 196, 29);
-
-    let headers: string[][] = [[]];
+    let headers: string[] = [];
     let rows: any[][] = [];
 
     if (reportType === 'Client Material Receipt Report') {
-      headers = [['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Received', 'UoM', 'Received From', 'Remarks']];
+      headers = ['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Received', 'UoM', 'Received From', 'Remarks'];
       rows = materialIssues.map(m => [
         m.voucherNo, m.issueDate, getProjectName(m.projectId), getItemName(m.itemId), m.qty, getItemUnit(m.itemId), m.issuedTo, m.remarks || '-'
       ]);
     } 
     else if (reportType === 'Client Material Return Report') {
-      headers = [['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Returned', 'UoM', 'Returned To', 'Remarks']];
+      headers = ['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Returned', 'UoM', 'Returned To', 'Remarks'];
       rows = materialReturns.map(m => [
         m.voucherNo, m.returnDate, getProjectName(m.projectId), getItemName(m.itemId), m.qty, getItemUnit(m.itemId), m.returnedBy, m.remarks || '-'
       ]);
     } 
     else if (reportType === 'Material Reconciliation Report') {
-      headers = [['Project Site', 'Material Item', 'Received (Qty)', 'Returned (Qty)', 'Net Balance', 'Unit']];
+      headers = ['Project Site', 'Material Item', 'Received (Qty)', 'Returned (Qty)', 'Net Balance', 'Unit'];
       rows = reconciliationBalances.map(b => [
         getProjectName(b.projectId), getItemName(b.itemId), b.received, b.returned, b.balance, getItemUnit(b.itemId)
       ]);
     } 
     else if (reportType === 'Site-wise Material Balance Report') {
-      headers = [['Project Site', 'Material Item', 'Received (Qty)', 'Returned (Qty)', 'Current Site Balance', 'Unit']];
+      headers = ['Project Site', 'Material Item', 'Received (Qty)', 'Returned (Qty)', 'Current Site Balance', 'Unit'];
       rows = reconciliationBalances
         .filter(b => filterProject === 'all' || b.projectId === filterProject)
         .map(b => [
@@ -553,31 +539,31 @@ export const Materials: React.FC = () => {
         ]);
     } 
     else if (reportType === 'Material Transfer Report') {
-      headers = [['Transfer Date', 'Material Item', 'Qty', 'Unit', 'From Project Site', 'To Project Site', 'Remarks']];
+      headers = ['Transfer Date', 'Material Item', 'Qty', 'Unit', 'From Project Site', 'To Project Site', 'Remarks'];
       rows = materialTransfers.map(t => [
         t.transferDate, getItemName(t.itemId), t.qty, getItemUnit(t.itemId), getProjectName(t.fromProjectId), getProjectName(t.toProjectId), t.remarks || '-'
       ]);
     } 
     else if (reportType === 'Loss & Damage Report') {
-      headers = [['Loss Date', 'Project Site', 'Material Item', 'Qty Lost', 'Reason', 'Responsible Person', 'Recovery (INR)', 'Remarks']];
+      headers = ['Loss Date', 'Project Site', 'Material Item', 'Qty Lost', 'Reason', 'Responsible Person', 'Recovery (INR)', 'Remarks'];
       rows = materialLosses.map(l => [
         l.date, getProjectName(l.projectId), getItemName(l.itemId), l.qty, l.reason, l.responsiblePerson, l.recoveryAmount ? `Rs ${l.recoveryAmount}` : '-', l.remarks || '-'
       ]);
     } 
     else if (reportType === 'Purchase Register') {
-      headers = [['Purchase Date', 'Supplier Name', 'Invoice No', 'Project Site', 'Material Item', 'Qty', 'Rate', 'Total Amount']];
+      headers = ['Purchase Date', 'Supplier Name', 'Invoice No', 'Project Site', 'Material Item', 'Qty', 'Rate', 'Total Amount'];
       rows = materialPurchases.map(p => [
         p.purchaseDate, p.supplierName, p.invoiceNumber || '-', getProjectName(p.projectId), getItemName(p.itemId), p.qty, `Rs ${p.rate}`, `Rs ${(p.qty * p.rate).toLocaleString()}`
       ]);
     } 
     else if (reportType === 'Equipment Purchase Report') {
-      headers = [['Purchase Date', 'Asset Code', 'Asset Name', 'Supplier/Brand', 'Cost (INR)', 'Allocated Site', 'Status']];
+      headers = ['Purchase Date', 'Asset Code', 'Asset Name', 'Supplier/Brand', 'Cost (INR)', 'Allocated Site', 'Status'];
       rows = assets.map(a => [
         a.purchaseDate, a.assetCode, a.name, a.brand, `Rs ${a.purchaseCost.toLocaleString()}`, getProjectName(a.currentSiteId), a.status
       ]);
     } 
     else if (reportType === 'Supplier Outstanding Statement') {
-      headers = [['Supplier Name', 'Total Invoice Amount', 'Total Safe Payments', 'Current Outstanding']];
+      headers = ['Supplier Name', 'Total Invoice Amount', 'Total Safe Payments', 'Current Outstanding'];
       // Compute outstanding on the fly
       const suppliers = Array.from(new Set([...materialPurchases.map(p => p.supplierName), ...supplierPayments.map(p => p.supplierName)]));
       rows = suppliers.map(sup => {
@@ -587,16 +573,15 @@ export const Materials: React.FC = () => {
       });
     }
 
-    autoTable(doc, {
-      startY: 33,
-      head: headers,
-      body: rows,
-      theme: 'grid',
-      headStyles: { fillColor: [44, 62, 80], halign: 'left' },
-      styles: { fontSize: 8, cellPadding: 2 }
+    const blobUrl = exportToPDF({
+      title: reportType,
+      headers,
+      data: rows,
+      userName: user?.name,
+      filename: `${reportType.replace(/\s+/g, '_').toLowerCase()}.pdf`
     });
-
-    doc.save(`${reportType.replace(/\s+/g, '_').toLowerCase()}.pdf`);
+    
+    downloadPDF(blobUrl, `${reportType.replace(/\s+/g, '_').toLowerCase()}.pdf`);
   };
 
   // Specific supplier chronological log data source
