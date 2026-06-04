@@ -48,6 +48,7 @@ export const Projects: React.FC = () => {
     if (!query) return true;
     return (
       project.name.toLowerCase().includes(query) ||
+      (project.clientName && project.clientName.toLowerCase().includes(query)) ||
       project.id.toLowerCase().includes(query)
     );
   });
@@ -268,7 +269,7 @@ export const Projects: React.FC = () => {
           <input
             type="text"
             className="sap-input w-48 text-[11px]"
-            placeholder="Filter by Name or ID..."
+            placeholder="Filter by Name, Client or ID..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />

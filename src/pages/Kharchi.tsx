@@ -14,6 +14,7 @@ export const Kharchi: React.FC = () => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   });
   const [viewMode, setViewMode] = useState<'pivot' | 'list'>('pivot');
+  const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -71,6 +72,16 @@ export const Kharchi: React.FC = () => {
     return allFilteredKharchis.filter(k => k.date.startsWith(selectedMonth));
   }, [allFilteredKharchis, selectedMonth]);
 
+  const filteredCurrentMonthKharchis = useMemo(() => {
+    if (!searchQuery.trim()) return currentMonthKharchis;
+    const q = searchQuery.toLowerCase();
+    return currentMonthKharchis.filter(k => {
+      const worker = workers.find(w => w.id === k.workerId);
+      const workerName = worker?.name.toLowerCase() || '';
+      return workerName.includes(q);
+    });
+  }, [currentMonthKharchis, searchQuery, workers]);
+
   const uniqueDates = useMemo(() => {
     return Array.from(new Set(currentMonthKharchis.map(k => k.date))).sort();
   }, [currentMonthKharchis]);
@@ -79,7 +90,7 @@ export const Kharchi: React.FC = () => {
     const relevantWorkers = projectWorkers.filter(w => currentMonthKharchis.some(k => k.workerId === w.id));
     relevantWorkers.sort((a, b) => (parseInt(a.serialNo) || 0) - (parseInt(b.serialNo) || 0));
     
-    return relevantWorkers.map(w => {
+    let rows = relevantWorkers.map(w => {
       const wKharchis = currentMonthKharchis.filter(k => k.workerId === w.id);
       let total = 0;
       const amountsByDate = uniqueDates.map(date => {
@@ -89,7 +100,13 @@ export const Kharchi: React.FC = () => {
       });
       return { worker: w, amountsByDate, total };
     });
-  }, [projectWorkers, currentMonthKharchis, uniqueDates]);
+    
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      rows = rows.filter(r => r.worker.name.toLowerCase().includes(q));
+    }
+    return rows;
+  }, [projectWorkers, currentMonthKharchis, uniqueDates, searchQuery]);
 
   const grandTotal = pivotRows.reduce((sum, row) => sum + row.total, 0);
 
@@ -151,14 +168,28 @@ export const Kharchi: React.FC = () => {
           </div>
           
           {selectedProject && (
-            <div className="flex items-center space-x-2">
-              <label className="font-semibold text-gray-700">Kharchi Month:</label>
-              <input 
-                type="month" 
-                className="sap-input font-bold"
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-              />
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <label className="font-semibold text-gray-700">Kharchi Month:</label>
+                <input 
+                  type="month" 
+                  className="sap-input font-bold"
+                  value={selectedMonth}
+                  onChange={e => setSelectedMonth(e.target.value)}
+                />
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  className="sap-input font-bold w-48"
+                  placeholder="Search workers..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">×</button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -343,7 +374,7 @@ export const Kharchi: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {currentMonthKharchis.map((kharchi, idx) => {
+                {filteredCurrentMonthKharchis.map((kharchi, idx) => {
                   const worker = getWorkerDetails(kharchi.workerId);
                   return (
                     <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: idx * 0.03 || 0 }} key={kharchi.id} className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-200">

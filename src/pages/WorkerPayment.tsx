@@ -36,6 +36,7 @@ export const WorkerPayment: React.FC = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedCategory, setSelectedCategory] = useState('Monthly work');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -134,6 +135,17 @@ export const WorkerPayment: React.FC = () => {
     );
   }, [selectedProject, selectedMonth, selectedCategory, workerPayments]);
 
+  const searchFilteredPayments = useMemo(() => {
+    if (!searchQuery.trim()) return filteredPayments;
+    const q = searchQuery.toLowerCase();
+    return filteredPayments.filter(p => {
+      const worker = workers.find(w => w.id === p.workerId);
+      const name = worker?.name.toLowerCase() || '';
+      const idNo = worker?.workerId.toLowerCase() || '';
+      return name.includes(q) || idNo.includes(q);
+    });
+  }, [filteredPayments, searchQuery, workers]);
+
   // Find the approval status of this project for this specific month
   const currentApproval = useMemo(() => {
     if (!selectedProject || !selectedMonth) return null;
@@ -220,7 +232,7 @@ export const WorkerPayment: React.FC = () => {
 
   // Calculate table column aggregations (matching Excel style)
   const totals = useMemo(() => {
-    return filteredPayments.reduce((acc, p) => {
+    return searchFilteredPayments.reduce((acc, p) => {
       acc.gross += p.workAmount;
       acc.supply += p.supplyAmount || 0;
       acc.mess += p.messDeduction;
@@ -231,10 +243,10 @@ export const WorkerPayment: React.FC = () => {
       acc.net += p.netPayment;
       return acc;
     }, { gross: 0, supply: 0, mess: 0, kharchi: 0, advance: 0, recovery: 0, otherDeduction: 0, net: 0 });
-  }, [filteredPayments]);
+  }, [searchFilteredPayments]);
 
   const allSupplyWorksInfo = useMemo(() => {
-    return filteredPayments.flatMap(payment => {
+    return searchFilteredPayments.flatMap(payment => {
       try {
         const details = payment.supplyDetails ? JSON.parse(payment.supplyDetails) : [];
         return details.map((d: any) => ({
@@ -244,7 +256,7 @@ export const WorkerPayment: React.FC = () => {
         }));
       } catch (e) { return []; }
     });
-  }, [filteredPayments, workers]);
+  }, [searchFilteredPayments, workers]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -400,6 +412,21 @@ export const WorkerPayment: React.FC = () => {
                 <option value="Monthly work">Monthly work</option>
                 <option value="Contract work">Contract work</option>
               </select>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  className="sap-input w-48 font-bold"
+                  placeholder="Search worker name or ID..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black font-bold">×</button>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -730,7 +757,7 @@ export const WorkerPayment: React.FC = () => {
                 subtitle={`Month: ${selectedMonth}`}
                 siteName={projects.find(p => p.id === selectedProject)?.name}
                 headers={['Sr No', 'ID No', 'Worker Name', 'Work Area', 'Gross Wages', 'Total Deductions', 'Net Payable', 'Status']}
-                data={filteredPayments.map(p => {
+                data={searchFilteredPayments.map(p => {
                   const w = getWorkerDetails(p.workerId);
                   const totalDed = p.messDeduction + p.kharchiDeduction + p.advanceDeduction + (p.recoveryAmount || 0) + (p.otherDeduction || 0);
                   return [
@@ -752,7 +779,7 @@ export const WorkerPayment: React.FC = () => {
                   ''
                 ]}
               />
-              {filteredPayments.length > 0 && (
+              {searchFilteredPayments.length > 0 && (
                 <>
                   <button
                     onClick={() => setShowPaymentSheetReport(true)}
@@ -769,7 +796,7 @@ export const WorkerPayment: React.FC = () => {
                 </>
               )}
 
-              {!isLocked && filteredPayments.length > 0 && (
+              {!isLocked && searchFilteredPayments.length > 0 && (
                 <div>
                   {!isSubmittingSheet ? (
                     <button
@@ -822,7 +849,7 @@ export const WorkerPayment: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPayments.map((payment, idx) => {
+              {searchFilteredPayments.map((payment, idx) => {
                 const worker = getWorkerDetails(payment.workerId);
                 const isPending = currentApproval?.status === 'Pending';
                 return (
@@ -875,7 +902,7 @@ export const WorkerPayment: React.FC = () => {
               })}
               
               {/* Total Aggregate Sum Row (Excel structure matching) */}
-              {filteredPayments.length > 0 && (
+              {searchFilteredPayments.length > 0 && (
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-mono font-bold text-gray-900 border-t-2 border-[#8c9ba8]">
                   <td colSpan={5} className="border border-[#8c9ba8] px-2 py-1 text-right font-sans uppercase text-[10px]">
                     Total Month Summary:
@@ -909,7 +936,7 @@ export const WorkerPayment: React.FC = () => {
                 </motion.tr>
               )}
 
-              {filteredPayments.length === 0 && (
+              {searchFilteredPayments.length === 0 && (
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                   <td colSpan={isLocked ? 13 : 14} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No payment records found for {selectedMonth} in this project. Use controls above to record new wage ledgers.
@@ -1103,7 +1130,7 @@ export const WorkerPayment: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPayments.map((payment, idx) => {
+                  {searchFilteredPayments.map((payment, idx) => {
                     const worker = getWorkerDetails(payment.workerId);
                     return (
                       <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={payment.id} className="hover:bg-gray-50 border-b print:border-gray-800 font-mono">
@@ -1123,7 +1150,7 @@ export const WorkerPayment: React.FC = () => {
                       </motion.tr>
                     );
                   })}
-                  {filteredPayments.length === 0 && (
+                  {searchFilteredPayments.length === 0 && (
                     <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                       <td colSpan={11} className="border border-gray-300 print:border-gray-800 px-2 py-6 text-center text-gray-500 italic">
                         No payment records found for {selectedMonth}.
@@ -1131,7 +1158,7 @@ export const WorkerPayment: React.FC = () => {
                     </motion.tr>
                   )}
                 </tbody>
-                {filteredPayments.length > 0 && (
+                {searchFilteredPayments.length > 0 && (
                   <tfoot className="bg-gray-100 font-bold border-t-2 border-black">
                     <tr>
                       <td colSpan={5} className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right uppercase text-[10px]">

@@ -34,6 +34,7 @@ export const Approvals: React.FC = () => {
   } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'advances' | 'paymentSheets' | 'kharchiSheets' | 'advanceSheets' | 'expenses' | 'history'>('advances');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [noteModal, setNoteModal] = useState<{
     id: string;
@@ -418,6 +419,19 @@ export const Approvals: React.FC = () => {
   const pendingAdvanceSheetsCount = advanceSheetApprovals.filter(s => s.status === 'Pending').length;
   const pendingExpensesCount = expensesLedger.filter(s => s.status === 'Submitted').length;
 
+  const getCommonFilter = <T extends any>(items: T[], getSearchText: (item: T) => string) => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.toLowerCase();
+    return items.filter(item => getSearchText(item).toLowerCase().includes(q));
+  };
+
+  const filteredAdvances = getCommonFilter(approvals, a => `${a.id} ${getWorkerName(a.workerId)} ${getProjectName(a.projectId)} ${a.remarks || ''}`);
+  const filteredPaymentSheets = getCommonFilter(paymentSheetApprovals, s => `${s.id} ${getProjectName(s.projectId)} ${s.month} ${s.remarks || ''}`);
+  const filteredKharchiSheets = getCommonFilter(kharchiApprovals, s => `${s.id} ${getProjectName(s.projectId)} ${s.month} ${s.remarks || ''}`);
+  const filteredAdvanceSheets = getCommonFilter(advanceSheetApprovals, s => `${s.id} ${getProjectName(s.projectId)} ${s.month} ${s.remarks || ''}`);
+  const filteredExpenses = getCommonFilter(expensesLedger.filter(e => e.status && e.status !== 'Draft').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), e => `${e.id} ${getProjectName(e.projectId)} ${e.description || ''} ${e.bank || ''}`);
+  const filteredHistoryLog = getCommonFilter(historyLog, e => `${e.projectName} ${e.type} ${e.details || ''} ${e.remarks || ''}`);
+
   return (
     <div className="text-[11px] space-y-3">
       {/* Upper Mode bar */}
@@ -433,8 +447,28 @@ export const Approvals: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="font-semibold text-gray-700 pr-1">
-          Workflow Approvals Engine
+        
+        <div className="flex items-center space-x-4 pr-1">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              className="sap-input w-56 text-[11px] border border-[#8c9ba8]"
+              placeholder="Search by ID, Name or Project..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')} 
+                className="absolute right-2 text-slate-400 hover:text-black font-bold font-mono"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <div className="font-semibold text-gray-700">
+            Workflow Approvals Engine
+          </div>
         </div>
       </div>
 
@@ -679,7 +713,14 @@ export const Approvals: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {approvals.map((app, idx) => {
+              {filteredAdvances.length === 0 ? (
+                <tr>
+                  <td colSpan={isOwner ? 9 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No advance records found.
+                  </td>
+                </tr>
+              ) : (
+                filteredAdvances.map((app, idx) => {
                 let statusBadge = '';
                 if (app.status === 'Approved') {
                   statusBadge = 'bg-green-100 text-green-800 border-green-300';
@@ -761,13 +802,7 @@ export const Approvals: React.FC = () => {
                     )}
                   </motion.tr>
                 );
-              })}
-              {approvals.length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isOwner ? 8 : 8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
-                    No worker advance requests have been generated.
-                  </td>
-                </motion.tr>
+              })
               )}
             </tbody>
           </table>
@@ -802,7 +837,14 @@ export const Approvals: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {paymentSheetApprovals.map((sheet, idx) => {
+              {filteredPaymentSheets.length === 0 ? (
+                <tr>
+                  <td colSpan={isOwner ? 8 : 8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No payment sheets found.
+                  </td>
+                </tr>
+              ) : (
+                filteredPaymentSheets.map((sheet, idx) => {
                 let statusBadge = '';
                 if (sheet.status === 'Approved') {
                   statusBadge = 'bg-green-100 text-green-800 border-green-300';
@@ -884,13 +926,7 @@ export const Approvals: React.FC = () => {
                     )}
                   </motion.tr>
                 );
-              })}
-              {paymentSheetApprovals.length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isOwner ? 8 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
-                    No worker monthly payment sheets have been submitted for approval yet.
-                  </td>
-                </motion.tr>
+              })
               )}
             </tbody>
           </table>
@@ -925,7 +961,14 @@ export const Approvals: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {kharchiApprovals.map((sheet, idx) => {
+              {filteredKharchiSheets.length === 0 ? (
+                <tr>
+                  <td colSpan={isOwner ? 8 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No kharchi sheets found.
+                  </td>
+                </tr>
+              ) : (
+                filteredKharchiSheets.map((sheet, idx) => {
                 let statusBadge = '';
                 if (sheet.status === 'Approved') {
                   statusBadge = 'bg-green-100 text-green-800 border-green-300';
@@ -1007,13 +1050,7 @@ export const Approvals: React.FC = () => {
                     )}
                   </motion.tr>
                 );
-              })}
-              {kharchiApprovals.length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isOwner ? 8 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
-                    No kharchi sheets have been submitted for approval yet.
-                  </td>
-                </motion.tr>
+              })
               )}
             </tbody>
           </table>
@@ -1039,7 +1076,14 @@ export const Approvals: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {advanceSheetApprovals.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(sheet => (
+              {filteredAdvanceSheets.length === 0 ? (
+                <tr>
+                  <td colSpan={isOwner ? 8 : 9} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No advance sheets found.
+                  </td>
+                </tr>
+              ) : (
+                filteredAdvanceSheets.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(sheet => (
                 <motion.tr 
                   initial={{ opacity: 0, y: 10 }} 
                   animate={{ opacity: 1, y: 0 }} 
@@ -1122,13 +1166,7 @@ export const Approvals: React.FC = () => {
                     </td>
                   )}
                 </motion.tr>
-              ))}
-              {advanceSheetApprovals.length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isOwner ? 9 : 10} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
-                    No advance sheets have been submitted for approval yet.
-                  </td>
-                </motion.tr>
+              ))
               )}
             </tbody>
           </table>
@@ -1152,7 +1190,14 @@ export const Approvals: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {expensesLedger.filter(e => e.status && e.status !== 'Draft').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(exp => (
+              {filteredExpenses.length === 0 ? (
+                <tr>
+                  <td colSpan={isOwner ? 9 : 10} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No expenses found.
+                  </td>
+                </tr>
+              ) : (
+                filteredExpenses.map(exp => (
                 <motion.tr 
                   initial={{ opacity: 0, y: 10 }} 
                   animate={{ opacity: 1, y: 0 }} 
@@ -1219,13 +1264,7 @@ export const Approvals: React.FC = () => {
                     </td>
                   )}
                 </motion.tr>
-              ))}
-              {expensesLedger.filter(e => e.status && e.status !== 'Draft').length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isOwner ? 8 : 7} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
-                    No expense records have been submitted for approval yet.
-                  </td>
-                </motion.tr>
+              ))
               )}
             </tbody>
           </table>
@@ -1261,7 +1300,14 @@ export const Approvals: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {historyLog.map((log, idx) => {
+              {filteredHistoryLog.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                    No approval history available.
+                  </td>
+                </tr>
+              ) : (
+                filteredHistoryLog.map((log, idx) => {
                 let statusBadge = '';
                 if (log.status === 'Approved') {
                   statusBadge = 'bg-green-100 text-green-800 border-green-300';
@@ -1293,13 +1339,7 @@ export const Approvals: React.FC = () => {
                     </td>
                   </motion.tr>
                 );
-              })}
-              {historyLog.length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={10} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
-                    No approval history available.
-                  </td>
-                </motion.tr>
+              })
               )}
             </tbody>
           </table>

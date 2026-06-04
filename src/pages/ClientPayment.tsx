@@ -27,6 +27,7 @@ export const ClientPayment: React.FC = () => {
   const [adjustmentMode, setAdjustmentMode] = useState<'net' | 'gross'>('net');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleEdit = (payment: any) => {
     setFormData({
@@ -153,15 +154,30 @@ export const ClientPayment: React.FC = () => {
   }, [projects, billings, clientPayments]);
 
   const filteredProjectSummary = useMemo(() => {
-    if (selectedProjectId === 'all') return projectSummary;
-    return projectSummary.filter(p => p.id === selectedProjectId);
-  }, [projectSummary, selectedProjectId]);
+    let filtered = projectSummary;
+    if (selectedProjectId !== 'all') {
+      filtered = filtered.filter(p => p.id === selectedProjectId);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
+    }
+    return filtered;
+  }, [projectSummary, selectedProjectId, searchQuery]);
 
   const filteredClientPayments = useMemo(() => {
-    const list = selectedProjectId === 'all'
+    let list = selectedProjectId === 'all'
       ? [...clientPayments]
       : clientPayments.filter(cp => cp.projectId === selectedProjectId);
     
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(cp => 
+        getProjectName(cp.projectId).toLowerCase().includes(q) ||
+        (cp.remarks && cp.remarks.toLowerCase().includes(q))
+      );
+    }
+
     return list.sort((a, b) => {
       const dateA = new Date(a.date || '').getTime() || 0;
       const dateB = new Date(b.date || '').getTime() || 0;
@@ -363,6 +379,16 @@ export const ClientPayment: React.FC = () => {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+            <input
+              type="text"
+              className="sap-input w-48 text-[11px]"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-black font-bold -ml-6 z-10 w-4">×</button>
+            )}
             {selectedProjectId !== 'all' && (
               <button
                 onClick={() => exportToCSV(true)}

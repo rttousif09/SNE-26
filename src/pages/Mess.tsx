@@ -28,6 +28,7 @@ export const Mess: React.FC = () => {
   const [paymentDate, setPaymentDate] = useState<string>('');
   const [remarks, setRemarks] = useState<string>('');
   const [postToLedger, setPostToLedger] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Search/Filter list states
   const [projectFilter, setProjectFilter] = useState<string>('all');
@@ -202,7 +203,15 @@ export const Mess: React.FC = () => {
   const filteredBookings = messBookings.filter(booking => {
     const matchesProject = projectFilter === 'all' || booking.projectId === projectFilter;
     const matchesOverdue = !showOnlyOverdue || booking.amountDue > 0;
-    return matchesProject && matchesOverdue;
+    
+    let matchesSearch = true;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      matchesSearch = (booking.paidTo && booking.paidTo.toLowerCase().includes(q)) ||
+                      (booking.remarks && booking.remarks.toLowerCase().includes(q));
+    }
+    
+    return matchesProject && matchesOverdue && matchesSearch;
   });
 
   // Overdue and Selection Helpers
@@ -528,6 +537,18 @@ export const Mess: React.FC = () => {
               <span>Mess Calculations & Due Tracker Logs</span>
             </div>
             <div className="flex items-center space-x-2 text-[10px]">
+              <div className="relative mr-2">
+                <input
+                  type="text"
+                  placeholder="Search logs..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-white border border-gray-400 p-0.5 text-[10px] font-normal w-36 pr-4"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black font-bold">×</button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setShowOnlyOverdue(!showOnlyOverdue)}

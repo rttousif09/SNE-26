@@ -19,6 +19,7 @@ export const Advance: React.FC = () => {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [sheetMonth, setSheetMonth] = useState('');
   const [sheetRemarks, setSheetRemarks] = useState('');
   const [formData, setFormData] = useState({
@@ -62,8 +63,18 @@ export const Advance: React.FC = () => {
 
   const filteredAdvances = useMemo(() => {
     if (!selectedProject) return [];
-    return advances.filter(a => a.projectId === selectedProject);
-  }, [selectedProject, advances]);
+    let list = advances.filter(a => a.projectId === selectedProject);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(a => {
+        const worker = workers.find(w => w.id === a.workerId);
+        const name = worker?.name.toLowerCase() || '';
+        const idNo = worker?.workerId.toLowerCase() || '';
+        return name.includes(q) || idNo.includes(q) || (a.remarks && a.remarks.toLowerCase().includes(q));
+      });
+    }
+    return list;
+  }, [selectedProject, advances, searchQuery, workers]);
 
   const totalAdvance = useMemo(() => {
     return filteredAdvances.reduce((sum, a) => sum + a.amount, 0);
@@ -174,16 +185,32 @@ export const Advance: React.FC = () => {
 
   return (
     <div className="text-[11px]">
-      <div className="mb-4 sap-panel p-2 flex items-center space-x-2">
-        <label className="font-semibold">Select Project:</label>
-        <select 
-          className="sap-input w-64" 
-          value={selectedProject} 
-          onChange={e => setSelectedProject(e.target.value)}
-        >
-          <option value="">-- Select Project --</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+      <div className="mb-4 sap-panel p-2 flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <label className="font-semibold">Select Project:</label>
+          <select 
+            className="sap-input w-64" 
+            value={selectedProject} 
+            onChange={e => setSelectedProject(e.target.value)}
+          >
+            <option value="">-- Select Project --</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        {selectedProject && (
+          <div className="relative">
+            <input
+              type="text"
+              className="sap-input w-56 font-bold"
+              placeholder="Search worker or remarks..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">×</button>
+            )}
+          </div>
+        )}
       </div>
 
       {selectedProject && !isReadOnly && (

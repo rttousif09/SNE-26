@@ -11,6 +11,7 @@ export const Billing: React.FC = () => {
   const { user, billings, projects, addBilling, updateBilling, deleteBilling } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Duplicate verification states
   const [dupModalOpen, setDupModalOpen] = useState(false);
@@ -330,6 +331,17 @@ export const Billing: React.FC = () => {
     };
   }, [billings]);
 
+  const filteredBillings = useMemo(() => {
+    if (!searchQuery.trim()) return billings;
+    const query = searchQuery.toLowerCase();
+    
+    return billings.filter(b => 
+      b.billNo.toLowerCase().includes(query) ||
+      getProjectName(b.projectId).toLowerCase().includes(query) ||
+      b.workNature.toLowerCase().includes(query)
+    );
+  }, [billings, searchQuery, projects]);
+
   return (
     <div className="text-[11px]">
       <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1 justify-between">
@@ -343,10 +355,21 @@ export const Billing: React.FC = () => {
             <div className="font-semibold text-gray-700 px-1 py-0.5">Billing Directory (Read Only)</div>
           )}
           
+          <input
+            type="text"
+            className="sap-input w-48 text-[11px]"
+            placeholder="Filter by Bill No, Project, Nature..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-black font-bold">×</button>
+          )}
+
           <PDFExportButton
             title="Billing List Report"
             headers={['Bill No', 'Project', 'Work Nature', 'Month', 'Certify Date', 'Gross', 'TDS (-)', 'Retention (-)', 'GST (+)', 'Net Amount']}
-            data={billings.map(b => {
+            data={filteredBillings.map(b => {
               const netAmount = b.amount - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0);
               return [
                 b.billNo,
@@ -650,13 +673,20 @@ export const Billing: React.FC = () => {
           </tr>
         </thead>
         <tbody>
-          {billings.map((bill, idx) => {
-            const tdsVal = bill.tds ?? 0;
-            const retVal = bill.retention ?? 0;
-            const gstVal = bill.gst ?? 0;
-            const netAmount = bill.amount - tdsVal - retVal + gstVal;
+          {filteredBillings.length === 0 ? (
+            <tr>
+              <td colSpan={isReadOnly ? 12 : 13} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">
+                No billing records found.
+              </td>
+            </tr>
+          ) : (
+            filteredBillings.map((bill, idx) => {
+              const tdsVal = bill.tds ?? 0;
+              const retVal = bill.retention ?? 0;
+              const gstVal = bill.gst ?? 0;
+              const netAmount = bill.amount - tdsVal - retVal + gstVal;
 
-            return (
+              return (
               <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={bill.id} className="hover:bg-[#e6f2ff] cursor-default">
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.srNo}</td>
                 <td className="border border-[#8c9ba8] px-2 py-1">{getProjectName(bill.projectId)}</td>
@@ -707,11 +737,7 @@ export const Billing: React.FC = () => {
                 )}
               </motion.tr>
             );
-          })}
-          {billings.length === 0 && (
-            <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-              <td colSpan={isReadOnly ? 12 : 13} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No bills found.</td>
-            </motion.tr>
+          })
           )}
         </tbody>
       </table>
