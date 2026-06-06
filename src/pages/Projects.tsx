@@ -19,9 +19,32 @@ export const Projects: React.FC = () => {
     projectType: 'Residential' as 'Residential' | 'Commercial' | 'Government' | '',
     workOrderNo: '', scopeOfWork: '', rateType: 'Item Rate' as 'Supply' | 'Item Rate' | 'BUA Basis' | 'Lump-sum' | '',
     workOrderAttachment: '', workOrderFileName: '', workOrderFileType: '',
-    projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: ''
+    projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: '',
+    status: 'Ongoing' as 'Ongoing' | 'Completed' | 'On Hold' | 'Cancelled' | 'Archived'
   });
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'All' | 'Ongoing' | 'Completed' | 'On Hold' | 'Cancelled' | 'Archived'>('Ongoing');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if ((window as any).__pendingGlobalSearch && (window as any).__pendingGlobalSearch.tab === 'projects') {
+      const q = (window as any).__pendingGlobalSearch.query;
+      (window as any).__pendingGlobalSearch = null;
+      return q;
+    }
+    return '';
+  });
+
+  React.useEffect(() => {
+    const handleGlobalSearch = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.tab === 'projects') {
+        setSearchQuery(customEvent.detail.query);
+        (window as any).__pendingGlobalSearch = null;
+      }
+    };
+    window.addEventListener('apply-global-search', handleGlobalSearch);
+    return () => {
+      window.removeEventListener('apply-global-search', handleGlobalSearch);
+    };
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -44,6 +67,9 @@ export const Projects: React.FC = () => {
   };
 
   const filteredProjects = projects.filter(project => {
+    if (filterStatus !== 'All' && project.status !== filterStatus) {
+      return false;
+    }
     const query = searchQuery.trim().toLowerCase();
     if (!query) return true;
     return (
@@ -75,7 +101,8 @@ export const Projects: React.FC = () => {
       siteIncharge: project.siteIncharge || '',
       siContact: project.siContact || '',
       ourRepresentatives: project.ourRepresentatives || '',
-      repContact: project.repContact || ''
+      repContact: project.repContact || '',
+      status: project.status || 'Ongoing'
     });
     setEditingId(project.id);
     setIsAdding(true);
@@ -88,7 +115,8 @@ export const Projects: React.FC = () => {
       name: '', clientName: '', startDate: '', completionDate: '', address: '', budget: '',
       projectType: 'Residential', workOrderNo: '', scopeOfWork: '', rateType: 'Item Rate',
       workOrderAttachment: '', workOrderFileName: '', workOrderFileType: '',
-      projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: ''
+      projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: '',
+      status: 'Ongoing'
     });
   };
 
@@ -225,7 +253,8 @@ export const Projects: React.FC = () => {
       siteIncharge: formData.siteIncharge,
       siContact: formData.siContact,
       ourRepresentatives: formData.ourRepresentatives,
-      repContact: formData.repContact
+      repContact: formData.repContact,
+      status: formData.status
     };
 
     if (editingId) {
@@ -264,12 +293,36 @@ export const Projects: React.FC = () => {
           />
         </div>
         <div className="flex items-center space-x-1.5 pr-1">
+          <div className="flex items-center border border-[#8c9ba8] bg-white divide-x divide-[#8c9ba8] rounded-sm overflow-hidden h-[21px] mr-1">
+            <span className="px-2 font-semibold text-gray-500 bg-gray-100 h-full flex items-center text-[9px] uppercase">Status:</span>
+            <button
+              type="button"
+              onClick={() => setFilterStatus('All')}
+              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'All' ? 'bg-[#0056b3] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterStatus('Ongoing')}
+              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'Ongoing' ? 'bg-[#0056b3] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+            >
+              Ongoing
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterStatus('Completed')}
+              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'Completed' ? 'bg-[#0056b3] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+            >
+              Completed
+            </button>
+          </div>
           <Search size={12} className="text-gray-600" />
           <span className="font-semibold text-gray-700">Search:</span>
           <input
             type="text"
-            className="sap-input w-48 text-[11px]"
-            placeholder="Filter by Name, Client or ID..."
+            className="sap-input w-36 text-[11px]"
+            placeholder="Filter..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -310,6 +363,12 @@ export const Projects: React.FC = () => {
             </button>
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col space-y-4 w-[600px] max-w-full">
+            {editingId && projects.find(p => p.id === editingId)?.status === 'Completed' && (
+              <div className="bg-amber-50 border border-amber-300 text-amber-800 p-2 rounded text-[10px] flex items-center font-semibold">
+                <Info size={14} className="mr-1.5 shrink-0 text-amber-600" />
+                <span>This project is Completed. Details are read-only; only the status can be modified.</span>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Group A: Basic Details */}
               <div className="sap-panel p-3">
@@ -317,19 +376,19 @@ export const Projects: React.FC = () => {
                 <div className="space-y-1.5 text-[11px]">
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">1. Project Name *</label>
-                    <input required type="text" className="sap-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="text" className="sap-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">2. Client Name</label>
-                    <input type="text" className="sap-input" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">3. Address *</label>
-                    <input required type="text" className="sap-input" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="text" className="sap-input" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">4. Project Type</label>
-                    <select className="sap-input" value={formData.projectType} onChange={e => setFormData({...formData, projectType: e.target.value as any})}>
+                    <select disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.projectType} onChange={e => setFormData({...formData, projectType: e.target.value as any})}>
                       <option value="Residential">Residential</option>
                       <option value="Commercial">Commercial</option>
                       <option value="Government">Government</option>
@@ -337,15 +396,25 @@ export const Projects: React.FC = () => {
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">5. Start Date *</label>
-                    <input required type="date" className="sap-input" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="date" className="sap-input" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">6. Completion Date</label>
-                    <input type="date" className="sap-input" value={formData.completionDate} onChange={e => setFormData({...formData, completionDate: e.target.value})} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="date" className="sap-input" value={formData.completionDate} onChange={e => setFormData({...formData, completionDate: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">7. Expected Budget (INR) *</label>
-                    <input required type="number" className="sap-input" value={formData.budget} onChange={e => setFormData({...formData, budget: e.target.value})} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="number" className="sap-input" value={formData.budget} onChange={e => setFormData({...formData, budget: e.target.value})} />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="font-semibold text-gray-700 font-bold text-blue-800">8. Project Status *</label>
+                    <select required className="sap-input font-bold border-blue-400" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                      <option value="Ongoing">Ongoing</option>
+                      <option value="Completed">Completed</option>
+                      <option value="On Hold">On Hold (Planned)</option>
+                      <option value="Cancelled">Cancelled (Planned)</option>
+                      <option value="Archived">Archived (Planned)</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -356,15 +425,15 @@ export const Projects: React.FC = () => {
                 <div className="space-y-1.5 text-[11px]">
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">1. Work Order No</label>
-                    <input type="text" className="sap-input" value={formData.workOrderNo} onChange={e => setFormData({...formData, workOrderNo: e.target.value})} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.workOrderNo} onChange={e => setFormData({...formData, workOrderNo: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">2. Scope of Work</label>
-                    <textarea className="sap-input h-[85px] resize-none" value={formData.scopeOfWork} onChange={e => setFormData({...formData, scopeOfWork: e.target.value})} />
+                    <textarea disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input h-[85px] resize-none" value={formData.scopeOfWork} onChange={e => setFormData({...formData, scopeOfWork: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700">3. Rate Type</label>
-                    <select className="sap-input" value={formData.rateType} onChange={e => setFormData({...formData, rateType: e.target.value as any})}>
+                    <select disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.rateType} onChange={e => setFormData({...formData, rateType: e.target.value as any})}>
                       <option value="Item Rate">Item Rate</option>
                       <option value="Supply">Supply</option>
                       <option value="BUA Basis">BUA Basis</option>
@@ -373,7 +442,7 @@ export const Projects: React.FC = () => {
                   </div>
                   <div className="flex flex-col pt-1">
                     <label className="font-semibold text-gray-700">4. Work Order Proof</label>
-                    <input type="file" className="sap-input py-1" accept="application/pdf,image/*" onChange={handleFileUpload} />
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="file" className="sap-input py-1" accept="application/pdf,image/*" onChange={handleFileUpload} />
                     {formData.workOrderFileName && (
                       <span className="text-[9px] text-green-700 mt-1 truncate font-mono">Attached: {formData.workOrderFileName}</span>
                     )}
@@ -388,41 +457,41 @@ export const Projects: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">1. Project Manager Name</label>
-                      <input type="text" className="sap-input" value={formData.projectManager} onChange={e => setFormData({...formData, projectManager: e.target.value})} placeholder="Name" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.projectManager} onChange={e => setFormData({...formData, projectManager: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">PM Contact No.</label>
-                      <input type="text" className="sap-input" value={formData.pmContact} onChange={e => setFormData({...formData, pmContact: e.target.value})} placeholder="Phone number" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.pmContact} onChange={e => setFormData({...formData, pmContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">2. Billing Engineer Name</label>
-                      <input type="text" className="sap-input" value={formData.billingEngineer} onChange={e => setFormData({...formData, billingEngineer: e.target.value})} placeholder="Name" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.billingEngineer} onChange={e => setFormData({...formData, billingEngineer: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">BE Contact No.</label>
-                      <input type="text" className="sap-input" value={formData.beContact} onChange={e => setFormData({...formData, beContact: e.target.value})} placeholder="Phone number" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.beContact} onChange={e => setFormData({...formData, beContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">3. Site-Incharge Name</label>
-                      <input type="text" className="sap-input" value={formData.siteIncharge} onChange={e => setFormData({...formData, siteIncharge: e.target.value})} placeholder="Name" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.siteIncharge} onChange={e => setFormData({...formData, siteIncharge: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">SI Contact No.</label>
-                      <input type="text" className="sap-input" value={formData.siContact} onChange={e => setFormData({...formData, siContact: e.target.value})} placeholder="Phone number" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.siContact} onChange={e => setFormData({...formData, siContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">4. Our Representative Name</label>
-                      <input type="text" className="sap-input" value={formData.ourRepresentatives} onChange={e => setFormData({...formData, ourRepresentatives: e.target.value})} placeholder="Name" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.ourRepresentatives} onChange={e => setFormData({...formData, ourRepresentatives: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
                       <label className="font-semibold text-gray-500">Rep Contact No.</label>
-                      <input type="text" className="sap-input" value={formData.repContact} onChange={e => setFormData({...formData, repContact: e.target.value})} placeholder="Phone number" />
+                      <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.repContact} onChange={e => setFormData({...formData, repContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
                 </div>
@@ -456,6 +525,7 @@ export const Projects: React.FC = () => {
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Address</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Contact Numbers</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Budget</th>
+            <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16">Actions</th>
           </tr>
         </thead>
@@ -484,6 +554,17 @@ export const Projects: React.FC = () => {
                 </div>
               </td>
               <td className="border border-[#8c9ba8] px-2 py-1 text-right">{project.budget.toLocaleString()}</td>
+              <td className="border border-[#8c9ba8] px-2 py-1 text-center font-semibold">
+                <span className={`px-1.5 py-0.5 rounded-sm border text-[9px] uppercase tracking-wide inline-block ${
+                  project.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                  project.status === 'Ongoing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                  project.status === 'On Hold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  project.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                  'bg-gray-50 text-gray-700 border-gray-200'
+                }`}>
+                  {project.status || 'Ongoing'}
+                </span>
+              </td>
               <td className="border border-[#8c9ba8] px-2 py-1 text-center">
                 <div className="flex border border-gray-300 rounded shadow-sm overflow-hidden inline-flex bg-white">
                   <button onClick={() => setViewDetailsId(project.id)} className="p-1 text-[#0056b3] hover:bg-blue-50 border-r border-gray-300" title="View Project Details">
@@ -551,6 +632,13 @@ export const Projects: React.FC = () => {
                         <span>{project.completionDate || '-'}</span>
                         <span className="font-semibold text-gray-500">Budget:</span>
                         <span className="font-bold text-green-700">₹{project.budget.toLocaleString()}</span>
+                        <span className="font-semibold text-gray-500">Status:</span>
+                        <span className={`font-bold uppercase text-[10px] ${
+                          project.status === 'Completed' ? 'text-green-700' :
+                          project.status === 'Ongoing' ? 'text-blue-700' :
+                          project.status === 'On Hold' ? 'text-amber-700' :
+                          project.status === 'Cancelled' ? 'text-red-700' : 'text-gray-700'
+                        }`}>{project.status || 'Ongoing'}</span>
                       </div>
                     </div>
 

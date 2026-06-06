@@ -99,6 +99,7 @@ export const ClientPayment: React.FC = () => {
     let portfolioGrossWork = 0;
     let portfolioTds = 0;
     let portfolioRetention = 0;
+    let portfolioDebits = 0;
     let portfolioReceived = 0;
 
     const summary = projects.map(p => {
@@ -107,8 +108,9 @@ export const ClientPayment: React.FC = () => {
       const grossWork = projectBillings.reduce((sum, b) => sum + (b.amount || 0), 0);
       const tds = projectBillings.reduce((sum, b) => sum + (b.tds ?? 0), 0);
       const retention = projectBillings.reduce((sum, b) => sum + (b.retention ?? 0), 0);
+      const debit = projectBillings.reduce((sum, b) => sum + (b.debitAmount ?? 0), 0);
       
-      const netBillExclGst = grossWork - tds - retention;
+      const netBillExclGst = grossWork - tds - retention - debit;
       const received = clientPayments
         .filter(cp => cp.projectId === p.id && cp.status !== 'Bounced')
         .reduce((sum, cp) => sum + (cp.amountReceived || 0), 0);
@@ -116,6 +118,7 @@ export const ClientPayment: React.FC = () => {
       portfolioGrossWork += grossWork;
       portfolioTds += tds;
       portfolioRetention += retention;
+      portfolioDebits += debit;
       portfolioReceived += received;
 
       // Calculate base differences
@@ -137,7 +140,7 @@ export const ClientPayment: React.FC = () => {
       };
     });
 
-    const portfolioNetBillExclGst = portfolioGrossWork - portfolioTds - portfolioRetention;
+    const portfolioNetBillExclGst = portfolioGrossWork - portfolioTds - portfolioRetention - portfolioDebits;
 
     return {
       projectSummary: summary,

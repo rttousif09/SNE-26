@@ -42,6 +42,12 @@ export const WorkerAttendanceLog: React.FC = () => {
 
     setAlertMessage(null);
 
+    const targetProjectObj = projects.find(p => p.id === selectedProjectId);
+    if (targetProjectObj?.status === 'Completed') {
+      alert("This project is marked as Completed. New entries are not allowed.");
+      return;
+    }
+
     // 3. Attendance Duplicate Check
     // If attendance row exists for Same Worker, Same Date, Same Site (or even different site for safety)
     const existingMatches = checkAttendanceDuplicate(attendance, {
@@ -133,7 +139,7 @@ export const WorkerAttendanceLog: React.FC = () => {
             }}
           >
             <option value="">Select Construction Site...</option>
-            {projects.map(p => (
+            {projects.filter(p => !p.status || p.status === 'Ongoing').map(p => (
               <option key={p.id} value={p.id}>{p.name} (Client: {p.clientName || 'General'})</option>
             ))}
           </select>

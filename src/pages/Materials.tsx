@@ -2,10 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../store';
 import { 
   Plus, Trash2, Edit, Printer, FileSpreadsheet, Search, AlertTriangle, 
-  Building2, Grid, Calendar, ShoppingCart, Send, RotateCcw, TrendingUp, Info, ArrowLeftRight, User, DollarSign, Wrench, Hammer
+  Building2, Grid, Calendar, ShoppingCart, Send, RotateCcw, TrendingUp, Info, ArrowLeftRight, User, DollarSign, Wrench, Hammer, Upload
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import { 
   checkMaterialPurchaseDuplicate, 
   checkMaterialIssueDuplicate, 
@@ -89,6 +90,8 @@ export const Materials: React.FC = () => {
   // Active ERP Workspace Tab
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'receipt' | 'return' | 'reconciliation' | 'transfer' | 'loss_damage' | 'company_purchase' | 'equipment' | 'supplier_ledger' | 'reports'>('dashboard');
 
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+
   // Duplicate verification states
   const [dupModalOpen, setDupModalOpen] = useState(false);
   const [dupModuleTitle, setDupModuleTitle] = useState('');
@@ -134,14 +137,159 @@ export const Materials: React.FC = () => {
   // Editing Modals/Form states
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   
-  const [masterForm, setMasterForm] = useState({ itemCode: '', itemName: '', category: 'Civil', unit: 'Nos', description: '' });
+  const [masterForm, setMasterForm] = useState({ itemCode: '', itemName: '', category: 'Civil', materialType: 'Consumable' as 'Consumable' | 'Returnable', unit: 'Nos', description: '' });
   const [receiptForm, setReceiptForm] = useState({ voucherNo: '', issueDate: new Date().toISOString().split('T')[0], projectId: '', tower: '', floor: '', itemId: '', qty: 0, issuedTo: '', remarks: '' });
+  const [receiptLineItems, setReceiptLineItems] = useState([{ id: Math.random(), itemId: '', qty: 0, tower: '', floor: '', remarks: '' }]);
   const [returnForm, setReturnForm] = useState({ voucherNo: '', returnDate: new Date().toISOString().split('T')[0], projectId: '', itemId: '', qty: 0, returnedBy: '', remarks: '' });
   const [transferForm, setTransferForm] = useState({ transferDate: new Date().toISOString().split('T')[0], itemId: '', qty: 0, fromProjectId: '', toProjectId: '', remarks: '' });
   const [lossForm, setLossForm] = useState({ date: new Date().toISOString().split('T')[0], projectId: '', itemId: '', qty: 0, reason: '', responsiblePerson: '', recoveryAmount: 0, remarks: '' });
   const [purchaseForm, setPurchaseForm] = useState({ purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', projectId: '', itemId: '', qty: 0, rate: 0, invoiceNumber: '', remarks: '' });
   const [equipmentForm, setEquipmentForm] = useState({ purchaseDate: new Date().toISOString().split('T')[0], name: '', assetCode: '', brand: '', purchaseCost: 0, currentSiteId: '', status: 'Available' as any, remarks: '' });
   const [paymentForm, setPaymentForm] = useState({ supplierName: '', paymentDate: new Date().toISOString().split('T')[0], amountPaid: 0, paymentMode: 'Bank Transfer', invoiceReference: '', remarks: '' });
+
+  // Dedicated Returnable Material Quick Log state
+  const [isReturnableModalOpen, setIsReturnableModalOpen] = useState(false);
+  const [returnableForm, setReturnableForm] = useState({
+    type: 'Issue' as 'Issue' | 'Return',
+    date: new Date().toISOString().substring(0, 10),
+    projectId: '',
+    itemId: '',
+    qty: 0,
+    voucherNo: '',
+    person: '',
+    condition: 'Good' as 'Good' | 'Damaged' | 'Scrap',
+    tower: '',
+    floor: '',
+    remarks: ''
+  });
+
+  const handleQuickLogReturnable = (type: 'Issue' | 'Return', projectId: string = '', itemId: string = '') => {
+    setReturnableForm({
+      type,
+      date: new Date().toISOString().substring(0, 10),
+      projectId,
+      itemId,
+      qty: 0,
+      voucherNo: '',
+      person: '',
+      condition: 'Good',
+      tower: '',
+      floor: '',
+      remarks: ''
+    });
+    setIsReturnableModalOpen(true);
+  };
+
+  const handleSaveReturnable = () => {
+    if (!returnableForm.projectId || !returnableForm.itemId || !returnableForm.qty) {
+      alert('Project Site, Material Item, and Quantity are mandatory.');
+      return;
+    }
+    if (returnableForm.qty <= 0) {
+      alert('Quantity must be greater than 0.');
+      return;
+    }
+
+    const creator = user?.name || user?.username || 'Admin';
+    const vNo = returnableForm.voucherNo || getNextVoucherNo(returnableForm.type === 'Issue' ? 'REC' : 'RET');
+
+    if (returnableForm.type === 'Issue') {
+      const dataToSave = {
+        voucherNo: vNo,
+        issueDate: returnableForm.date,
+        projectId: returnableForm.projectId,
+        tower: returnableForm.tower,
+        floor: returnableForm.floor,
+        itemId: returnableForm.itemId,
+        qty: Number(returnableForm.qty),
+        issuedTo: returnableForm.person || 'Representative',
+        remarks: returnableForm.remarks || 'Returnable Item Issued'
+      };
+
+      // Check duplicates
+      const countMatches = checkMaterialIssueDuplicate(
+        materialIssues,
+        {
+          voucherNo: dataToSave.voucherNo,
+          issueDate: dataToSave.issueDate,
+          projectId: dataToSave.projectId,
+          itemId: dataToSave.itemId
+        }
+      );
+
+      const executeSave = (bypass: boolean = false, reason: string = '') => {
+        addMaterialIssue(dataToSave);
+        if (bypass && reason) {
+          addOverrideLog(
+            creator,
+            'Client Material Receipt',
+            `Voucher: ${dataToSave.voucherNo}, Date: ${dataToSave.issueDate}, Qty: ${dataToSave.qty}`,
+            reason
+          );
+        }
+        setIsReturnableModalOpen(false);
+      };
+
+      if (countMatches.length > 0) {
+        setDupModuleTitle('Client Material Receipt');
+        setDupWarningText('Warning: A duplicate receipt record with the exact same Date, Site, Item and Voucher Number exists.');
+        setDupData(countMatches);
+        setPendingSaveFn(() => (reason?: string) => executeSave(true, reason || 'No details'));
+        setDupModalOpen(true);
+        return;
+      }
+
+      executeSave();
+    } else {
+      const dataToSave = {
+        voucherNo: vNo,
+        returnDate: returnableForm.date,
+        projectId: returnableForm.projectId,
+        tower: returnableForm.tower,
+        floor: returnableForm.floor,
+        itemId: returnableForm.itemId,
+        qty: Number(returnableForm.qty),
+        returnedBy: returnableForm.person || 'Representative',
+        condition: returnableForm.condition || 'Good',
+        remarks: returnableForm.remarks || 'Returnable Item Returned'
+      };
+
+      // Check duplicates
+      const countMatches = checkMaterialReturnDuplicate(
+        materialReturns,
+        {
+          voucherNo: dataToSave.voucherNo,
+          returnDate: dataToSave.returnDate,
+          projectId: dataToSave.projectId,
+          itemId: dataToSave.itemId
+        }
+      );
+
+      const executeSave = (bypass: boolean = false, reason: string = '') => {
+        addMaterialReturn(dataToSave as any);
+        if (bypass && reason) {
+          addOverrideLog(
+            creator,
+            'Client Material Return',
+            `Voucher: ${dataToSave.voucherNo}, Date: ${dataToSave.returnDate}, Qty: ${dataToSave.qty}`,
+            reason
+          );
+        }
+        setIsReturnableModalOpen(false);
+      };
+
+      if (countMatches.length > 0) {
+        setDupModuleTitle('Client Material Return');
+        setDupWarningText('Warning: A duplicate return record with the exact same Date, Site, Item and Voucher Number exists.');
+        setDupData(countMatches);
+        setPendingSaveFn(() => (reason?: string) => executeSave(true, reason || 'No details'));
+        setDupModalOpen(true);
+        return;
+      }
+
+      executeSave();
+    }
+  };
 
   // Helpers
   const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || 'Deleted Project Site';
@@ -259,17 +407,33 @@ export const Materials: React.FC = () => {
         }
       } 
       else if (type === 'receipt') {
-        const dataToSave = { ...receiptForm, voucherNo: receiptForm.voucherNo || getNextVoucherNo('REC') };
         if (editTargetId === 'new') {
-          addMaterialIssue(dataToSave as any);
+          const vNo = receiptForm.voucherNo || getNextVoucherNo('REC');
+          let savedCount = 0;
+          for (const item of receiptLineItems) {
+            if (item.itemId && item.qty > 0) {
+              const dataToSave = { 
+                ...receiptForm, 
+                voucherNo: vNo, 
+                itemId: item.itemId, 
+                qty: item.qty, 
+                tower: item.tower, 
+                floor: item.floor, 
+                remarks: item.remarks 
+              };
+              addMaterialIssue(dataToSave as any);
+              savedCount++;
+            }
+          }
         } else if (editTargetId) {
+          const dataToSave = { ...receiptForm, voucherNo: receiptForm.voucherNo || getNextVoucherNo('REC') };
           updateMaterialIssue(editTargetId, dataToSave as any);
         }
         if (bypassCheck && overrideReason) {
           addOverrideLog(
             creator,
             'Client Material Receipt',
-            `Voucher: ${dataToSave.voucherNo}, Date: ${dataToSave.issueDate}, Qty: ${dataToSave.qty}`,
+            `Voucher: ${receiptForm.voucherNo || 'Auto'}, Multiple Items`,
             overrideReason
           );
         }
@@ -377,18 +541,25 @@ export const Materials: React.FC = () => {
       if (!masterForm.itemName) return alert('Material Item Name is mandatory.');
     } 
     else if (type === 'receipt') {
-      if (!receiptForm.projectId || !receiptForm.itemId || !receiptForm.qty) return alert('Site, Item, and Quantity are mandatory.');
-      const dataToSave = { ...receiptForm, voucherNo: receiptForm.voucherNo || getNextVoucherNo('REC') };
+      if (editTargetId === 'new') {
+        if (!receiptForm.projectId) return alert('Site is mandatory.');
+        const validItems = receiptLineItems.filter(i => i.itemId && i.qty > 0);
+        if (validItems.length === 0) return alert('At least one Material Item and Quantity is mandatory.');
+      } else {
+        if (!receiptForm.projectId || !receiptForm.itemId || !receiptForm.qty) return alert('Site, Item, and Quantity are mandatory.');
+      }
       
-      const countMatches = checkMaterialIssueDuplicate(
+      const vNoToCheck = receiptForm.voucherNo || getNextVoucherNo('REC');
+      
+      const countMatches = editTargetId === 'new' ? [] : checkMaterialIssueDuplicate(
         materialIssues,
         {
-          voucherNo: dataToSave.voucherNo,
-          issueDate: dataToSave.issueDate,
-          projectId: dataToSave.projectId,
-          itemId: dataToSave.itemId
+          voucherNo: vNoToCheck,
+          issueDate: receiptForm.issueDate,
+          projectId: receiptForm.projectId,
+          itemId: receiptForm.itemId
         },
-        editTargetId === 'new' ? undefined : editTargetId || undefined
+        editTargetId || undefined
       );
 
       if (countMatches.length > 0) {
@@ -513,11 +684,33 @@ export const Materials: React.FC = () => {
     let rows: any[][] = [];
 
     if (reportType === 'Client Material Receipt Report') {
-      headers = ['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Received', 'UoM', 'Received From', 'Remarks'];
+      headers = ['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Received', 'UoM', 'Issued by', 'Remarks'];
       rows = materialIssues.map(m => [
         m.voucherNo, m.issueDate, getProjectName(m.projectId), getItemName(m.itemId), m.qty, getItemUnit(m.itemId), m.issuedTo, m.remarks || '-'
       ]);
     } 
+    else if (reportType === 'Client Material Receipt (Date-wise)') {
+      headers = ['Date', 'Item Description', 'Project Site', 'Qty Received', 'UoM', 'Challan No'];
+      const sorted = [...materialIssues].sort((a, b) => new Date(a.issueDate).getTime() - new Date(b.issueDate).getTime());
+      rows = sorted.map(m => [
+        m.issueDate, getItemName(m.itemId), getProjectName(m.projectId), m.qty, getItemUnit(m.itemId), m.voucherNo
+      ]);
+    }
+    else if (reportType === 'Item-wise Consolidated Balance') {
+      headers = ['Material Item', 'Total Received', 'Total Returned', 'Net Balance', 'Unit'];
+      const itemMap = new Map<string, { received: number, returned: number }>();
+      materialIssues.forEach(i => {
+        const d = itemMap.get(i.itemId) || { received: 0, returned: 0 };
+        itemMap.set(i.itemId, { ...d, received: d.received + i.qty });
+      });
+      materialReturns.forEach(r => {
+        const d = itemMap.get(r.itemId) || { received: 0, returned: 0 };
+        itemMap.set(r.itemId, { ...d, returned: d.returned + r.qty });
+      });
+      rows = Array.from(itemMap.entries()).map(([k, v]) => [
+        getItemName(k), v.received, v.returned, v.received - v.returned, getItemUnit(k)
+      ]);
+    }
     else if (reportType === 'Client Material Return Report') {
       headers = ['Challan No', 'Date', 'Project Site', 'Item Description', 'Qty Returned', 'UoM', 'Returned To', 'Remarks'];
       rows = materialReturns.map(m => [
@@ -786,6 +979,99 @@ export const Materials: React.FC = () => {
                 </table>
               </div>
             </div>
+
+            {/* Live Returnable Materials Issue & Return Tracking Registry */}
+            <div className="bg-white border border-[#b2c0cc] rounded-xs shadow-xs animate-fade-in">
+              <div className="bg-purple-50 px-3 py-2 border-b border-[#cbd5e1] font-bold text-purple-950 flex justify-between items-center text-xs">
+                <span className="flex items-center gap-1.5 font-sans font-extrabold text-purple-950">
+                  <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
+                  Returnable Materials - Issue & Return Track Ledger
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-purple-700 bg-purple-100 font-bold px-2 py-0.5 rounded uppercase font-sans">Type: Returnable Only</span>
+                  <button 
+                    onClick={() => handleQuickLogReturnable('Issue', '', '')} 
+                    className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-3 py-1 rounded text-[10px] flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Plus size={11} /> Quick Log Issue/Return
+                  </button>
+                </div>
+              </div>
+              <div className="p-3">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-purple-100/40 text-purple-950 uppercase text-[9px] border-b border-purple-200">
+                      <th className="py-2 px-3">Project Site</th>
+                      <th className="py-2 px-3">Returnable Item Code & Name</th>
+                      <th className="py-2 px-3 text-right">Inward Issued (Receipts)</th>
+                      <th className="py-2 px-3 text-right">Outward Returned</th>
+                      <th className="py-2 px-3 text-right font-extrabold text-purple-900 bg-purple-100/30">Outstanding Balance On-Site</th>
+                      <th className="py-2 px-3 flex-none w-16">Unit</th>
+                      <th className="py-2 px-3 text-center">Reconciliation Status</th>
+                      <th className="py-2 px-3 text-center">Quick Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-purple-100">
+                    {reconciliationBalances
+                      .filter(b => {
+                        const itemObj = materialItems.find(mi => mi.id === b.itemId);
+                        return itemObj?.materialType === 'Returnable';
+                      })
+                      .map((item, idx) => {
+                        const itemObj = materialItems.find(mi => mi.id === item.itemId);
+                        return (
+                          <tr key={idx} className="hover:bg-purple-50/20">
+                            <td className="py-2.5 px-3 font-semibold text-gray-800">{getProjectName(item.projectId)}</td>
+                            <td className="py-2.5 px-3 font-bold text-purple-950">
+                              <span className="text-gray-400 font-mono text-[10px] mr-1.5">[{itemObj?.itemCode}]</span>
+                              {itemObj?.itemName}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-purple-800 font-bold">{item.received}</td>
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-800 font-bold">{item.returned}</td>
+                            <td className="py-2.5 px-3 text-right font-mono font-black text-purple-700 bg-purple-50/50">{item.balance}</td>
+                            <td className="py-2.5 px-3 text-gray-500 font-mono text-[10px]">{getItemUnit(item.itemId)}</td>
+                            <td className="py-1 px-3 text-center">
+                              {item.balance === 0 ? (
+                                <span className="px-2 py-0.5 rounded text-[9px] bg-emerald-105 text-emerald-800 border border-emerald-300 font-sans font-black uppercase tracking-wider">Fully Returned</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[9px] bg-amber-105 text-amber-800 border border-amber-300 font-sans font-black uppercase tracking-wider">Outstanding ({item.balance})</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button 
+                                  onClick={() => handleQuickLogReturnable('Issue', item.projectId, item.itemId)}
+                                  className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-[4px] text-[10px] font-bold shadow-sm flex items-center gap-0.5 cursor-pointer"
+                                  title="Log Returnable Material Issue"
+                                >
+                                  <Plus size={10} /> Issue
+                                </button>
+                                <button 
+                                  onClick={() => handleQuickLogReturnable('Return', item.projectId, item.itemId)}
+                                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[4px] text-[10px] font-bold shadow-sm flex items-center gap-0.5 cursor-pointer"
+                                  title="Log Returnable Material Return"
+                                >
+                                  <RotateCcw size={10} /> Return
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {reconciliationBalances.filter(b => {
+                      const itemObj = materialItems.find(mi => mi.id === b.itemId);
+                      return itemObj?.materialType === 'Returnable';
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="text-center py-8 text-gray-400 font-medium">
+                          No active returnable material issues or returns have been logged yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
@@ -799,19 +1085,26 @@ export const Materials: React.FC = () => {
                 <h3 className="font-semibold text-[#1a365d] border-b pb-1 text-xs">
                   {editTargetId === 'new' ? 'Add New Item to Master Catalog' : 'Modify Item Details'}
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-xs font-sans">
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Item Code (ID) *</label>
-                    <input type="text" placeholder="e.g. CMT-OPC" className="w-full p-2 border rounded bg-[#fcfdfe]" value={masterForm.itemCode} onChange={e => setMasterForm({ ...masterForm, itemCode: e.target.value })} />
+                    <input type="text" placeholder="Item Code" className="w-full p-2 border rounded bg-[#fcfdfe]" value={masterForm.itemCode} onChange={e => setMasterForm({ ...masterForm, itemCode: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Material Item Name *</label>
-                    <input type="text" placeholder="e.g. Portland Cement Grade-43" className="w-full p-2 border rounded" value={masterForm.itemName} onChange={e => setMasterForm({ ...masterForm, itemName: e.target.value })} />
+                    <input type="text" placeholder="Material Item Name" className="w-full p-2 border rounded" value={masterForm.itemName} onChange={e => setMasterForm({ ...masterForm, itemName: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Item Category *</label>
                     <select className="w-full p-2 border rounded bg-white" value={masterForm.category} onChange={e => setMasterForm({ ...masterForm, category: e.target.value })}>
                       {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Material Type *</label>
+                    <select className="w-full p-2 border rounded bg-white" value={masterForm.materialType} onChange={e => setMasterForm({ ...masterForm, materialType: e.target.value as 'Consumable' | 'Returnable' })}>
+                      <option value="Consumable">Consumable</option>
+                      <option value="Returnable">Returnable</option>
                     </select>
                   </div>
                   <div>
@@ -836,9 +1129,14 @@ export const Materials: React.FC = () => {
               <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
                 <span className="font-extrabold text-slate-800">Master Material Specifications List</span>
                 {!editTargetId && (
-                  <button onClick={() => { setMasterForm({ itemCode: '', itemName: '', category: 'Civil', unit: 'Bag', description: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800 transition flex items-center gap-1">
-                    <Plus size={11} /> Append Material Item specifications
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => { setMasterForm({ itemCode: '', itemName: '', category: 'Civil', materialType: 'Consumable', unit: 'Bag', description: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800 transition flex items-center gap-1">
+                      <Plus size={11} /> Append Material Item specifications
+                    </button>
+                    <button onClick={() => setIsBulkUploadOpen(true)} className="bg-[#2ea043] text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-[#238334] transition flex items-center gap-1">
+                      <Upload size={11} /> Bulk Upload
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="p-3 border-b border-gray-200">
@@ -853,6 +1151,7 @@ export const Materials: React.FC = () => {
                     <th className="py-2 px-3">Item Code</th>
                     <th className="py-2 px-3">Item Description</th>
                     <th className="py-2 px-3">Assigned Category</th>
+                    <th className="py-2 px-3">Material Type</th>
                     <th className="py-2 px-3">Standard UoM</th>
                     <th className="py-2 px-3">Specifications/Remarks</th>
                     <th className="py-2 px-3 text-center">Manage</th>
@@ -866,11 +1165,16 @@ export const Materials: React.FC = () => {
                         <td className="py-2 px-3 font-mono font-semibold text-blue-700">{item.itemCode || '-'}</td>
                         <td className="py-2 px-3 font-bold text-gray-900">{item.itemName}</td>
                         <td className="py-2 px-3 text-gray-600">{item.category}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.materialType === 'Returnable' ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-gray-100 text-gray-800'}`}>
+                            {item.materialType || 'Consumable'}
+                          </span>
+                        </td>
                         <td className="py-2 px-3 font-mono text-gray-500">{item.unit}</td>
                         <td className="py-2 px-3 text-gray-400 italic">{item.description || '-'}</td>
                         <td className="py-2 px-3">
                           <div className="flex justify-center items-center space-x-2">
-                            <button onClick={() => { setMasterForm({ itemCode: item.itemCode || '', itemName: item.itemName, category: item.category, unit: item.unit, description: item.description || '' }); setEditTargetId(item.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                            <button onClick={() => { setMasterForm({ itemCode: item.itemCode || '', itemName: item.itemName, category: item.category, materialType: item.materialType || 'Consumable', unit: item.unit, description: item.description || '' }); setEditTargetId(item.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
                             <button onClick={() => removeRecord('master', item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
                           </div>
                         </td>
@@ -903,37 +1207,103 @@ export const Materials: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-gray-700 font-bold mb-1">Material Item Specification *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={receiptForm.itemId} onChange={e => setReceiptForm({ ...receiptForm, itemId: e.target.value })}>
-                      <option value="">-- Choose item --</option>
-                      {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-1">Quantity Received *</label>
-                    <input type="number" min="0" className="w-full p-2 border rounded" value={receiptForm.qty} onChange={e => setReceiptForm({ ...receiptForm, qty: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-1">Tower (Optional)</label>
-                    <input type="text" placeholder="e.g. Tower B" className="w-full p-2 border rounded" value={receiptForm.tower} onChange={e => setReceiptForm({ ...receiptForm, tower: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-1">Floor (Optional)</label>
-                    <input type="text" placeholder="e.g. 14th Floor" className="w-full p-2 border rounded" value={receiptForm.floor} onChange={e => setReceiptForm({ ...receiptForm, floor: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-1">Delivered By (Client Representative) *</label>
-                    <input type="text" placeholder="Name/Agency" className="w-full p-2 border rounded" value={receiptForm.issuedTo} onChange={e => setReceiptForm({ ...receiptForm, issuedTo: e.target.value })} />
+                    <label className="block text-gray-700 font-bold mb-1">Issued by *</label>
+                    <input type="text" placeholder="Staff Name" className="w-full p-2 border rounded" value={receiptForm.issuedTo} onChange={e => setReceiptForm({ ...receiptForm, issuedTo: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Client Delivery Challan (Voucher No) *</label>
-                    <input type="text" placeholder="e.g. CH-238491" className="w-full p-2 border rounded font-mono" value={receiptForm.voucherNo} onChange={e => setReceiptForm({ ...receiptForm, voucherNo: e.target.value })} />
+                    <input type="text" placeholder="Voucher Number" className="w-full p-2 border rounded font-mono" value={receiptForm.voucherNo} onChange={e => setReceiptForm({ ...receiptForm, voucherNo: e.target.value })} />
                   </div>
                 </div>
-                <div className="text-xs">
-                  <label className="block text-gray-700 font-bold mb-1">Remarks</label>
-                  <input type="text" placeholder="Type comments..." className="w-full p-2 border rounded" value={receiptForm.remarks} onChange={e => setReceiptForm({ ...receiptForm, remarks: e.target.value })} />
-                </div>
+
+                {editTargetId === 'new' ? (
+                  <div className="mt-4 border border-blue-200 bg-blue-50/30 p-2 rounded">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-bold text-xs text-[#0056b3]">Line Items</h4>
+                      <button onClick={() => setReceiptLineItems([...receiptLineItems, { id: Math.random(), itemId: '', qty: 0, tower: '', floor: '', remarks: '' }])} className="text-[10px] bg-[#0056b3] text-white px-2 py-1 rounded hover:bg-blue-800 flex items-center">
+                        <Plus size={10} className="mr-1" /> Add Line
+                      </button>
+                    </div>
+                    {receiptLineItems.map((line, index) => (
+                      <div key={line.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 text-xs mb-2 items-start border-b border-blue-100 pb-2">
+                        <div className="col-span-3">
+                          <select className="w-full p-1.5 border rounded bg-white" value={line.itemId} onChange={e => {
+                            const newLines = [...receiptLineItems];
+                            newLines[index].itemId = e.target.value;
+                            setReceiptLineItems(newLines);
+                          }}>
+                            <option value="">-- Choose item --</option>
+                            {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <input type="number" min="0" placeholder="Qty" className="w-full p-1.5 border rounded" value={line.qty || ''} onChange={e => {
+                            const newLines = [...receiptLineItems];
+                            newLines[index].qty = Number(e.target.value);
+                            setReceiptLineItems(newLines);
+                          }} />
+                        </div>
+                        <div className="col-span-2">
+                          <input type="text" placeholder="Tower (Opt)" className="w-full p-1.5 border rounded" value={line.tower} onChange={e => {
+                            const newLines = [...receiptLineItems];
+                            newLines[index].tower = e.target.value;
+                            setReceiptLineItems(newLines);
+                          }} />
+                        </div>
+                        <div className="col-span-2">
+                          <input type="text" placeholder="Floor (Opt)" className="w-full p-1.5 border rounded" value={line.floor} onChange={e => {
+                            const newLines = [...receiptLineItems];
+                            newLines[index].floor = e.target.value;
+                            setReceiptLineItems(newLines);
+                          }} />
+                        </div>
+                        <div className="col-span-2">
+                          <input type="text" placeholder="Remarks" className="w-full p-1.5 border rounded" value={line.remarks} onChange={e => {
+                            const newLines = [...receiptLineItems];
+                            newLines[index].remarks = e.target.value;
+                            setReceiptLineItems(newLines);
+                          }} />
+                        </div>
+                        <div className="col-span-1 pt-1 text-center">
+                          <button onClick={() => {
+                            if (receiptLineItems.length > 1) {
+                              setReceiptLineItems(receiptLineItems.filter((_, i) => i !== index));
+                            }
+                          }} className="text-red-500 hover:text-red-700">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs mt-2 border-t pt-2">
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1">Material Item Specification *</label>
+                      <select className="w-full p-2 border rounded bg-white" value={receiptForm.itemId} onChange={e => setReceiptForm({ ...receiptForm, itemId: e.target.value })}>
+                        <option value="">-- Choose item --</option>
+                        {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1">Quantity Received *</label>
+                      <input type="number" min="0" className="w-full p-2 border rounded" value={receiptForm.qty} onChange={e => setReceiptForm({ ...receiptForm, qty: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1">Tower (Optional)</label>
+                      <input type="text" placeholder="Tower" className="w-full p-2 border rounded" value={receiptForm.tower} onChange={e => setReceiptForm({ ...receiptForm, tower: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1">Floor (Optional)</label>
+                      <input type="text" placeholder="Floor" className="w-full p-2 border rounded" value={receiptForm.floor} onChange={e => setReceiptForm({ ...receiptForm, floor: e.target.value })} />
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-gray-700 font-bold mb-1">Remarks</label>
+                      <input type="text" placeholder="Type comments..." className="w-full p-2 border rounded" value={receiptForm.remarks} onChange={e => setReceiptForm({ ...receiptForm, remarks: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex justify-end space-x-2 text-xs pt-2">
                   <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
                   <button onClick={() => saveEntry('receipt')} className="px-3 py-1.5 bg-[#1a365d] text-white hover:bg-slate-800 rounded">Save Receipt Entry</button>
@@ -945,7 +1315,7 @@ export const Materials: React.FC = () => {
               <div className="bg-slate-100 px-3 py-2 border-b border-[#cbd5e1] flex justify-between items-center text-xs">
                 <span className="font-extrabold text-slate-800">Historical Log of Client-Supplied Material Receipts</span>
                 {!editTargetId && (
-                  <button onClick={() => { setReceiptForm({ voucherNo: '', issueDate: new Date().toISOString().split('T')[0], projectId: '', tower: '', floor: '', itemId: '', qty: 0, issuedTo: '', remarks: '' }); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800">
+                  <button onClick={() => { setReceiptForm({ voucherNo: '', issueDate: new Date().toISOString().split('T')[0], projectId: '', tower: '', floor: '', itemId: '', qty: 0, issuedTo: '', remarks: '' }); setReceiptLineItems([{ id: Math.random(), itemId: '', qty: 0, tower: '', floor: '', remarks: '' }]); setEditTargetId('new'); }} className="bg-sky-700 text-white font-bold px-3 py-1 rounded text-[10px] hover:bg-sky-800">
                     <Plus size={11} className="inline mr-1" /> Register Influx Material
                   </button>
                 )}
@@ -960,7 +1330,7 @@ export const Materials: React.FC = () => {
                     <th className="py-2 px-3">Material Name</th>
                     <th className="py-2 px-3 text-right">Qty Received</th>
                     <th className="py-2 px-3 font-semibold">Unit</th>
-                    <th className="py-2 px-3">Received From</th>
+                    <th className="py-2 px-3">Issued by</th>
                     <th className="py-2 px-3">Audit Stamp</th>
                     <th className="py-2 px-3 text-center">Manage</th>
                   </tr>
@@ -1035,7 +1405,7 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Outward Return Challan No *</label>
-                    <input type="text" placeholder="e.g. CH-RET-231" className="w-full p-2 border rounded font-mono" value={returnForm.voucherNo} onChange={e => setReturnForm({ ...returnForm, voucherNo: e.target.value })} />
+                    <input type="text" placeholder="Outward Challan Number" className="w-full p-2 border rounded font-mono" value={returnForm.voucherNo} onChange={e => setReturnForm({ ...returnForm, voucherNo: e.target.value })} />
                   </div>
                 </div>
                 <div className="text-xs">
@@ -1206,7 +1576,7 @@ export const Materials: React.FC = () => {
                 </div>
                 <div className="text-xs">
                   <label className="block text-gray-700 font-bold mb-1">Authorized Remarks / Gate Pass Ref</label>
-                  <input type="text" placeholder="e.g. Authorized by Project Coordinator" className="w-full p-2 border rounded" value={transferForm.remarks} onChange={e => setTransferForm({ ...transferForm, remarks: e.target.value })} />
+                  <input type="text" placeholder="Authorized comments / pass details" className="w-full p-2 border rounded" value={transferForm.remarks} onChange={e => setTransferForm({ ...transferForm, remarks: e.target.value })} />
                 </div>
                 <div className="flex justify-end space-x-2 text-xs pt-2">
                   <button onClick={() => setEditTargetId(null)} className="px-3 py-1.5 bg-gray-100 border hover:bg-gray-200 rounded">Cancel</button>
@@ -1312,7 +1682,7 @@ export const Materials: React.FC = () => {
                 </div>
                 <div className="text-xs">
                   <label className="block text-gray-700 font-bold mb-1">Reason for Damage / Accident Log *</label>
-                  <input type="text" placeholder="e.g. Broken under heavy forklift movement" className="w-full p-2 border rounded text-red-800 font-semibold" value={lossForm.reason} onChange={e => setLossForm({ ...lossForm, reason: e.target.value })} />
+                  <input type="text" placeholder="Detail reason of damage/accident" className="w-full p-2 border rounded text-red-800 font-semibold" value={lossForm.reason} onChange={e => setLossForm({ ...lossForm, reason: e.target.value })} />
                 </div>
                 <div className="text-xs">
                   <label className="block text-gray-700 font-bold mb-1">Additional Comments / Remarks</label>
@@ -1395,7 +1765,7 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Supplier Corp / Store *</label>
-                    <input type="text" placeholder="e.g. UltraTech Dealer Corp" className="w-full p-2 border rounded font-semibold" value={purchaseForm.supplierName} onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })} />
+                    <input type="text" placeholder="Supplier / Store name" className="w-full p-2 border rounded font-semibold" value={purchaseForm.supplierName} onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Purchase Site Allocation *</label>
@@ -1421,7 +1791,7 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Invoice Number *</label>
-                    <input type="text" placeholder="e.g. INV-92841" className="w-full p-2 border rounded font-mono font-semibold text-blue-900" value={purchaseForm.invoiceNumber} onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })} />
+                    <input type="text" placeholder="Invoice Number" className="w-full p-2 border rounded font-mono font-semibold text-blue-900" value={purchaseForm.invoiceNumber} onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })} />
                   </div>
                 </div>
                 <div className="text-xs">
@@ -1501,15 +1871,15 @@ export const Materials: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-sans">
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Asset Category Name *</label>
-                    <input type="text" placeholder="e.g. Vibrator / Cutter Machine / Grinder" className="w-full p-2 border rounded font-semibold text-slate-800" value={equipmentForm.name} onChange={e => setEquipmentForm({ ...equipmentForm, name: e.target.value })} />
+                    <input type="text" placeholder="Asset Name / Description" className="w-full p-2 border rounded font-semibold text-slate-800" value={equipmentForm.name} onChange={e => setEquipmentForm({ ...equipmentForm, name: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1 font-mono">Unique Asset Serialization Code *</label>
-                    <input type="text" placeholder="e.g. EQ-VIB-01" className="w-full p-2 border rounded font-mono font-semibold" value={equipmentForm.assetCode} onChange={e => setEquipmentForm({ ...equipmentForm, assetCode: e.target.value })} />
+                    <input type="text" placeholder="Asset Code" className="w-full p-2 border rounded font-mono font-semibold" value={equipmentForm.assetCode} onChange={e => setEquipmentForm({ ...equipmentForm, assetCode: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Acquisition Supplier / Brand *</label>
-                    <input type="text" placeholder="e.g. Bosch Power / Greaves" className="w-full p-2 border rounded" value={equipmentForm.brand} onChange={e => setEquipmentForm({ ...equipmentForm, brand: e.target.value })} />
+                    <input type="text" placeholder="Brand / Supplier" className="w-full p-2 border rounded" value={equipmentForm.brand} onChange={e => setEquipmentForm({ ...equipmentForm, brand: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Total Asset Cost (INR) *</label>
@@ -1614,7 +1984,7 @@ export const Materials: React.FC = () => {
                 <div className="space-y-2 text-xs">
                   <div>
                     <label className="block text-gray-600 font-bold mb-0.5">Supplier Name *</label>
-                    <input type="text" placeholder="e.g. UltraTech Dealer Corp" className="w-full p-2 border rounded font-semibold" value={paymentForm.supplierName} onChange={e => setPaymentForm({ ...paymentForm, supplierName: e.target.value })} />
+                    <input type="text" placeholder="Supplier / Contractor Name" className="w-full p-2 border rounded font-semibold" value={paymentForm.supplierName} onChange={e => setPaymentForm({ ...paymentForm, supplierName: e.target.value })} />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -1638,7 +2008,7 @@ export const Materials: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-gray-600 font-bold mb-0.5 font-mono">Invoice Reference</label>
-                      <input type="text" placeholder="e.g. INV-92841" className="w-full p-2 border rounded" value={paymentForm.invoiceReference} onChange={e => setPaymentForm({ ...paymentForm, invoiceReference: e.target.value })} />
+                      <input type="text" placeholder="Invoice Number/Challan" className="w-full p-2 border rounded" value={paymentForm.invoiceReference} onChange={e => setPaymentForm({ ...paymentForm, invoiceReference: e.target.value })} />
                     </div>
                   </div>
                   <div>
@@ -1752,6 +2122,8 @@ export const Materials: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {[
                   { title: "Client Material Receipt Report", desc: "Detailed chronological record of materials supplied by client." },
+                  { title: "Client Material Receipt (Date-wise)", desc: "Material receipts sorted by date chronologically." },
+                  { title: "Item-wise Consolidated Balance", desc: "Total quantity issued and returned mapped by item name." },
                   { title: "Client Material Return Report", desc: "Detailed records of raw/scrap materials returned to clients." },
                   { title: "Material Reconciliation Report", desc: "Comparative item-wise inward vs returned balance matrix." },
                   { title: "Site-wise Material Balance Report", desc: "Balance sheet filtered for site locations." },
@@ -1779,6 +2151,189 @@ export const Materials: React.FC = () => {
           </div>
         )}
       </div>
+
+      {isReturnableModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white border border-[#b2c0cc] w-full max-w-lg shadow-xl rounded-xs overflow-hidden flex flex-col">
+            <div className="bg-purple-900 text-white px-4 py-3 border-b border-purple-950 flex justify-between items-center font-sans">
+              <div className="flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider">
+                <Plus size={14} /> Log Returnable Material Transaction
+              </div>
+              <button 
+                onClick={() => setIsReturnableModalOpen(false)}
+                className="text-purple-200 hover:text-white font-extrabold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-3 overflow-y-auto max-h-[80vh] text-xs font-sans">
+              
+              {/* Type Switcher Selector Tabs */}
+              <div className="grid grid-cols-2 gap-2 text-center font-bold">
+                <button
+                  type="button"
+                  onClick={() => setReturnableForm(prev => ({ ...prev, type: 'Issue' }))}
+                  className={`py-2 rounded border transition ${returnableForm.type === 'Issue' ? 'bg-purple-100 border-purple-500 text-purple-950' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                >
+                  <Plus size={12} className="inline mr-1" /> Issue (Inward Issued)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReturnableForm(prev => ({ ...prev, type: 'Return' }))}
+                  className={`py-2 rounded border transition ${returnableForm.type === 'Return' ? 'bg-emerald-100 border-emerald-500 text-emerald-950' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                >
+                  <RotateCcw size={12} className="inline mr-1" /> Return (Outward Returned)
+                </button>
+              </div>
+
+              {/* Form fields */}
+              <div className="space-y-3 pt-2 text-left">
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">Transaction Date *</label>
+                  <input 
+                    type="date" 
+                    className="w-full p-2 border rounded font-semibold text-slate-800" 
+                    value={returnableForm.date} 
+                    onChange={e => setReturnableForm(prev => ({ ...prev, date: e.target.value }))} 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">Allocated Project Site *</label>
+                  <select 
+                    className="w-full p-2 border rounded bg-white font-semibold text-slate-800" 
+                    value={returnableForm.projectId} 
+                    onChange={e => setReturnableForm(prev => ({ ...prev, projectId: e.target.value }))}
+                  >
+                    <option value="">-- Select Project Site --</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">Returnable Material Item *</label>
+                  <select 
+                    className="w-full p-2 border rounded bg-white font-semibold text-slate-800" 
+                    value={returnableForm.itemId} 
+                    onChange={e => setReturnableForm(prev => ({ ...prev, itemId: e.target.value }))}
+                  >
+                    <option value="">-- Choose Returnable Item --</option>
+                    {materialItems
+                      .filter(i => i.materialType === 'Returnable')
+                      .map(i => <option key={i.id} value={i.id}>{i.itemName} [{i.itemCode || 'No Code'}] ({i.unit})</option>)}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Quantity/Volume *</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      placeholder="Enter count"
+                      className="w-full p-2 border rounded font-bold font-mono text-slate-800"
+                      value={returnableForm.qty || ''} 
+                      onChange={e => setReturnableForm(prev => ({ ...prev, qty: Number(e.target.value) }))} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Challan / Voucher No (Optional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Auto-generated if blank"
+                      className="w-full p-2 border rounded font-mono text-slate-800"
+                      value={returnableForm.voucherNo} 
+                      onChange={e => setReturnableForm(prev => ({ ...prev, voucherNo: e.target.value }))} 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Tower (Optional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Tower 3"
+                      className="w-full p-2 border rounded text-slate-800"
+                      value={returnableForm.tower} 
+                      onChange={e => setReturnableForm(prev => ({ ...prev, tower: e.target.value }))} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Floor (Optional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. 15th F"
+                      className="w-full p-2 border rounded text-slate-800"
+                      value={returnableForm.floor} 
+                      onChange={e => setReturnableForm(prev => ({ ...prev, floor: e.target.value }))} 
+                    />
+                  </div>
+                </div>
+
+                {returnableForm.type === 'Return' && (
+                  <div>
+                    <label className="block text-gray-700 font-bold mb-1">Packaging / Safety Material Condition *</label>
+                    <select 
+                      className="w-full p-2 border rounded bg-white text-slate-800"
+                      value={returnableForm.condition}
+                      onChange={e => setReturnableForm(prev => ({ ...prev, condition: e.target.value as any }))}
+                    >
+                      <option value="Good">Good/Reusable</option>
+                      <option value="Damaged">Damaged</option>
+                      <option value="Scrap">Waste/Scrap</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">
+                    {returnableForm.type === 'Issue' 
+                      ? 'Issued by *' 
+                      : 'Returned To (Supervisor/Security Signoff) *'}
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="Enter name of carrier/person"
+                    className="w-full p-[7px] border rounded font-medium text-slate-800"
+                    value={returnableForm.person} 
+                    onChange={e => setReturnableForm(prev => ({ ...prev, person: e.target.value }))} 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">Transaction Specifications / Remarks</label>
+                  <textarea 
+                    rows={2} 
+                    placeholder="Type comments, gate pass logs, or transit notes..."
+                    className="w-full p-2 border rounded text-slate-800"
+                    value={returnableForm.remarks}
+                    onChange={e => setReturnableForm(prev => ({ ...prev, remarks: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex justify-end gap-2 text-xs">
+              <button 
+                type="button" 
+                onClick={() => setIsReturnableModalOpen(false)} 
+                className="px-3 py-1.5 bg-white border hover:bg-slate-100 rounded text-slate-700 font-medium font-sans cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={handleSaveReturnable} 
+                className={`px-4 py-1.5 text-white font-bold rounded font-sans transition shadow-sm cursor-pointer ${returnableForm.type === 'Issue' ? 'bg-purple-700 hover:bg-purple-800' : 'bg-emerald-700 hover:bg-emerald-800'}`}
+              >
+                Save {returnableForm.type === 'Issue' ? 'Issue Inflow' : 'Return Outflow'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DuplicateWarningModal
         isOpen={dupModalOpen}
@@ -1848,6 +2403,29 @@ export const Materials: React.FC = () => {
             });
             setActiveTab('supplier_ledger');
           }
+        }}
+      />
+      <BulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        expectedColumns={['itemCode', 'itemName', 'category', 'unit']}
+        entityName="Material Master"
+        onUpload={async (data) => {
+          const formattedData = data.map(item => ({
+            ...item,
+            id: `m_` + Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
+            materialType: item.materialType || 'Consumable'
+          }));
+          const res = await fetch('/api/material-items/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formattedData)
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Failed to bulk upload materials");
+          }
+          window.location.reload();
         }}
       />
     </div>

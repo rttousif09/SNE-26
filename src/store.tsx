@@ -122,9 +122,9 @@ interface AppContextType extends AppState {
 
 const initialState: AppState = {
   projects: [
-    { id: 'p1', name: 'S3 Eco City', startDate: '2026-01-01', completionDate: '2027-01-01', address: 'Plot 4, Sector 18', budget: 15000000 },
-    { id: 'p2', name: 'EPR Mulund', startDate: '2026-01-01', completionDate: '2027-06-30', address: 'LBS Road, Mulund West', budget: 85000000 },
-    { id: 'p3', name: 'City Center Mall', startDate: '2025-01-15', completionDate: '2026-01-15', address: 'Downtown', budget: 5000000 },
+    { id: 'p1', name: 'S3 Eco City', startDate: '2026-01-01', completionDate: '2027-01-01', address: 'Plot 4, Sector 18', budget: 15000000, status: 'Ongoing' },
+    { id: 'p2', name: 'EPR Mulund', startDate: '2026-01-01', completionDate: '2027-06-30', address: 'LBS Road, Mulund West', budget: 85000000, status: 'Ongoing' },
+    { id: 'p3', name: 'City Center Mall', startDate: '2025-01-15', completionDate: '2026-01-15', address: 'Downtown', budget: 5000000, status: 'Ongoing' },
   ],
   workers: [
     { id: 'w1', serialNo: '1', workerId: 'EMP001', name: 'John Doe', projectId: 'p1', designation: 'Supervisor', joiningDate: '2025-01-10' },

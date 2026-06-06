@@ -100,7 +100,7 @@ export const SiteMonthlySummary: React.FC = () => {
                 className="sap-input font-bold w-48"
                 value={billNo}
                 onChange={e => setBillNo(e.target.value)}
-                placeholder="e.g. SNE/LD/2025/04"
+                placeholder="Bill Number"
               />
             </div>
 

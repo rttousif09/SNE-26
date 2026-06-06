@@ -40,7 +40,8 @@ function initDbSchema() {
       startDate TEXT NOT NULL,
       completionDate TEXT,
       address TEXT NOT NULL,
-      budget REAL NOT NULL
+      budget REAL NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Ongoing'
     );
 
     CREATE TABLE IF NOT EXISTS workers (
@@ -67,6 +68,10 @@ function initDbSchema() {
       tds REAL DEFAULT 0,
       retention REAL DEFAULT 0,
       gst REAL DEFAULT 0,
+      debitAmount REAL DEFAULT 0,
+      debitReason TEXT,
+      billType TEXT,
+      measurementItems TEXT,
       hardCopyFile TEXT,
       hardCopyFileName TEXT,
       hardCopyFileType TEXT,
@@ -230,6 +235,7 @@ function initDbSchema() {
       itemCode TEXT,
       itemName TEXT NOT NULL,
       category TEXT NOT NULL,
+      materialType TEXT DEFAULT 'Consumable',
       unit TEXT NOT NULL,
       description TEXT,
       createdBy TEXT,
@@ -451,6 +457,7 @@ function initDbSchema() {
   try {
     db.exec("ALTER TABLE projects ADD COLUMN clientName TEXT");
   } catch (e) {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'Ongoing'"); } catch (e) {}
   try { db.exec("ALTER TABLE projects ADD COLUMN projectManager TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE projects ADD COLUMN pmContact TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE projects ADD COLUMN billingEngineer TEXT"); } catch (e) {}
@@ -464,6 +471,12 @@ function initDbSchema() {
     db.exec("ALTER TABLE billings ADD COLUMN gst REAL DEFAULT 0");
   } catch (e) {}
   try {
+    db.exec("ALTER TABLE billings ADD COLUMN debitAmount REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN debitReason TEXT");
+  } catch (e) {}
+  try {
     db.exec("ALTER TABLE billings ADD COLUMN hardCopyFile TEXT");
   } catch (e) {}
   try {
@@ -471,6 +484,12 @@ function initDbSchema() {
   } catch (e) {}
   try {
     db.exec("ALTER TABLE billings ADD COLUMN hardCopyFileType TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN billType TEXT");
+  } catch (e) {}
+  try {
+    db.exec("ALTER TABLE billings ADD COLUMN measurementItems TEXT");
   } catch (e) {}
 
   try {
@@ -578,6 +597,23 @@ function initDbSchema() {
       profitLoss REAL DEFAULT 0,
       closedBy TEXT,
       closedDate TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS daily_site_summaries (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      workforceSummary TEXT,
+      financialSummary TEXT,
+      materialSummary TEXT,
+      billingSummary TEXT,
+      projectActivitySummary TEXT,
+      aiInsights TEXT,
+      riskAlerts TEXT,
+      healthScore INTEGER,
+      healthStatus TEXT,
+      generatedAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
   `);
 
@@ -687,6 +723,12 @@ function initDbSchema() {
       );
     }
   }
+  
+  try {
+    db.exec("ALTER TABLE material_items ADD COLUMN materialType TEXT DEFAULT 'Consumable'");
+  } catch (e) {
+    // Column already exists, safe to ignore
+  }
 }
 
 initDbSchema();
@@ -736,14 +778,15 @@ async function startServer() {
 
   app.post("/api/projects", (req, res) => {
     try {
-      const { id, name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact } = req.body;
+      const { id, name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact, status } = req.body;
       db.prepare(`
-        INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, name, clientName || null, startDate, completionDate || null, address, parseFloat(budget),
         projectManager || "", pmContact || "", billingEngineer || "", beContact || "",
-        siteIncharge || "", siContact || "", ourRepresentatives || "", repContact || ""
+        siteIncharge || "", siContact || "", ourRepresentatives || "", repContact || "",
+        status || "Ongoing"
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -754,16 +797,17 @@ async function startServer() {
   app.put("/api/projects/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact } = req.body;
+      const { name, clientName, startDate, completionDate, address, budget, projectManager, pmContact, billingEngineer, beContact, siteIncharge, siContact, ourRepresentatives, repContact, status } = req.body;
       db.prepare(`
         UPDATE projects
         SET name = ?, clientName = ?, startDate = ?, completionDate = ?, address = ?, budget = ?,
-            projectManager = ?, pmContact = ?, billingEngineer = ?, beContact = ?, siteIncharge = ?, siContact = ?, ourRepresentatives = ?, repContact = ?
+            projectManager = ?, pmContact = ?, billingEngineer = ?, beContact = ?, siteIncharge = ?, siContact = ?, ourRepresentatives = ?, repContact = ?, status = ?
         WHERE id = ?
       `).run(
         name, clientName || null, startDate, completionDate || null, address, parseFloat(budget),
         projectManager || "", pmContact || "", billingEngineer || "", beContact || "",
         siteIncharge || "", siContact || "", ourRepresentatives || "", repContact || "",
+        status || "Ongoing",
         id
       );
       res.json(req.body);
@@ -787,6 +831,41 @@ async function startServer() {
     try {
       const rows = db.prepare("SELECT * FROM workers").all();
       res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/workers/bulk", (req, res) => {
+    try {
+      const records = req.body;
+      if (!Array.isArray(records)) {
+        return res.status(400).json({ error: "Expected an array of records" });
+      }
+      
+      const insert = db.prepare(`
+        INSERT INTO workers (id, serialNo, workerId, name, projectId, designation, joiningDate, exitDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      const transaction = db.transaction((recs) => {
+        let count = 0;
+        for (const rec of recs) {
+          // If a worker with the same ID already exists, or basically just insert
+          // Since we want this to be safe, we can use INSERT OR REPLACE or just let it fail on duplication. Let's let it fail on duplication of UI logic or use REPLACE.
+          try {
+            insert.run(rec.id, rec.serialNo || null, rec.workerId, rec.name, rec.projectId, rec.designation, rec.joiningDate, rec.exitDate || null);
+            count++;
+          } catch (e: any) {
+            // Ignore duplicates if needed, or throw. For now let's throw to be strict, but we could also console.log.
+            throw e;
+          }
+        }
+        return count;
+      });
+      
+      const count = transaction(records);
+      res.status(201).json({ count });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -834,7 +913,21 @@ async function startServer() {
   app.get("/api/billings", (req, res) => {
     try {
       const rows = db.prepare("SELECT * FROM billings").all();
-      res.json(rows);
+      const mapped = rows.map((row: any) => {
+        let parsedItems = [];
+        if (row.measurementItems) {
+          try {
+            parsedItems = JSON.parse(row.measurementItems);
+          } catch (e) {
+            parsedItems = [];
+          }
+        }
+        return {
+          ...row,
+          measurementItems: parsedItems
+        };
+      });
+      res.json(mapped);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -842,10 +935,11 @@ async function startServer() {
 
   app.post("/api/billings", (req, res) => {
     try {
-      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, hardCopyFile, hardCopyFileName, hardCopyFileType } = req.body;
+      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems } = req.body;
+      const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
-        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, hardCopyFile, hardCopyFileName, hardCopyFileType)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         srNo || null,
@@ -858,6 +952,10 @@ async function startServer() {
         parseFloat(tds || 0),
         parseFloat(retention || 0),
         parseFloat(gst || 0),
+        parseFloat(debitAmount || 0),
+        debitReason || null,
+        billType || null,
+        mItemsStr,
         hardCopyFile || null,
         hardCopyFileName || null,
         hardCopyFileType || null
@@ -871,10 +969,11 @@ async function startServer() {
   app.put("/api/billings/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, hardCopyFile, hardCopyFileName, hardCopyFileType } = req.body;
+      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems } = req.body;
+      const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
         UPDATE billings
-        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?
+        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, debitAmount = ?, debitReason = ?, billType = ?, measurementItems = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?
         WHERE id = ?
       `).run(
         srNo || null,
@@ -887,6 +986,10 @@ async function startServer() {
         parseFloat(tds || 0),
         parseFloat(retention || 0),
         parseFloat(gst || 0),
+        parseFloat(debitAmount || 0),
+        debitReason || null,
+        billType || null,
+        mItemsStr,
         hardCopyFile || null,
         hardCopyFileName || null,
         hardCopyFileType || null,
@@ -1772,13 +1875,48 @@ async function startServer() {
     }
   });
 
+  app.post("/api/material-items/bulk", (req, res) => {
+    try {
+      const records = req.body;
+      if (!Array.isArray(records)) {
+        return res.status(400).json({ error: "Expected an array of records" });
+      }
+
+      const insert = db.prepare(`
+        INSERT INTO material_items (id, itemCode, itemName, category, materialType, unit, description, createdBy, createdDate, modifiedBy, modifiedDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const transaction = db.transaction((recs) => {
+        let count = 0;
+        for (const rec of recs) {
+          try {
+            insert.run(
+              rec.id, rec.itemCode || null, rec.itemName, rec.category, rec.materialType || 'Consumable', rec.unit, 
+              rec.description || null, rec.createdBy || null, rec.createdDate || null, rec.modifiedBy || null, rec.modifiedDate || null
+            );
+            count++;
+          } catch (e: any) {
+            throw e;
+          }
+        }
+        return count;
+      });
+
+      const count = transaction(records);
+      res.status(201).json({ count });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/material-items", (req, res) => {
     try {
-      const { id, itemCode, itemName, category, unit, description, createdBy, createdDate } = req.body;
+      const { id, itemCode, itemName, category, materialType, unit, description, createdBy, createdDate } = req.body;
       db.prepare(`
-        INSERT INTO material_items (id, itemCode, itemName, category, unit, description, createdBy, createdDate, modifiedBy, modifiedDate)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, itemCode || null, itemName, category, unit, description || null, createdBy || null, createdDate || null, createdBy || null, createdDate || null);
+        INSERT INTO material_items (id, itemCode, itemName, category, materialType, unit, description, createdBy, createdDate, modifiedBy, modifiedDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, itemCode || null, itemName, category, materialType || 'Consumable', unit, description || null, createdBy || null, createdDate || null, createdBy || null, createdDate || null);
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1788,12 +1926,12 @@ async function startServer() {
   app.put("/api/material-items/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { itemCode, itemName, category, unit, description, modifiedBy, modifiedDate } = req.body;
+      const { itemCode, itemName, category, materialType, unit, description, modifiedBy, modifiedDate } = req.body;
       db.prepare(`
         UPDATE material_items
-        SET itemCode = ?, itemName = ?, category = ?, unit = ?, description = ?, modifiedBy = ?, modifiedDate = ?
+        SET itemCode = ?, itemName = ?, category = ?, materialType = ?, unit = ?, description = ?, modifiedBy = ?, modifiedDate = ?
         WHERE id = ?
-      `).run(itemCode || null, itemName, category, unit, description || null, modifiedBy || null, modifiedDate || null, id);
+      `).run(itemCode || null, itemName, category, materialType || 'Consumable', unit, description || null, modifiedBy || null, modifiedDate || null, id);
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2293,11 +2431,11 @@ async function startServer() {
       // Insert fresh data
       if (backup.projects && Array.isArray(backup.projects)) {
         const insert = db.prepare(`
-          INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO projects (id, name, clientName, startDate, completionDate, address, budget, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const p of backup.projects) {
-          insert.run(p.id, p.name, p.clientName || null, p.startDate, p.completionDate || null, p.address, parseFloat(p.budget));
+          insert.run(p.id, p.name, p.clientName || null, p.startDate, p.completionDate || null, p.address, parseFloat(p.budget), p.status || "Ongoing");
         }
       }
 
@@ -2719,6 +2857,157 @@ async function startServer() {
       db.prepare("DELETE FROM financial_years WHERE id=?").run(id);
       res.json({ success: true, id });
     } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 17. Daily Site Summaries
+  app.get("/api/daily-summaries", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM daily_site_summaries ORDER BY date DESC").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/generate-daily-summary", async (req, res) => {
+    try {
+      const { projectId, date } = req.body;
+      if (!projectId || !date) {
+        return res.status(400).json({ error: "Missing projectId or date" });
+      }
+
+      // Fetch project details
+      const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as any;
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Collect raw data for the specific project and date
+      const attendance = db.prepare("SELECT * FROM attendance WHERE projectId = ? AND date = ?").all(projectId, date) as any[];
+      const totalWorkers = db.prepare("SELECT COUNT(*) as count FROM workers WHERE projectId = ?").get(projectId) as any;
+      const advances = db.prepare("SELECT amount FROM advances WHERE projectId = ? AND date = ?").all(projectId, date) as any[];
+      const workerPayments = db.prepare("SELECT netPayment FROM worker_payments WHERE projectId = ? AND date = ?").all(projectId, date) as any[];
+      const kharchis = db.prepare("SELECT amount FROM kharchis WHERE projectId = ? AND date = ?").all(projectId, date) as any[];
+      
+      const ledgerExpenses = db.prepare("SELECT kharchi, mess, workerAdvance, tiffin, travel, machineryMaterial, workerPayment, stationery, others FROM expenses_ledger WHERE projectId = ? AND date = ?").all(projectId, date) as any[];
+      
+      const issues = db.prepare("SELECT i.qty, m.itemName, m.unit FROM material_issues i JOIN material_items m ON i.itemId = m.id WHERE i.projectId = ? AND i.issueDate = ?").all(projectId, date) as any[];
+      const returns = db.prepare("SELECT r.qty, m.itemName, m.unit FROM material_returns r JOIN material_items m ON r.itemId = m.id WHERE r.projectId = ? AND r.returnDate = ?").all(projectId, date) as any[];
+      
+      const bills = db.prepare("SELECT amount FROM billings WHERE projectId = ? AND certifyDate = ?").all(projectId, date) as any[];
+      const cPayments = db.prepare("SELECT amountReceived FROM client_payments WHERE projectId = ? AND date = ?").all(projectId, date) as any[];
+      
+      const dlrs = db.prepare("SELECT carpenter, fitter, helper, mason, rigger, staff, remarks FROM dlrs WHERE projectId = ? AND date = ?").all(projectId, date) as any[];
+
+      // Yesterday metrics for comparison
+      const yesterdayDate = new Date(new Date(date).getTime() - 86400000).toISOString().split('T')[0];
+      const yAttendance = db.prepare("SELECT * FROM attendance WHERE projectId = ? AND date = ?").all(projectId, yesterdayDate) as any[];
+      const yExpenses = db.prepare("SELECT kharchi, mess, workerAdvance, tiffin, travel, machineryMaterial, workerPayment, stationery, others FROM expenses_ledger WHERE projectId = ? AND date = ?").all(projectId, yesterdayDate) as any[];
+      
+      const calcExpenses = (list: any[]) => list.reduce((acc, exp) => acc + (exp.kharchi||0) + (exp.mess||0) + (exp.workerAdvance||0) + (exp.tiffin||0) + (exp.travel||0) + (exp.machineryMaterial||0) + (exp.workerPayment||0) + (exp.stationery||0) + (exp.others||0), 0);
+
+      const yesterdayExpTotal = calcExpenses(yExpenses);
+      const todayExpTotal = calcExpenses(ledgerExpenses);
+
+      // Build data string
+      const rawData = `
+        Project Name: ${project.name}
+        Date: ${date}
+        
+        Total Assigned Workers (approx): ${totalWorkers?.count || 0}
+        Attendance Records Today: ${attendance.length} (${attendance.filter(a => a.status === 'Present').length} Present, ${attendance.filter(a => a.status === 'Absent').length} Absent)
+        Attendance Yesterday: ${yAttendance.filter(a => a.status === 'Present').length} Present
+        
+        Financials Today:
+        Advances: ${advances.length} records, Total: ${advances.reduce((s, a) => s + parseFloat(a.amount || 0), 0)}
+        Worker Payments: ${workerPayments.length} records, Total: ${workerPayments.reduce((s, p) => s + parseFloat(p.netPayment || 0), 0)}
+        Kharchis (Pocket Money): ${kharchis.length} records, Total: ${kharchis.reduce((s, k) => s + parseFloat(k.amount || 0), 0)}
+        Ledger Expenses Today: ${todayExpTotal} from records: ${JSON.stringify(ledgerExpenses)}
+        Ledger Expenses Yesterday: ${yesterdayExpTotal}
+        
+        Materials Today:
+        Issued: ${JSON.stringify(issues)}
+        Returned: ${JSON.stringify(returns)}
+        
+        Billing Today:
+        Bills Certified: ${bills.reduce((s, b) => s + parseFloat(b.amount || 0), 0)}
+        Client Payments Received: ${cPayments.reduce((s, cp) => s + parseFloat(cp.amountReceived || 0), 0)}
+        
+        Daily Labour Report / Activities Today:
+        ${JSON.stringify(dlrs)}
+      `;
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "GEMINI_API_KEY is not configured" });
+      }
+      
+      // Dynamic import to avoid breaking if not available globally
+      const { Type } = require("@google/genai");
+      const ai = getAiClient();
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `You are an AI ERP Manager for SN ENTERPRISES. Analyze the following site activity data for the day and generate a concise management site summary. Be professional and objective. Focus on metrics. Calculate the cash outflows. For health status, use 'Green', 'Yellow', or 'Red'. Data:\n\n${rawData}`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              workforceSummary: { type: Type.STRING, description: "Total Assigned, Present, Absent, Attendance Percentage." },
+              financialSummary: { type: Type.STRING, description: "Today's Expenses, Advances, Worker Payments, Total Cash Outflow." },
+              materialSummary: { type: Type.STRING, description: "Materials Issued, Returns, and any Stock alerts." },
+              billingSummary: { type: Type.STRING, description: "Bills Raised, Client Payments, Outstanding updates." },
+              projectActivitySummary: { type: Type.STRING, description: "Work Completed, Major Activities, Site Diary Notes." },
+              aiInsights: { type: Type.STRING, description: "Analyze trends, identify observations (e.g., expenses unusually high, productivity dropping)." },
+              riskAlerts: { type: Type.STRING, description: "Identify risks such as low attendance, negative cash flow, missing reports." },
+              healthScore: { type: Type.INTEGER, description: "Score out of 100 based on the day's performance metrics." },
+              healthStatus: { type: Type.STRING, description: "Green, Yellow, or Red" },
+            },
+            required: ["workforceSummary", "financialSummary", "materialSummary", "billingSummary", "projectActivitySummary", "aiInsights", "riskAlerts", "healthScore", "healthStatus"],
+          },
+        },
+      });
+
+      const jsonStr = response.text?.trim() || "{}";
+      const summaryObj = JSON.parse(jsonStr);
+      
+      const newId = "sum_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+      
+      db.prepare(`
+        INSERT INTO daily_site_summaries (id, projectId, date, workforceSummary, financialSummary, materialSummary, billingSummary, projectActivitySummary, aiInsights, riskAlerts, healthScore, healthStatus, generatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(projectId, date) DO UPDATE SET
+          workforceSummary = excluded.workforceSummary,
+          financialSummary = excluded.financialSummary,
+          materialSummary = excluded.materialSummary,
+          billingSummary = excluded.billingSummary,
+          projectActivitySummary = excluded.projectActivitySummary,
+          aiInsights = excluded.aiInsights,
+          riskAlerts = excluded.riskAlerts,
+          healthScore = excluded.healthScore,
+          healthStatus = excluded.healthStatus,
+          generatedAt = excluded.generatedAt
+      `).run(
+        newId, projectId, date, 
+        summaryObj.workforceSummary || "", 
+        summaryObj.financialSummary || "", 
+        summaryObj.materialSummary || "", 
+        summaryObj.billingSummary || "", 
+        summaryObj.projectActivitySummary || "", 
+        summaryObj.aiInsights || "", 
+        summaryObj.riskAlerts || "", 
+        summaryObj.healthScore || 0, 
+        summaryObj.healthStatus || "Red", 
+        new Date().toISOString()
+      );
+
+      // Return the generated (or updated) object
+      const savedDoc = db.prepare("SELECT * FROM daily_site_summaries WHERE projectId = ? AND date = ?").get(projectId, date);
+      res.json(savedDoc);
+    } catch (err: any) {
+      console.error(err);
       res.status(500).json({ error: err.message });
     }
   });

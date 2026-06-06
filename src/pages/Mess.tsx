@@ -494,7 +494,7 @@ export const Mess: React.FC = () => {
                     type="text"
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
-                    placeholder="e.g. Paid in cash, Check #3828"
+                    placeholder="Payment comments / reference"
                     className="w-full border border-[#8c9ba8] p-1 text-[11px] focus:outline-none"
                   />
                 </div>

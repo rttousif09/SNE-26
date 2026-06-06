@@ -653,7 +653,7 @@ export const Approvals: React.FC = () => {
                       required
                       type="number"
                       className="sap-input font-bold"
-                      placeholder="e.g. 5000"
+                      placeholder="Required Amount"
                       value={formData.amount}
                       onChange={e => setFormData({ ...formData, amount: e.target.value })}
                     />

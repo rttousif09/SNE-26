@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronDown, Database, Folder, FileText, Server, ClipboardCheck } from 'lucide-react';
+import { useAppContext } from '../store';
 
 interface SidebarProps {
   currentTab: string;
@@ -9,6 +10,13 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) => {
   const [expanded, setExpanded] = useState(true);
   const [catalogExpanded, setCatalogExpanded] = useState(true);
+  const { approvals, advanceSheetApprovals, kharchiApprovals, paymentSheetApprovals, expensesLedger } = useAppContext();
+
+  const pendingCount = (approvals?.filter(a => a.status === 'Pending').length || 0) +
+    (advanceSheetApprovals?.filter(s => s.status === 'Pending').length || 0) +
+    (kharchiApprovals?.filter(s => s.status === 'Pending').length || 0) +
+    (paymentSheetApprovals?.filter(s => s.status === 'Pending').length || 0) +
+    (expensesLedger?.filter(e => e.status === 'Submitted').length || 0);
 
   // States to track expansion of each defined folder
   const [foldersExpanded, setFoldersExpanded] = useState<Record<string, boolean>>({
@@ -29,7 +37,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       label: 'a) Project Details',
       items: [
         { id: 'projects', label: '1) Projects' },
-        { id: 'site-monthly-summary', label: '2) Site Monthly Report' }
+        { id: 'site-monthly-summary', label: '2) Site Monthly Report' },
+        { id: 'daily-site-summary', label: '3) AI Daily Site Summary' }
       ]
     },
     {
@@ -114,11 +123,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                 {/* 2. Approvals Workflow at Root of Catalog */}
                 <div
                   onClick={() => setCurrentTab('approvals')}
-                  className={`flex items-center space-x-1 py-0.5 cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                  className={`flex items-center space-x-1 py-0.5 pr-2 cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
                 >
                   <div className="w-3"></div>
                   <ClipboardCheck size={12} className="text-[#0056b3]" />
-                  <span className="font-semibold text-[#002f6c]">Approvals Workflow</span>
+                  <span className="font-semibold text-[#002f6c] flex-1">Approvals Workflow</span>
+                  {pendingCount > 0 && (
+                    <span className="bg-red-650 text-white font-mono text-[9px] px-1.5 py-0.2 rounded-sm font-bold animate-pulse" title={`${pendingCount} requests pending approval`}>
+                      {pendingCount}
+                    </span>
+                  )}
                 </div>
 
                 {/* Collapsible Folders */}

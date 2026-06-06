@@ -34,6 +34,7 @@ export const Expenses: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [projectIdFilter, setProjectIdFilter] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [exportMonth, setExportMonth] = useState(() => {
     const d = new Date();
@@ -131,6 +132,15 @@ export const Expenses: React.FC = () => {
   const handleSave = (e: React.FormEvent, shouldExit: boolean = true) => {
     e.preventDefault();
     if (!formData.description) return;
+
+    if (formData.projectId) {
+      const targetProjectObj = projects.find(p => p.id === formData.projectId);
+      if (targetProjectObj?.status === 'Completed') {
+        alert("This project is marked as Completed. New entries are not allowed.");
+        return;
+      }
+    }
+
     const isCredit = transactionType === 'credit';
     const amountVal = parseFloat(formData.amount) || 0;
 
@@ -846,10 +856,20 @@ export const Expenses: React.FC = () => {
             className="border border-[#8c9ba8] bg-white p-0.5 rounded shadow-sm outline-none"
           >
             <option value="">All Projects</option>
-            {projects.map(p => (
+            {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+
+          <label className="flex items-center space-x-1 cursor-pointer text-gray-600 text-[10px] font-semibold">
+            <input 
+              type="checkbox" 
+              checked={showCompleted} 
+              onChange={e => setShowCompleted(e.target.checked)} 
+              className="rounded"
+            />
+            <span>Show Completed</span>
+          </label>
 
           <select 
             value={categoryFilter} 
@@ -954,11 +974,21 @@ export const Expenses: React.FC = () => {
                 <label className="block text-[10px] text-gray-500 font-bold mb-1">PROJECT LINK (OPTIONAL)</label>
                 <select 
                   value={formData.projectId}
-                  onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                  onChange={(e) => {
+                    const selectedPr = e.target.value;
+                    if (selectedPr) {
+                      const pObj = projects.find(p => p.id === selectedPr);
+                      if (pObj?.status === 'Completed') {
+                        alert("This project is marked as Completed. New entries are not allowed.");
+                        return;
+                      }
+                    }
+                    setFormData({ ...formData, projectId: selectedPr });
+                  }}
                   className="w-full border border-gray-300 p-1 bg-white outline-none h-[23px]"
                 >
                   <option value="">General (None)</option>
-                  {projects.map(p => (
+                  {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -992,7 +1022,7 @@ export const Expenses: React.FC = () => {
                       required
                       min="0.01"
                       step="any"
-                      placeholder="e.g., 5000"
+                      placeholder="Spent Amount"
                       value={formData.amount}
                       onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                       className="w-full border border-gray-300 p-1 bg-white outline-none font-mono"
@@ -1006,7 +1036,7 @@ export const Expenses: React.FC = () => {
                     <input 
                       type="text" 
                       required
-                      placeholder="e.g., SBI"
+                      placeholder="Bank name"
                       value={formData.bank}
                       onChange={(e) => setFormData({ ...formData, bank: e.target.value })}
                       className="w-full border border-gray-300 p-1 bg-white outline-none"
@@ -1020,7 +1050,7 @@ export const Expenses: React.FC = () => {
                       required
                       min="0.01"
                       step="any"
-                      placeholder="e.g., 15000"
+                      placeholder="Credit Amount"
                       value={formData.amount}
                       onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                       className="w-full border border-gray-300 p-1 bg-white outline-none font-mono"

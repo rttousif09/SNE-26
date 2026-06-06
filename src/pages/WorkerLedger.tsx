@@ -827,7 +827,7 @@ export const WorkerLedger: React.FC = () => {
                   <label className="text-[9px] uppercase tracking-wider font-bold text-gray-600 mb-1">Voucher ID:</label>
                   <input 
                     type="text"
-                    placeholder="e.g. ADJ-401"
+                    placeholder="Voucher ID / Number"
                     className="sap-input font-bold font-mono"
                     value={ledgerForm.voucherNo}
                     onChange={e => setLedgerForm({...ledgerForm, voucherNo: e.target.value})}
@@ -869,7 +869,7 @@ export const WorkerLedger: React.FC = () => {
                   type="number"
                   required
                   step="any"
-                  placeholder="₹ E.g. 5000"
+                  placeholder="Transaction Amount"
                   className="sap-input font-bold text-right"
                   value={ledgerForm.amount}
                   onChange={e => setLedgerForm({...ledgerForm, amount: e.target.value})}
@@ -881,7 +881,7 @@ export const WorkerLedger: React.FC = () => {
                 <input 
                   type="text"
                   required
-                  placeholder="e.g. Manual Recovery Adjustment"
+                  placeholder="Adjustment Label"
                   className="sap-input font-semibold"
                   value={ledgerForm.description}
                   onChange={e => setLedgerForm({...ledgerForm, description: e.target.value})}

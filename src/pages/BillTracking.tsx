@@ -29,7 +29,29 @@ export const BillTracking: React.FC = () => {
   const [selectedReportTab, setSelectedReportTab] = useState<'status' | 'outstanding' | 'client' | 'followup'>('status');
 
   // Search & Filter state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if ((window as any).__pendingGlobalSearch && (window as any).__pendingGlobalSearch.tab === 'bill-tracking') {
+      const q = (window as any).__pendingGlobalSearch.query;
+      (window as any).__pendingGlobalSearch = null;
+      return q;
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    const handleGlobalSearch = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.tab === 'bill-tracking') {
+        setSearchQuery(customEvent.detail.query);
+        (window as any).__pendingGlobalSearch = null;
+      }
+    };
+    window.addEventListener('apply-global-search', handleGlobalSearch);
+    return () => {
+      window.removeEventListener('apply-global-search', handleGlobalSearch);
+    };
+  }, []);
+
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterProject, setFilterProject] = useState<string>('all');
@@ -585,7 +607,7 @@ export const BillTracking: React.FC = () => {
                   onChange={e => setFormData({ ...formData, billNo: e.target.value })} 
                   className="sap-input w-full p-1" 
                   required 
-                  placeholder="e.g. RA-B2-02"
+                  placeholder="Bill Number"
                 />
               </div>
 
@@ -637,7 +659,7 @@ export const BillTracking: React.FC = () => {
                   onChange={e => setFormData({ ...formData, billingPeriod: e.target.value })} 
                   className="sap-input w-full p-1" 
                   required 
-                  placeholder="e.g. Feb 2026"
+                  placeholder="Billing Month/Period"
                 />
               </div>
 
@@ -1068,7 +1090,7 @@ export const BillTracking: React.FC = () => {
                                 value={transitionAmountCertified}
                                 onChange={e => setTransitionAmountCertified(e.target.value)}
                                 className="sap-input w-full p-0.5 text-[10px]"
-                                placeholder="e.g. 45000"
+                                placeholder="Certified Amount"
                               />
                             </div>
                             <div>

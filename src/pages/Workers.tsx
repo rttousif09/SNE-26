@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { LabourRequirementPlanning } from '../components/LabourRequirementPlanning';
 import { WorkerAttendanceLog } from '../components/WorkerAttendanceLog';
 import { PDFExportButton } from '../components/PDFExportButton';
+import { BulkUploadModal } from '../components/BulkUploadModal';
+import { Upload } from 'lucide-react';
 
 export const Workers: React.FC = () => {
   const { 
@@ -31,6 +33,7 @@ export const Workers: React.FC = () => {
   const [activeView, setActiveView] = useState<'directory' | 'ledger' | 'planning' | 'transfers' | 'attendance'>('directory');
   
   // Directory Tab States
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -46,7 +49,29 @@ export const Workers: React.FC = () => {
   const [formData, setFormData] = useState({
     serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: ''
   });
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if ((window as any).__pendingGlobalSearch && (window as any).__pendingGlobalSearch.tab === 'workers') {
+      const q = (window as any).__pendingGlobalSearch.query;
+      (window as any).__pendingGlobalSearch = null;
+      return q;
+    }
+    return '';
+  });
+
+  React.useEffect(() => {
+    const handleGlobalSearch = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.tab === 'workers') {
+        setSearchQuery(customEvent.detail.query);
+        (window as any).__pendingGlobalSearch = null;
+      }
+    };
+    window.addEventListener('apply-global-search', handleGlobalSearch);
+    return () => {
+      window.removeEventListener('apply-global-search', handleGlobalSearch);
+    };
+  }, []);
+
   const [selectedFilterProject, setSelectedFilterProject] = useState<string>('all');
 
   // Ledger Tab States
@@ -575,10 +600,19 @@ export const Workers: React.FC = () => {
           <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1.5">
             <div className="flex items-center space-x-2">
               {!isReadOnly ? (
-                <button onClick={handleAddNewWorkerClick} className="sap-btn flex items-center space-x-1">
-                  {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-                  <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
-                </button>
+                <>
+                  <button onClick={handleAddNewWorkerClick} className="sap-btn flex items-center space-x-1">
+                    {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+                    <span>{isAdding ? 'Cancel' : 'New Worker'}</span>
+                  </button>
+                  <button 
+                    onClick={() => setIsBulkUploadOpen(true)} 
+                    className="sap-btn bg-[#2ea043] text-white hover:bg-[#238334] flex items-center space-x-1"
+                  >
+                    <Upload size={12} />
+                    <span>Bulk Upload</span>
+                  </button>
+                </>
               ) : (
                 <div className="font-semibold text-gray-700 px-1 py-0.5">Workers Directory (Read Only)</div>
               )}
@@ -684,7 +718,7 @@ export const Workers: React.FC = () => {
                 </div>
                 <div className="flex items-center">
                   <label className="w-28 font-semibold text-gray-700">Worker ID (Unique):</label>
-                  <input required type="text" className="sap-input flex-1 font-mono font-bold text-blue-900" placeholder="e.g. EMP001" value={formData.workerId} onChange={e => setFormData({...formData, workerId: e.target.value})} />
+                  <input required type="text" className="sap-input flex-1 font-mono font-bold text-blue-900" placeholder="Worker ID" value={formData.workerId} onChange={e => setFormData({...formData, workerId: e.target.value})} />
                 </div>
                 <div className="flex items-center">
                   <label className="w-28 font-semibold text-gray-700">Full Name:</label>
@@ -1520,6 +1554,29 @@ export const Workers: React.FC = () => {
           setDeleteId(null);
         }}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <BulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        expectedColumns={['serialNo', 'workerId', 'name', 'projectId', 'designation', 'joiningDate']}
+        entityName="Workers"
+        onUpload={async (data) => {
+          const formattedData = data.map(item => ({
+            ...item,
+            id: `w_` + Date.now().toString(36) + Math.random().toString(36).substring(2, 5)
+          }));
+          const res = await fetch('/api/workers/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formattedData)
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Failed to bulk upload workers");
+          }
+          window.location.reload();
+        }}
       />
     </div>
   );

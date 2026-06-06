@@ -11,6 +11,7 @@ export const Advance: React.FC = () => {
   const { user, advances, projects, workers, addAdvance, updateAdvance, deleteAdvance, advanceSheetApprovals, addAdvanceSheetApproval } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
   
   // Duplicate verification states
   const [dupModalOpen, setDupModalOpen] = useState(false);
@@ -103,6 +104,12 @@ export const Advance: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
+
+    const targetProjectObj = projects.find(p => p.id === selectedProject);
+    if (targetProjectObj?.status === 'Completed') {
+      alert("This project is marked as Completed. New entries are not allowed.");
+      return;
+    }
     
     const payload = {
       projectId: selectedProject,
@@ -194,8 +201,19 @@ export const Advance: React.FC = () => {
             onChange={e => setSelectedProject(e.target.value)}
           >
             <option value="">-- Select Project --</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
           </select>
+          <label className="flex items-center space-x-1 ml-4 cursor-pointer text-gray-600">
+            <input 
+              type="checkbox" 
+              checked={showCompleted} 
+              onChange={e => setShowCompleted(e.target.checked)} 
+              className="rounded"
+            />
+            <span>Show Completed Projects (Read-only)</span>
+          </label>
         </div>
         {selectedProject && (
           <div className="relative">
@@ -213,7 +231,13 @@ export const Advance: React.FC = () => {
         )}
       </div>
 
-      {selectedProject && !isReadOnly && (
+      {selectedProject && projects.find(p => p.id === selectedProject)?.status === 'Completed' && (
+        <div className="bg-red-50 border border-red-300 text-red-800 p-2.5 rounded mb-4 text-[11px] font-bold">
+          This project is marked as Completed. New entries are not allowed.
+        </div>
+      )}
+
+      {selectedProject && projects.find(p => p.id === selectedProject)?.status !== 'Completed' && !isReadOnly && (
         <div className="sap-panel p-2 mb-4">
           <div className="font-semibold mb-2 border-b border-[#8c9ba8] pb-1 text-[#0056b3]">
             {editingId ? 'Edit Advance Details' : 'Record Advance'}

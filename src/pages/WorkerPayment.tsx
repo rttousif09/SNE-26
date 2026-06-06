@@ -25,6 +25,7 @@ export const WorkerPayment: React.FC = () => {
   
   const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
   
   // Duplicate verification state
   const [dupModalOpen, setDupModalOpen] = useState(false);
@@ -261,6 +262,12 @@ export const WorkerPayment: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject || isLocked) return;
+
+    const targetProjectObj = projects.find(p => p.id === selectedProject);
+    if (targetProjectObj?.status === 'Completed') {
+      alert("This project is marked as Completed. New entries are not allowed.");
+      return;
+    }
     
     const paymentData = {
       projectId: selectedProject,
@@ -380,8 +387,19 @@ export const WorkerPayment: React.FC = () => {
             onChange={e => setSelectedProject(e.target.value)}
           >
             <option value="">-- Choose Project --</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
           </select>
+          <label className="flex items-center space-x-1 ml-4 cursor-pointer text-gray-600">
+            <input 
+              type="checkbox" 
+              checked={showCompleted} 
+              onChange={e => setShowCompleted(e.target.checked)} 
+              className="rounded"
+            />
+            <span>Show Completed Projects (Read-only)</span>
+          </label>
         </div>
 
         {selectedProject && (
@@ -474,8 +492,14 @@ export const WorkerPayment: React.FC = () => {
         </div>
       )}
 
+      {selectedProject && projects.find(p => p.id === selectedProject)?.status === 'Completed' && (
+        <div className="bg-red-50 border border-red-300 text-red-800 p-2.5 rounded mb-3 text-[11px] font-bold">
+          This project is marked as Completed. New entries are not allowed.
+        </div>
+      )}
+
       {/* Payment entry form (Hidden when locked) */}
-      {selectedProject && !isLocked && (
+      {selectedProject && !isLocked && projects.find(p => p.id === selectedProject)?.status !== 'Completed' && (
         <div className="sap-panel p-2.5 border-l-4 border-l-[#0056b3]">
           <div className="font-bold mb-2.5 pb-1 border-b border-[#8c9ba8] text-[#0056b3] uppercase tracking-wider text-[10px]">
             {editingId ? 'Modify Recorded Payment Details' : 'Record Worker Wages & Deductions'}
@@ -614,7 +638,7 @@ export const WorkerPayment: React.FC = () => {
                 <input 
                   type="text" 
                   className="sap-input font-semibold"
-                  placeholder="e.g. Block A, Ground Floor, Level 1"
+                  placeholder="Work location / level details"
                   value={formData.level}
                   onChange={e => setFormData({...formData, level: e.target.value})}
                 />

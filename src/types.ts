@@ -21,6 +21,7 @@ export interface Project {
   siContact?: string;
   ourRepresentatives?: string;
   repContact?: string;
+  status: 'Ongoing' | 'Completed' | 'On Hold' | 'Cancelled' | 'Archived';
 }
 
 export interface Worker {
@@ -36,6 +37,17 @@ export interface Worker {
   openingAdvance?: number;
 }
 
+export interface MeasurementItem {
+  id: string;
+  description: string;
+  qtyExecuted: number;
+  unit: string;
+  rate: number;
+  amount: number; // qtyExecuted * rate
+  prevQty: number;
+  cumulativeQty: number; // prevQty + qtyExecuted
+}
+
 export interface Billing {
   id: string;
   srNo: string;
@@ -48,6 +60,10 @@ export interface Billing {
   tds?: number;
   retention?: number;
   gst?: number;
+  debitAmount?: number;
+  debitReason?: string;
+  billType?: string; // 'Running Account', 'Final Bill', 'Extra Item Bill', 'Additional Work Bill', 'Manpower Supply Bill'
+  measurementItems?: MeasurementItem[];
   hardCopyFile?: string;
   hardCopyFileName?: string;
   hardCopyFileType?: string;
@@ -234,6 +250,7 @@ export interface MaterialItem {
   itemCode?: string;
   itemName: string;
   category: string;
+  materialType?: 'Consumable' | 'Returnable';
   unit: string;
   description?: string;
   createdBy?: string;
