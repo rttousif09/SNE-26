@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronDown, Database, Folder, FileText, Server, ClipboardCheck } from 'lucide-react';
 import { useAppContext } from '../store';
+import { motion, AnimatePresence } from 'motion/react';
+import { ExpandableSection } from './AnimatedERP';
+
 
 interface SidebarProps {
   currentTab: string;
@@ -100,92 +103,104 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
           <span className="font-medium">ERP_PRD (SYSTEM)</span>
         </div>
         
-        {expanded && (
-          <div className="ml-4">
-            <div className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff]" onClick={() => setCatalogExpanded(!catalogExpanded)}>
-              {catalogExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              <Folder size={12} className="text-yellow-500 fill-yellow-200" />
-              <span>Catalog</span>
-            </div>
-            
-            {catalogExpanded && (
-              <div className="ml-4 space-y-1">
-                {/* 1. Dashboard Overview at Root of Catalog */}
-                <div
-                  onClick={() => setCurrentTab('dashboard')}
-                  className={`flex items-center space-x-1 py-0.5 cursor-pointer ${currentTab === 'dashboard' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
-                >
-                  <div className="w-3"></div>
-                  <Server size={12} className="text-[#0056b3]" />
-                  <span className="font-semibold text-[#002f6c]">Dashboard Overview</span>
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <ExpandableSection isOpen={expanded}>
+              <div className="ml-4">
+                <div className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff]" onClick={() => setCatalogExpanded(!catalogExpanded)}>
+                  {catalogExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  <Folder size={12} className="text-yellow-500 fill-yellow-200" />
+                  <span>Catalog</span>
                 </div>
-
-                {/* 2. Approvals Workflow at Root of Catalog */}
-                <div
-                  onClick={() => setCurrentTab('approvals')}
-                  className={`flex items-center space-x-1 py-0.5 pr-2 cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
-                >
-                  <div className="w-3"></div>
-                  <ClipboardCheck size={12} className="text-[#0056b3]" />
-                  <span className="font-semibold text-[#002f6c] flex-1">Approvals Workflow</span>
-                  {pendingCount > 0 && (
-                    <span className="bg-red-650 text-white font-mono text-[9px] px-1.5 py-0.2 rounded-sm font-bold animate-pulse" title={`${pendingCount} requests pending approval`}>
-                      {pendingCount}
-                    </span>
-                  )}
-                </div>
-
-                {/* Collapsible Folders */}
-                {folders.map((folder) => {
-                  const isFolderOpen = foldersExpanded[folder.key];
-                  return (
-                    <div key={folder.key} className="space-y-0.5">
-                      <div 
-                        onClick={() => toggleFolder(folder.key)}
-                        className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff] font-medium text-gray-700"
-                      >
-                        <div className="w-3 flex justify-center">
-                          {isFolderOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                
+                <AnimatePresence initial={false}>
+                  {catalogExpanded && (
+                    <ExpandableSection isOpen={catalogExpanded}>
+                      <div className="ml-4 space-y-1">
+                        {/* 1. Dashboard Overview at Root of Catalog */}
+                        <div
+                          onClick={() => setCurrentTab('dashboard')}
+                          className={`flex items-center space-x-1 py-0.5 cursor-pointer ${currentTab === 'dashboard' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                        >
+                          <div className="w-3"></div>
+                          <Server size={12} className="text-[#0056b3]" />
+                          <span className="font-semibold text-[#002f6c]">Dashboard Overview</span>
                         </div>
-                        <Folder size={11} className="text-amber-500 fill-amber-150" />
-                        <span>{folder.label}</span>
-                      </div>
 
-                      {isFolderOpen && (
-                        <div className="ml-3 border-l border-gray-300 pl-1.5 space-y-0.5">
-                          {folder.items.map((item) => {
-                            const isActive = currentTab === item.id;
-                            return (
-                              <div
-                                key={item.id}
-                                onClick={() => setCurrentTab(item.id)}
-                                className={`flex items-center space-x-1 py-0.5 cursor-pointer ${isActive ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                        {/* 2. Approvals Workflow at Root of Catalog */}
+                        <div
+                          onClick={() => setCurrentTab('approvals')}
+                          className={`flex items-center space-x-1 py-0.5 pr-2 cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                        >
+                          <div className="w-3"></div>
+                          <ClipboardCheck size={12} className="text-[#0056b3]" />
+                          <span className="font-semibold text-[#002f6c] flex-1">Approvals Workflow</span>
+                          {pendingCount > 0 && (
+                            <span className="bg-red-650 text-white font-mono text-[9px] px-1.5 py-0.2 rounded-sm font-bold animate-pulse" title={`${pendingCount} requests pending approval`}>
+                              {pendingCount}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Collapsible Folders */}
+                        {folders.map((folder) => {
+                          const isFolderOpen = foldersExpanded[folder.key];
+                          return (
+                            <div key={folder.key} className="space-y-0.5">
+                              <div 
+                                onClick={() => toggleFolder(folder.key)}
+                                className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff] font-medium text-gray-700"
                               >
-                                <FileText size={11} className="text-[#0056b3]" />
-                                <span>{item.label}</span>
+                                <div className="w-3 flex justify-center">
+                                  {isFolderOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                                </div>
+                                <Folder size={11} className="text-amber-500 fill-amber-150" />
+                                <span>{folder.label}</span>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                              <AnimatePresence initial={false}>
+                                {isFolderOpen && (
+                                  <ExpandableSection isOpen={isFolderOpen}>
+                                    <div className="ml-3 border-l border-gray-300 pl-1.5 space-y-0.5">
+                                      {folder.items.map((item) => {
+                                        const isActive = currentTab === item.id;
+                                        return (
+                                          <div
+                                            key={item.id}
+                                            onClick={() => setCurrentTab(item.id)}
+                                            className={`flex items-center space-x-1 py-0.5 cursor-pointer ${isActive ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                                          >
+                                            <FileText size={11} className="text-[#0056b3]" />
+                                            <span>{item.label}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </ExpandableSection>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ExpandableSection>
+                  )}
+                </AnimatePresence>
+                
+                <div className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff]">
+                  <ChevronRight size={12} />
+                  <Folder size={12} className="text-yellow-500 fill-yellow-200" />
+                  <span>Provisioning</span>
+                </div>
+                <div className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff]">
+                  <ChevronRight size={12} />
+                  <Folder size={12} className="text-yellow-500 fill-yellow-200" />
+                  <span>Security</span>
+                </div>
               </div>
-            )}
-            
-            <div className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff]">
-              <ChevronRight size={12} />
-              <Folder size={12} className="text-yellow-500 fill-yellow-200" />
-              <span>Provisioning</span>
-            </div>
-            <div className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff]">
-              <ChevronRight size={12} />
-              <Folder size={12} className="text-yellow-500 fill-yellow-200" />
-              <span>Security</span>
-            </div>
-          </div>
-        )}
+            </ExpandableSection>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -6,6 +6,8 @@ import {
   AlertTriangle, AlertCircle, Calendar, LineChart, Banknote
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { AnimatedCounter } from '../components/AnimatedERP';
+
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -139,23 +141,33 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm">
           <span className="text-gray-500 font-bold uppercase text-[9px]">Active Projects</span>
-          <span className="text-lg font-black text-blue-900 mt-1">{activeProjectsCount}</span>
+          <span className="text-lg font-black text-blue-900 mt-1">
+            <AnimatedCounter value={activeProjectsCount} />
+          </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm">
           <span className="text-gray-500 font-bold uppercase text-[9px]">Active Workers</span>
-          <span className="text-lg font-black text-indigo-900 mt-1">{activeWorkersCount}</span>
+          <span className="text-lg font-black text-indigo-900 mt-1">
+            <AnimatedCounter value={activeWorkersCount} />
+          </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm bg-emerald-50">
           <span className="text-emerald-800 font-bold uppercase text-[9px]">Current Cash Pos.</span>
-          <span className="text-lg font-black text-emerald-900 mt-1">{formatIN(currentCash)}</span>
+          <span className="text-lg font-black text-emerald-900 mt-1">
+            <AnimatedCounter value={currentCash} formatter={formatIN} />
+          </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm bg-blue-50">
           <span className="text-blue-800 font-bold uppercase text-[9px]">Monthly Billing</span>
-          <span className="text-lg font-black text-blue-900 mt-1">{formatIN(monthlyBilling)}</span>
+          <span className="text-lg font-black text-blue-900 mt-1">
+            <AnimatedCounter value={monthlyBilling} formatter={formatIN} />
+          </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm bg-teal-50">
           <span className="text-teal-800 font-bold uppercase text-[9px]">Monthly Receipts</span>
-          <span className="text-lg font-black text-teal-900 mt-1">{formatIN(monthlyReceipts)}</span>
+          <span className="text-lg font-black text-teal-900 mt-1">
+            <AnimatedCounter value={monthlyReceipts} formatter={formatIN} />
+          </span>
         </div>
       </div>
 
@@ -163,25 +175,33 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm bg-amber-50">
           <span className="text-amber-800 font-bold uppercase text-[9px]">Out. Receivables</span>
-          <span className="text-lg font-black text-amber-900 mt-1">{formatIN(totalOutstandingReceivable)}</span>
+          <span className="text-lg font-black text-amber-900 mt-1">
+            <AnimatedCounter value={totalOutstandingReceivable} formatter={formatIN} />
+          </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm bg-red-50">
           <span className="text-red-800 font-bold uppercase text-[9px]">Worker Adv. Out.</span>
-          <span className="text-lg font-black text-red-900 mt-1">{formatIN(outstandingAdvance)}</span>
+          <span className="text-lg font-black text-red-900 mt-1">
+            <AnimatedCounter value={outstandingAdvance} formatter={formatIN} />
+          </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm bg-rose-50">
           <span className="text-rose-800 font-bold uppercase text-[9px]">Monthly Profit</span>
           <span className={`text-lg font-black mt-1 ${trendData[trendData.length-1].Profit >= 0 ? 'text-emerald-700' : 'text-rose-900'}`}>
-            {formatIN(trendData[trendData.length-1].Profit)}
+            <AnimatedCounter value={trendData[trendData.length-1].Profit} formatter={formatIN} />
           </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm">
           <span className="text-gray-500 font-bold uppercase text-[9px]">Equipment Value</span>
-          <span className="text-lg font-black text-gray-900 mt-1">{formatIN(equipmentValue)}</span>
+          <span className="text-lg font-black text-gray-900 mt-1">
+            <AnimatedCounter value={equipmentValue} formatter={formatIN} />
+          </span>
         </div>
         <div className="border border-[#8c9ba8] bg-white p-2 flex flex-col shadow-sm">
           <span className="text-gray-500 font-bold uppercase text-[9px]">Total Expenses (All Time)</span>
-          <span className="text-lg font-black text-gray-900 mt-1">{formatIN(totalCalculatedExpenses)}</span>
+          <span className="text-lg font-black text-gray-900 mt-1">
+            <AnimatedCounter value={totalCalculatedExpenses} formatter={formatIN} />
+          </span>
         </div>
       </div>
 

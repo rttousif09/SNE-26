@@ -10,9 +10,10 @@ interface TopBarProps {
   onToggleFKeysBar?: () => void;
   showFKeysBar?: boolean;
   onNavigate?: (tab: string) => void;
+  onLock?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onToggleFKeysBar, showFKeysBar = true, onNavigate }) => {
+export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onToggleFKeysBar, showFKeysBar = true, onNavigate, onLock }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -440,6 +441,17 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
               </div>
             )}
           </div>
+
+          <button
+            onClick={() => onLock && onLock()}
+            className="flex items-center space-x-1 hover:bg-[#001f4d] px-2 py-1 rounded transition duration-150 cursor-pointer text-white mx-1"
+            title="Lock Session (F13)"
+          >
+            <div className="flex items-center space-x-1 opacity-90 border border-blue-400/50 bg-blue-900/20 px-1.5 py-0.5 rounded-sm hover:opacity-100 hover:border-blue-400">
+               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+               <span className="font-semibold text-[10px] hidden lg:inline">Lock</span>
+            </div>
+          </button>
 
         {/* Profile Card / Dropdown Menu */}
         {user && (

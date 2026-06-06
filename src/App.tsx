@@ -31,6 +31,8 @@ import { DailySiteSummary } from './pages/DailySiteSummary';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
+import { SuccessToast } from './components/AnimatedERP';
+import { LockScreen } from './components/LockScreen';
 
 function AppContent({ user, onLogout }: { user: { username: string; name: string } | null; onLogout: () => void }) {
   const erp = useAppContext();
@@ -49,10 +51,24 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [showFKeysBar, setShowFKeysBar] = useState(true);
+  const [successToast, setSuccessToast] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
+  const [isSessionLocked, setIsSessionLocked] = useState(false);
 
   useEffect(() => {
     initAuth();
+    
+    const handleSuccessToast = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.message) {
+        setSuccessToast({ open: true, message: customEvent.detail.message });
+      }
+    };
+    window.addEventListener('show-success-toast', handleSuccessToast);
+    return () => {
+      window.removeEventListener('show-success-toast', handleSuccessToast);
+    };
   }, []);
+
 
   const handleDriveBackup = async () => {
     setIsBackingUp(true);
@@ -198,7 +214,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // List of supported Keyboard functional keys
-      const trackedFKeys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'];
+      const trackedFKeys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'F13'];
       
       if (trackedFKeys.includes(e.key)) {
         // Prevent default actions (e.g., browser Help on F1, Page refresh on F5, full screen on F11, inspect tools on F12)
@@ -207,6 +223,9 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         switch (e.key) {
           case 'F1':
             setIsHelpOpen(p => !p);
+            break;
+          case 'F13':
+            setIsSessionLocked(true);
             break;
           case 'F2':
             setCurrentTab('site-monthly-summary');
@@ -316,6 +335,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           onToggleFKeysBar={() => setShowFKeysBar(p => !p)}
           showFKeysBar={showFKeysBar}
           onNavigate={setCurrentTab}
+          onLock={() => setIsSessionLocked(true)}
         />
       </motion.div>
       <div className="flex flex-1 overflow-hidden">
@@ -812,11 +832,19 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         )}
       </AnimatePresence>
 
+      <SuccessToast 
+        isOpen={successToast.open} 
+        message={successToast.message} 
+        onClose={() => setSuccessToast(prev => ({ ...prev, open: false }))} 
+      />
+
       {/* Status Bar */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="h-5 bg-[#d9e4f1] border-t border-[#8c9ba8] flex items-center px-2 text-[10px] text-gray-800 justify-between print:hidden">
         <span>System: ERP_PRD Host: erp.local Instance: 00 Connected User: {user ? user.username : 'SYSTEM'}</span>
         <span className="text-gray-500 text-[9px] font-mono select-none">Client: SN ENTERPRISE</span>
       </motion.div>
+      
+      <LockScreen isLocked={isSessionLocked} onUnlock={() => setIsSessionLocked(false)} />
     </div>
   );
 }

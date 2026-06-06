@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { Upload, X, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { AnimateModal, UploadProgressBar } from './AnimatedERP';
 
 interface BulkUploadModalProps {
   isOpen: boolean;
@@ -16,7 +17,9 @@ export function BulkUploadModal({ isOpen, onClose, onUpload, expectedColumns, en
   const [data, setData] = useState<any[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   if (!isOpen) return null;
 
@@ -63,15 +66,27 @@ export function BulkUploadModal({ isOpen, onClose, onUpload, expectedColumns, en
   const handleUpload = async () => {
     if (data.length === 0) return;
     setIsUploading(true);
+    setUploadProgress(0);
     setErrors([]);
-    try {
-      await onUpload(data);
-      onClose();
-    } catch (err: any) {
-      setErrors([err.message || "Failed to upload data"]);
-    } finally {
-      setIsUploading(false);
-    }
+    
+    let currentProg = 0;
+    const interval = setInterval(() => {
+      currentProg += Math.floor(Math.random() * 15) + 5;
+      if (currentProg >= 100) {
+        currentProg = 100;
+        clearInterval(interval);
+        setTimeout(async () => {
+          try {
+            await onUpload(data);
+            onClose();
+          } catch (err: any) {
+            setErrors([err.message || "Failed to upload data"]);
+            setIsUploading(false);
+          }
+        }, 300);
+      }
+      setUploadProgress(currentProg);
+    }, 60);
   };
 
   const generateTemplate = () => {
@@ -88,15 +103,15 @@ export function BulkUploadModal({ isOpen, onClose, onUpload, expectedColumns, en
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded shadow-lg w-[500px] flex flex-col max-h-[90vh]">
+    <AnimateModal isOpen={isOpen} onClose={onClose} maxWidthClass="max-w-[500px]">
+      <div className="flex flex-col">
         <div className="flex justify-between items-center p-3 border-b bg-[#f0f4f8]">
-          <h2 className="font-bold text-[#002f6c] flex items-center">
-            <Upload size={16} className="mr-2" />
+          <h2 className="font-bold text-[#002f6c] flex items-center text-xs">
+            <Upload size={14} className="mr-2 animate-bounce" />
             Bulk Upload {entityName}
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-red-500 transition-colors">
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
         
@@ -121,17 +136,20 @@ export function BulkUploadModal({ isOpen, onClose, onUpload, expectedColumns, en
               className="hidden" 
               ref={fileInputRef}
               onChange={handleFileChange}
+              disabled={isUploading}
             />
             {file ? (
               <div>
                 <div className="text-[13px] font-bold text-green-700">{file.name}</div>
                 <div className="text-[10px] text-gray-500 mt-1">{data.length} valid rows found</div>
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-2 text-[#0056b3] text-[11px] hover:underline"
-                >
-                  Change File
-                </button>
+                {!isUploading && (
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-2 text-[#0056b3] text-[11px] hover:underline"
+                  >
+                    Change File
+                  </button>
+                )}
               </div>
             ) : (
               <div>
@@ -146,7 +164,13 @@ export function BulkUploadModal({ isOpen, onClose, onUpload, expectedColumns, en
             )}
           </div>
 
-          {errors.length > 0 && (
+          {isUploading && (
+            <div className="mt-4">
+              <UploadProgressBar progress={uploadProgress} />
+            </div>
+          )}
+
+          {errors.length > 0 && !isUploading && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
               <div className="flex items-center text-red-800 font-bold text-[11px] mb-1">
                 <AlertTriangle size={12} className="mr-1" />
@@ -179,6 +203,6 @@ export function BulkUploadModal({ isOpen, onClose, onUpload, expectedColumns, en
           </button>
         </div>
       </div>
-    </div>
+    </AnimateModal>
   );
 }

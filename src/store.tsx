@@ -473,11 +473,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const triggerSuccess = (message: string) => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('show-success-toast', { detail: { message } }));
+    }
+  };
+
   const generateId = () => crypto.randomUUID();
 
   const addProject = async (project: Omit<Project, 'id'>) => {
     const newProject = { ...project, id: generateId() };
     setState(s => ({ ...s, projects: [...s.projects, newProject] }));
+    triggerSuccess('New Project successfully registered: ' + newProject.name);
     try {
       await fetch('/api/projects', {
         method: 'POST',
@@ -492,6 +499,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateProject = async (id: string, project: Partial<Project>) => {
     setState(s => ({ ...s, projects: s.projects.map(p => p.id === id ? { ...p, ...project } : p) }));
+    triggerSuccess('Project data updated successfully.');
     try {
       const existing = state.projects.find(p => p.id === id);
       if (existing) {
@@ -510,6 +518,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteProject = async (id: string) => {
     setState(s => ({ ...s, projects: s.projects.filter(p => p.id !== id) }));
+    triggerSuccess('Project record has been deleted.');
     try {
       await fetch(`/api/projects/${id}`, { method: 'DELETE' });
       await saveAllToStore('projects', state.projects.filter(p => p.id !== id));
@@ -521,6 +530,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addWorker = async (worker: Omit<Worker, 'id'>) => {
     const newWorker = { ...worker, id: generateId() };
     setState(s => ({ ...s, workers: [...s.workers, newWorker] }));
+    triggerSuccess('New Worker registered: ' + newWorker.name);
     try {
       await fetch('/api/workers', {
         method: 'POST',
@@ -535,6 +545,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateWorker = async (id: string, worker: Partial<Worker>) => {
     setState(s => ({ ...s, workers: s.workers.map(w => w.id === id ? { ...w, ...worker } : w) }));
+    triggerSuccess('Worker profile information successfully updated.');
     try {
       const existing = state.workers.find(w => w.id === id);
       if (existing) {
@@ -553,6 +564,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteWorker = async (id: string) => {
     setState(s => ({ ...s, workers: s.workers.filter(w => w.id !== id) }));
+    triggerSuccess('Worker file deleted successfully from directory.');
     try {
       await fetch(`/api/workers/${id}`, { method: 'DELETE' });
       await saveAllToStore('workers', state.workers.filter(w => w.id !== id));
@@ -564,6 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addBilling = async (billing: Omit<Billing, 'id'>) => {
     const newBilling = { ...billing, id: generateId() };
     setState(s => ({ ...s, billings: [...s.billings, newBilling] }));
+    triggerSuccess('Billing entry logged successfully: ' + newBilling.billNo);
     try {
       await fetch('/api/billings', {
         method: 'POST',
@@ -578,6 +591,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateBilling = async (id: string, billing: Partial<Billing>) => {
     setState(s => ({ ...s, billings: s.billings.map(b => b.id === id ? { ...b, ...billing } : b) }));
+    triggerSuccess('Billing invoice record updated.');
     try {
       const existing = state.billings.find(b => b.id === id);
       if (existing) {
@@ -596,6 +610,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteBilling = async (id: string) => {
     setState(s => ({ ...s, billings: s.billings.filter(b => b.id !== id) }));
+    triggerSuccess('Billing entry deleted from records.');
     try {
       await fetch(`/api/billings/${id}`, { method: 'DELETE' });
       await saveAllToStore('billings', state.billings.filter(b => b.id !== id));
@@ -793,6 +808,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateApproval = async (id: string, approval: Partial<Approval>) => {
     setState(s => ({ ...s, approvals: s.approvals.map(app => app.id === id ? { ...app, ...approval } : app) }));
+    triggerSuccess(`Approval Request was successfully ${approval.status || 'processed'}.`);
     try {
       const existing = state.approvals.find(app => app.id === id);
       if (existing) {
@@ -811,6 +827,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteApproval = async (id: string) => {
     setState(s => ({ ...s, approvals: s.approvals.filter(app => app.id !== id) }));
+    triggerSuccess('Approval record deleted.');
     try {
       await fetch(`/api/approvals/${id}`, { method: 'DELETE' });
       await saveAllToStore('approvals', state.approvals.filter(app => app.id !== id));

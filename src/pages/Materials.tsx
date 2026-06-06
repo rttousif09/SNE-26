@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../store';
+import { motion, AnimatePresence } from 'motion/react';
+import { AnimateBadge } from '../components/AnimatedERP';
 import { 
   Plus, Trash2, Edit, Printer, FileSpreadsheet, Search, AlertTriangle, 
   Building2, Grid, Calendar, ShoppingCart, Send, RotateCcw, TrendingUp, Info, ArrowLeftRight, User, DollarSign, Wrench, Hammer, Upload
@@ -1158,28 +1160,41 @@ export const Materials: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {materialItems
-                    .filter(i => i.itemName.toLowerCase().includes(searchQuery.toLowerCase()) || (i.itemCode || '').toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map(item => (
-                      <tr key={item.id} className="hover:bg-slate-50/50">
-                        <td className="py-2 px-3 font-mono font-semibold text-blue-700">{item.itemCode || '-'}</td>
-                        <td className="py-2 px-3 font-bold text-gray-900">{item.itemName}</td>
-                        <td className="py-2 px-3 text-gray-600">{item.category}</td>
-                        <td className="py-2 px-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.materialType === 'Returnable' ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-gray-100 text-gray-800'}`}>
-                            {item.materialType || 'Consumable'}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 font-mono text-gray-500">{item.unit}</td>
-                        <td className="py-2 px-3 text-gray-400 italic">{item.description || '-'}</td>
-                        <td className="py-2 px-3">
-                          <div className="flex justify-center items-center space-x-2">
-                            <button onClick={() => { setMasterForm({ itemCode: item.itemCode || '', itemName: item.itemName, category: item.category, materialType: item.materialType || 'Consumable', unit: item.unit, description: item.description || '' }); setEditTargetId(item.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
-                            <button onClick={() => removeRecord('master', item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                  <AnimatePresence mode="popLayout">
+                    {materialItems
+                      .filter(i => i.itemName.toLowerCase().includes(searchQuery.toLowerCase()) || (i.itemCode || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(item => (
+                        <motion.tr 
+                          layout
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.98 }}
+                          transition={{ duration: 0.18, ease: 'easeOut' }}
+                          key={item.id} 
+                          className="hover:bg-slate-50/50"
+                        >
+                          <td className="py-2 px-3 font-mono font-semibold text-blue-700">{item.itemCode || '-'}</td>
+                          <td className="py-2 px-3 font-bold text-gray-900">{item.itemName}</td>
+                          <td className="py-2 px-3 text-gray-600">{item.category}</td>
+                          <td className="py-2 px-3">
+                            <AnimateBadge 
+                              status={item.materialType || 'Consumable'}
+                              className={item.materialType === 'Returnable' ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-gray-100 text-gray-800'}
+                            >
+                              {item.materialType || 'Consumable'}
+                            </AnimateBadge>
+                          </td>
+                          <td className="py-2 px-3 font-mono text-gray-500">{item.unit}</td>
+                          <td className="py-2 px-3 text-gray-400 italic">{item.description || '-'}</td>
+                          <td className="py-2 px-3">
+                            <div className="flex justify-center items-center space-x-2">
+                              <button onClick={() => { setMasterForm({ itemCode: item.itemCode || '', itemName: item.itemName, category: item.category, materialType: item.materialType || 'Consumable', unit: item.unit, description: item.description || '' }); setEditTargetId(item.id); }} className="text-slate-600 hover:text-blue-700"><Edit size={13} /></button>
+                              <button onClick={() => removeRecord('master', item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={13} /></button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))}
+                  </AnimatePresence>
                 </tbody>
               </table>
             </div>
