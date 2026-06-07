@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../store';
-import { Save, Plus, Trash2, Printer } from 'lucide-react';
+import { Save, Plus, Trash2, Printer, FileSpreadsheet } from 'lucide-react';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -8,6 +9,7 @@ export const DLR: React.FC = () => {
   const { projects, dlrs, addDLR, updateDLR, deleteDLR } = useAppContext();
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterProject, setFilterProject] = useState('all');
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
 
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -141,6 +143,10 @@ export const DLR: React.FC = () => {
               }} className="sap-btn">
                 <Plus size={14} className="mr-1" /> Add New Site Report
               </button>
+              <button onClick={() => setIsExcelImportOpen(true)} className="sap-btn flex items-center bg-green-50 text-green-700 border-green-300 hover:bg-green-100">
+                <FileSpreadsheet size={14} className="mr-1 text-green-600" />
+                <span>Import Excel</span>
+              </button>
               <button onClick={exportPDF} className="sap-btn" disabled={filteredDLRs.length === 0}>
                 <Printer size={14} className="mr-1" /> Export as PDF
               </button>
@@ -265,6 +271,30 @@ export const DLR: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['date', 'projectId', 'carpenter', 'fitter', 'helper', 'mason', 'rigger', 'staff', 'remarks']}
+        entityName="Daily Labour Report"
+        projectsContext={projects}
+        onUpload={async (data) => {
+          for (const item of data) {
+            if (!item.projectId) continue;
+            await addDLR({
+              date: item.date || new Date().toISOString().split('T')[0],
+              projectId: item.projectId,
+              carpenter: Number(item.carpenter) || 0,
+              fitter: Number(item.fitter) || 0,
+              helper: Number(item.helper) || 0,
+              mason: Number(item.mason) || 0,
+              rigger: Number(item.rigger) || 0,
+              staff: Number(item.staff) || 0,
+              remarks: item.remarks || ''
+            });
+          }
+        }}
+      />
     </div>
   );
 };

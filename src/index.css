@@ -74,49 +74,59 @@ body {
   background: linear-gradient(to bottom, var(--btn-gradient-top) 0%, var(--btn-gradient-bot) 100%);
   border: 1px solid var(--color-sap-border-val);
   border-radius: 2px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   color: var(--text-primary);
   cursor: pointer;
-  box-shadow: inset 1px 1px 0px rgba(255,255,255,0.1), inset -1px -1px 0px rgba(0,0,0,0.1);
+  box-shadow: inset 1px 1px 0px rgba(255,255,255,0.15), inset -1px -1px 0px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.05);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .sap-btn:hover {
   background: linear-gradient(to bottom, var(--btn-hover-top) 0%, var(--btn-hover-bot) 100%);
   border-color: var(--color-sap-blue-val);
+  box-shadow: 0 0 4px rgba(0, 86, 179, 0.15);
+  transform: translateY(-0.5px);
 }
 .sap-btn:active {
   background: var(--btn-active);
-  box-shadow: inset 1px 1px 2px rgba(0,0,0,0.2);
+  box-shadow: inset 1px 1px 2.5px rgba(0,0,0,0.18);
+  transform: translateY(0.5px);
 }
 
 /* Classic SAP 3D Input */
 .sap-input {
   background-color: var(--input-bg);
   border: 1px solid var(--color-sap-border-val);
-  border-top-color: var(--color-sap-border-val);
-  border-left-color: var(--color-sap-border-val);
-  padding: 2px 4px;
-  border-radius: 1px;
+  padding: 3px 6px;
+  border-radius: 2px;
   color: var(--text-primary);
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: inset 0 1px 1.5px rgba(0, 0, 0, 0.05);
 }
 .sap-input:focus {
   outline: none;
   background-color: var(--input-focus-bg);
   border-color: var(--color-sap-blue-val);
+  box-shadow: 0 0 0 2px rgba(0, 86, 179, 0.18), inset 0 1px 1.5px rgba(0, 0, 0, 0.05);
 }
 
 /* Classic SAP Panel */
 .sap-panel {
   background-color: var(--panel-bg);
   border: 1px solid var(--color-sap-border-val);
-  box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.sap-panel:hover {
+  box-shadow: 0 3px 6px rgba(0,0,0,0.06), 0 2px 3px rgba(0,0,0,0.04);
 }
 
 /* Classic SAP Header */
 .sap-header {
   background: linear-gradient(to bottom, var(--header-gradient-top) 0%, var(--header-gradient-bot) 100%);
-  border-bottom: 1px solid var(--color-sap-border-val);
+  border-bottom: 2px solid var(--color-sap-border-val);
   color: var(--text-primary);
-  font-weight: bold;
+  font-weight: 700;
+  text-shadow: 0 0.5px 0px rgba(255, 255, 255, 0.5);
 }
 
 /* Custom scrollbar for classic look */
@@ -159,23 +169,36 @@ body {
 .excel-grid td {
   border: 1px solid var(--grid-td-border);
 }
+.excel-grid tbody tr {
+  transition: background-color 0.12s ease;
+}
+.excel-grid tbody tr:hover {
+  background-color: var(--color-sap-highlight-val);
+}
 
 /* Base sap-table styling */
 .sap-table {
   border-collapse: collapse;
   outline: 1px solid var(--color-sap-border-val);
+  width: 100%;
 }
 .sap-table th {
   background-color: var(--grid-th-bg);
   border: 1px solid var(--color-sap-border-val);
-  padding: 4px 6px;
+  padding: 6px 10px;
   font-weight: 600;
   color: var(--text-primary);
   text-align: left;
 }
 .sap-table td {
   border: 1px solid var(--grid-td-border);
-  padding: 4px 6px;
+  padding: 6px 10px;
+}
+.sap-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+.sap-table tbody tr:hover {
+  background-color: var(--color-sap-highlight-val);
 }
 .excel-row-num {
   background-color: var(--grid-th-bg);

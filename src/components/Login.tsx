@@ -11,23 +11,26 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     const trimmedUsername = username.trim();
-    if (trimmedUsername === 'rejatousifsne' && password === 'Tousif09@') {
-      onLoginSuccess({
-        username: trimmedUsername,
-        name: 'Reja Tousif'
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: trimmedUsername, password })
       });
-    } else if (trimmedUsername === 'saddamsne' && password === 'Saddam09@') {
-      onLoginSuccess({
-        username: trimmedUsername,
-        name: 'Saddam Hussain'
-      });
-    } else {
-      setError('Logon failed: Incorrect User ID or Password.');
+      if (response.ok) {
+        const data = await response.json();
+        onLoginSuccess(data);
+      } else {
+        const errData = await response.json();
+        setError(errData.error || 'Logon failed: Incorrect User ID or Password.');
+      }
+    } catch (err) {
+      setError('Network error: Could not connect to authentication server.');
     }
   };
 

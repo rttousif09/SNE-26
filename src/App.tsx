@@ -28,11 +28,15 @@ import { WorkerLedger } from './pages/WorkerLedger';
 import { BillTracking } from './pages/BillTracking';
 import { FinancialYearArchive } from './pages/FinancialYearArchive';
 import { DailySiteSummary } from './pages/DailySiteSummary';
+import { FloorAbstracts } from './pages/FloorAbstracts';
+import StaffManagement from './pages/StaffManagement';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
 import { SuccessToast } from './components/AnimatedERP';
 import { LockScreen } from './components/LockScreen';
+import { exportConsolidatedSitesReportToPDF, downloadPDF } from './lib/pdfGenerator';
+
 
 function AppContent({ user, onLogout }: { user: { username: string; name: string } | null; onLogout: () => void }) {
   const erp = useAppContext();
@@ -68,6 +72,22 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       window.removeEventListener('show-success-toast', handleSuccessToast);
     };
   }, []);
+
+  // Automated report compiler listener via QR Code scan parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('download-all-sites-pdf') === 'true' && erp.isDbLoaded && user) {
+      try {
+        const logoUrlBlob = exportConsolidatedSitesReportToPDF(erp, user.name || 'Executive Staff member');
+        downloadPDF(logoUrlBlob, `SN_Enterprise_Consolidated_Sites_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+        // Clean URL parameter to prevent multiple redundant downloads
+        const clearedUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, clearedUrl);
+      } catch (err) {
+        console.error('Failed to automatically compile QR-linked PDF site report:', err);
+      }
+    }
+  }, [erp.isDbLoaded, user]);
 
 
   const handleDriveBackup = async () => {
@@ -294,7 +314,13 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'site-monthly-summary': return <SiteMonthlySummary />;
       case 'daily-site-summary': return <DailySiteSummary />;
       case 'bill-tracking': return <BillTracking />;
+      case 'floor-abstracts': return <FloorAbstracts />;
       case 'financial-year-archive': return <FinancialYearArchive />;
+      case 'staff-management':
+        if (user?.username === 'saddamsne' || user?.username === 'rejatousifsne') {
+          return <StaffManagement />;
+        }
+        return <Dashboard />;
       default: return <Dashboard />;
     }
   };
@@ -320,7 +346,9 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'site-monthly-summary': return 'Site Monthly Report';
       case 'daily-site-summary': return 'AI Daily Site Summary';
       case 'bill-tracking': return 'Bill Tracking Workflow';
+      case 'floor-abstracts': return 'Floor Abstract';
       case 'financial-year-archive': return 'Financial Year Archive & Closing';
+      case 'staff-management': return 'Staff & Access Management';
       default: return 'Overview';
     }
   };

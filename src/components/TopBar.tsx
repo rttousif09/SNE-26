@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock } from 'lucide-react';
+import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 import { useAppContext } from '../store';
+import { exportConsolidatedSitesReportToPDF, downloadPDF } from '../lib/pdfGenerator';
 
 interface TopBarProps {
   user: { username: string; name: string } | null;
@@ -19,7 +20,9 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [copied, setCopied] = useState(false);
 
+  const erpStore = useAppContext();
   const {
     projects,
     workers,
@@ -31,7 +34,27 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
     expensesLedger,
     materialIssues,
     materialReturns
-  } = useAppContext();
+  } = erpStore;
+
+  const handleCopyUrl = async () => {
+    try {
+      const downloadUrl = `${window.location.origin}/?download-all-sites-pdf=true`;
+      await navigator.clipboard.writeText(downloadUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDirectDownload = () => {
+    try {
+      const blobUrl = exportConsolidatedSitesReportToPDF(erpStore, user?.name || user?.username || 'Executive');
+      downloadPDF(blobUrl, `SN_Enterprise_Consolidated_Sites_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const [command, setCommand] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -468,7 +491,7 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
             </button>
 
             {isOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 bg-[#eef2f6] border border-[#8c9ba8] shadow-2xl rounded-sm z-50 text-gray-800 animate-fade-in">
+              <div className="absolute right-0 mt-1.5 w-60 bg-[#eef2f6] border border-[#8c9ba8] shadow-2xl rounded-sm z-50 text-gray-800 animate-fade-in">
                 <div className="bg-gradient-to-r from-[#0056b3] to-[#002f6c] text-white px-2 py-1 flex items-center select-none">
                   <span className="font-bold text-[9px] uppercase tracking-wide">System Access Profile</span>
                 </div>
@@ -499,6 +522,49 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
                       Authenticated Mode
                     </span>
                   </div>
+
+                  {/* QR Code Section */}
+                  <div className="pt-2 border-t border-gray-150 flex flex-col items-center space-y-1.5">
+                    <div className="flex items-center space-x-1 text-[#002f6c] font-bold text-[8px] uppercase tracking-wide">
+                      <QrCode size={11} className="text-[#0056b3]" />
+                      <span>Scan for Sites Report PDF</span>
+                    </div>
+                    
+                    <div className="bg-white p-1.5 rounded border border-gray-300 shadow-sm relative group cursor-pointer" title="Scan with mobile to download consolidated reports PDF">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + '/?download-all-sites-pdf=true')}`}
+                        alt="ERP Reports QR Code"
+                        className="w-24 h-24 select-all"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center space-x-1.5 w-full">
+                      <button
+                        onClick={handleDirectDownload}
+                        title="Compile and download all site reports now (PDF)"
+                        className="sap-btn flex-1 py-1 px-1.5 text-[9px] text-[#002f6c] hover:text-[#001f4d] font-bold uppercase hover:bg-blue-50 border-blue-450 transition flex items-center justify-center space-x-1 h-6 cursor-pointer"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <span>Download</span>
+                      </button>
+                      <button
+                        onClick={handleCopyUrl}
+                        title={copied ? "Copied download URL to clipboard!" : "Copy URL to clipboard"}
+                        className={`sap-btn px-2 text-[9px] font-bold uppercase transition flex items-center justify-center space-x-1 h-6 cursor-pointer border ${copied ? 'bg-green-700 hover:bg-green-800 text-white border-green-700' : 'text-gray-700 hover:bg-gray-100 border-gray-400'}`}
+                      >
+                        {copied ? (
+                          <span>Copied!</span>
+                        ) : (
+                          <>
+                            <Copy size={9} />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="pt-2 border-t border-gray-150 flex items-center">
                     <button 
                       onClick={() => {

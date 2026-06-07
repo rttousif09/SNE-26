@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Database, Folder, FileText, Server, ClipboardCheck } from 'lucide-react';
+import { ChevronRight, ChevronDown, Database, Folder, FileText, Server, ClipboardCheck, Users } from 'lucide-react';
 import { useAppContext } from '../store';
 import { motion, AnimatePresence } from 'motion/react';
 import { ExpandableSection } from './AnimatedERP';
@@ -13,7 +13,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) => {
   const [expanded, setExpanded] = useState(true);
   const [catalogExpanded, setCatalogExpanded] = useState(true);
-  const { approvals, advanceSheetApprovals, kharchiApprovals, paymentSheetApprovals, expensesLedger } = useAppContext();
+  const { approvals, advanceSheetApprovals, kharchiApprovals, paymentSheetApprovals, expensesLedger, user } = useAppContext();
 
   const pendingCount = (approvals?.filter(a => a.status === 'Pending').length || 0) +
     (advanceSheetApprovals?.filter(s => s.status === 'Pending').length || 0) +
@@ -28,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
     payrollLabour: true,
     billingAccounts: true,
     materialInventory: true,
+    systemAdmin: true,
   });
 
   const toggleFolder = (key: string) => {
@@ -50,7 +51,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       items: [
         { id: 'workers', label: '1) Workers Management' },
         { id: 'dlr', label: '2) DLR' },
-        { id: 'worker-ledger', label: '3) Worker Ledger & Holds' }
+        { id: 'worker-ledger', label: '3) Worker Ledger & Holds' },
+        { id: 'floor-abstracts', label: '4) Floor Abstract' }
       ]
     },
     {
@@ -84,6 +86,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       ]
     }
   ];
+
+  const isModuleAllowed = (moduleId: string) => {
+    if (user?.username === 'saddamsne' || user?.username === 'rejatousifsne') {
+      return true;
+    }
+    if (moduleId === 'dashboard') {
+      return true;
+    }
+    if (user?.allowedModules) {
+      return user.allowedModules.includes(moduleId);
+    }
+    return false;
+  };
+
+  const isAdmin = user?.username === 'saddamsne' || user?.username === 'rejatousifsne';
 
   return (
     <div className="w-64 bg-white border-r border-[#8c9ba8] flex flex-col h-full text-[11px] select-none">
@@ -128,28 +145,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                         </div>
 
                         {/* 2. Approvals Workflow at Root of Catalog */}
-                        <div
-                          onClick={() => setCurrentTab('approvals')}
-                          className={`flex items-center space-x-1 py-0.5 pr-2 cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
-                        >
-                          <div className="w-3"></div>
-                          <ClipboardCheck size={12} className="text-[#0056b3]" />
-                          <span className="font-semibold text-[#002f6c] flex-1">Approvals Workflow</span>
-                          {pendingCount > 0 && (
-                            <span className="bg-red-650 text-white font-mono text-[9px] px-1.5 py-0.2 rounded-sm font-bold animate-pulse" title={`${pendingCount} requests pending approval`}>
-                              {pendingCount}
-                            </span>
-                          )}
-                        </div>
+                        {isModuleAllowed('approvals') && (
+                          <div
+                            onClick={() => setCurrentTab('approvals')}
+                            className={`flex items-center space-x-1 py-0.5 pr-2 cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                          >
+                            <div className="w-3"></div>
+                            <ClipboardCheck size={12} className="text-[#0056b3]" />
+                            <span className="font-semibold text-[#002f6c] flex-1">Approvals Workflow</span>
+                            {pendingCount > 0 && (
+                              <span className="bg-red-650 text-white font-mono text-[9px] px-1.5 py-0.2 rounded-sm font-bold animate-pulse" title={`${pendingCount} requests pending approval`}>
+                                {pendingCount}
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {/* Collapsible Folders */}
                         {folders.map((folder) => {
                           const isFolderOpen = foldersExpanded[folder.key];
+                          const allowedItems = folder.items.filter(item => isModuleAllowed(item.id));
+                          if (allowedItems.length === 0) return null;
                           return (
                             <div key={folder.key} className="space-y-0.5">
                               <div 
                                 onClick={() => toggleFolder(folder.key)}
-                                className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff] font-medium text-gray-700"
+                                className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff] font-medium text-gray-700 hover:text-gray-900"
                               >
                                 <div className="w-3 flex justify-center">
                                   {isFolderOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
@@ -162,7 +183,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                                 {isFolderOpen && (
                                   <ExpandableSection isOpen={isFolderOpen}>
                                     <div className="ml-3 border-l border-gray-300 pl-1.5 space-y-0.5">
-                                      {folder.items.map((item) => {
+                                      {allowedItems.map((item) => {
                                         const isActive = currentTab === item.id;
                                         return (
                                           <div
@@ -182,6 +203,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                             </div>
                           );
                         })}
+
+                        {/* System Admin Tools */}
+                        {isAdmin && (
+                          <div className="space-y-0.5">
+                            <div 
+                              onClick={() => toggleFolder('systemAdmin')}
+                              className="flex items-center space-x-1 py-0.5 cursor-pointer hover:bg-[#e6f2ff] font-medium text-gray-700 hover:text-blue-900"
+                            >
+                              <div className="w-3 flex justify-center">
+                                {foldersExpanded.systemAdmin ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                              </div>
+                              <Folder size={11} className="text-blue-700 fill-blue-100" />
+                              <span className="font-bold text-blue-900">f) System Administration</span>
+                            </div>
+
+                            <AnimatePresence initial={false}>
+                              {foldersExpanded.systemAdmin && (
+                                <ExpandableSection isOpen={foldersExpanded.systemAdmin}>
+                                  <div className="ml-3 border-l border-blue-400 pl-1.5 space-y-0.5">
+                                    <div
+                                      onClick={() => setCurrentTab('staff-management')}
+                                      className={`flex items-center space-x-1 py-0.5 cursor-pointer ${currentTab === 'staff-management' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                                    >
+                                      <Users size={11} className="text-blue-700" />
+                                      <span className="font-semibold text-blue-950">Add & Manage Staff</span>
+                                    </div>
+                                  </div>
+                                </ExpandableSection>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        )}
                       </div>
                     </ExpandableSection>
                   )}

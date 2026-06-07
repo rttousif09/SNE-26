@@ -3,8 +3,9 @@ import { useAppContext } from '../store';
 import { ExpenseEntry } from '../types';
 import { 
   Plus, X, Edit, Trash2, Calendar, FileText, Check, Save,
-  ArrowDownCircle, ArrowUpCircle, Wallet, Download, Printer, Filter, Info
+  ArrowDownCircle, ArrowUpCircle, Wallet, Download, Printer, Filter, Info, FileSpreadsheet
 } from 'lucide-react';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import { checkExpenseDuplicate, addOverrideLog } from '../lib/duplicateChecker';
@@ -30,6 +31,7 @@ export const Expenses: React.FC = () => {
 
   // State
   const [isAdding, setIsAdding] = useState(false);
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -776,13 +778,22 @@ export const Expenses: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-[#eef2f6] border border-[#8c9ba8] p-1.5 gap-2 shadow-sm print:hidden mb-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {!isReadOnly ? (
-            <button 
-              onClick={isAdding ? handleCancel : () => setIsAdding(true)} 
-              className="sap-btn flex items-center space-x-1 font-semibold self-start md:self-auto cursor-pointer"
-            >
-              {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-              <span>{isAdding ? 'Cancel' : 'Record Transaction'}</span>
-            </button>
+            <>
+              <button 
+                onClick={isAdding ? handleCancel : () => setIsAdding(true)} 
+                className="sap-btn flex items-center space-x-1 font-semibold self-start md:self-auto cursor-pointer"
+              >
+                {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+                <span>{isAdding ? 'Cancel' : 'Record Transaction'}</span>
+              </button>
+              <button 
+                onClick={() => setIsExcelImportOpen(true)} 
+                className="sap-btn flex items-center space-x-1 font-semibold bg-green-50 text-green-700 border-green-300 hover:bg-green-100 transition cursor-pointer"
+              >
+                <FileSpreadsheet size={12} className="text-green-600" />
+                <span>Import Excel</span>
+              </button>
+            </>
           ) : (
             <span className="font-semibold text-gray-700 px-1 py-0.5 max-sm:text-[10px]">All Expenses Summary List (Read Only)</span>
           )}
@@ -1378,6 +1389,34 @@ export const Expenses: React.FC = () => {
         onViewExisting={(record) => {
           setDupModalOpen(false);
           handleEdit(record);
+        }}
+      />
+
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['date', 'description', 'projectId', 'kharchi', 'mess', 'workerAdvance', 'tiffin', 'travel', 'machineryMaterial', 'workerPayment', 'stationery', 'others', 'bank', 'crBalance']}
+        entityName="Expenses Ledger"
+        projectsContext={projects}
+        onUpload={async (data) => {
+          for (const item of data) {
+            await addExpenseEntry({
+              date: item.date || new Date().toISOString().split('T')[0],
+              description: item.description || 'Spreadsheet Import Entry',
+              projectId: item.projectId || '',
+              kharchi: Number(item.kharchi) || 0,
+              mess: Number(item.mess) || 0,
+              workerAdvance: Number(item.workerAdvance) || 0,
+              tiffin: Number(item.tiffin) || 0,
+              travel: Number(item.travel) || 0,
+              machineryMaterial: Number(item.machineryMaterial) || 0,
+              workerPayment: Number(item.workerPayment) || 0,
+              stationery: Number(item.stationery) || 0,
+              others: Number(item.others) || 0,
+              bank: item.bank || '',
+              crBalance: Number(item.crBalance) || 0
+            });
+          }
         }}
       />
     </div>

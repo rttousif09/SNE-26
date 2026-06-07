@@ -47,7 +47,7 @@ export const Workers: React.FC = () => {
   const [transferSearch, setTransferSearch] = useState('');
 
   const [formData, setFormData] = useState({
-    serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: ''
+    serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: '', dailyRate: ''
   });
   const [searchQuery, setSearchQuery] = useState(() => {
     if ((window as any).__pendingGlobalSearch && (window as any).__pendingGlobalSearch.tab === 'workers') {
@@ -175,7 +175,8 @@ export const Workers: React.FC = () => {
       projectId: worker.projectId,
       designation: worker.designation,
       joiningDate: worker.joiningDate,
-      exitDate: worker.exitDate || ''
+      exitDate: worker.exitDate || '',
+      dailyRate: worker.dailyRate ? worker.dailyRate.toString() : ''
     });
     setEditingId(worker.id);
     setIsAdding(true);
@@ -221,7 +222,8 @@ export const Workers: React.FC = () => {
         projectId: selectedFilterProject !== 'all' ? selectedFilterProject : '', 
         designation: '', 
         joiningDate: new Date().toISOString().split('T')[0], 
-        exitDate: '' 
+        exitDate: '',
+        dailyRate: '' 
       });
     }
   };
@@ -229,7 +231,7 @@ export const Workers: React.FC = () => {
   const handleCancel = () => {
     setIsAdding(false);
     setEditingId(null);
-    setFormData({ serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: '' });
+    setFormData({ serialNo: '', workerId: '', name: '', projectId: '', designation: '', joiningDate: '', exitDate: '', dailyRate: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -250,9 +252,9 @@ export const Workers: React.FC = () => {
     }
     
     if (editingId) {
-      updateWorker(editingId, { ...formData });
+      updateWorker(editingId, { ...formData, dailyRate: Number(formData.dailyRate) || undefined });
     } else {
-      addWorker({ ...formData });
+      addWorker({ ...formData, dailyRate: Number(formData.dailyRate) || undefined });
     }
     handleCancel();
   };
@@ -748,6 +750,10 @@ export const Workers: React.FC = () => {
                     <option value="Cook">Cook</option>
                     <option value="Storeman">Storeman</option>
                   </select>
+                </div>
+                <div className="flex items-center">
+                  <label className="w-28 font-semibold text-gray-700">Daily Rate (₹):</label>
+                  <input type="number" className="sap-input flex-1 font-mono" placeholder="Optional" value={formData.dailyRate} onChange={e => setFormData({...formData, dailyRate: e.target.value})} />
                 </div>
                 <div className="flex items-center">
                   <label className="w-28 font-semibold text-gray-700">Joining Date:</label>
@@ -1561,6 +1567,7 @@ export const Workers: React.FC = () => {
         onClose={() => setIsBulkUploadOpen(false)}
         expectedColumns={['serialNo', 'workerId', 'name', 'projectId', 'designation', 'joiningDate']}
         entityName="Workers"
+        projectsContext={projects}
         onUpload={async (data) => {
           const formattedData = data.map(item => ({
             ...item,

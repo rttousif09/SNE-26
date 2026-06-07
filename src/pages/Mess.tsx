@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../store';
 import { MessBooking, ExpenseEntry } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, Calendar, Users, Wallet, CheckSquare, Search, Info, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Calendar, Users, Wallet, CheckSquare, Search, Info, HelpCircle, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 
 export const Mess: React.FC = () => {
   const {
@@ -31,6 +32,7 @@ export const Mess: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Search/Filter list states
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [showOnlyOverdue, setShowOnlyOverdue] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -562,6 +564,15 @@ export const Mess: React.FC = () => {
                 <span>Overdue Only</span>
               </button>
 
+              <button
+                type="button"
+                onClick={() => setIsExcelImportOpen(true)}
+                className="bg-green-50 text-green-800 hover:bg-green-100 px-1.5 py-0.5 rounded-xs border border-green-450 font-semibold flex items-center space-x-1 select-none cursor-pointer"
+              >
+                <FileSpreadsheet size={11} className="text-green-700" />
+                <span>Import Excel</span>
+              </button>
+
               <span>Filter Project:</span>
               <select
                 value={projectFilter}
@@ -756,6 +767,33 @@ export const Mess: React.FC = () => {
           )}
         </motion.div>
       </div>
+
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['projectId', 'fromDate', 'toDate', 'workerCount', 'ratePerWeek', 'totalComputed', 'amountPaid', 'amountDue', 'paidTo', 'paymentDate', 'remarks']}
+        entityName="Mess Calculations"
+        projectsContext={projects}
+        onUpload={async (data) => {
+          for (const item of data) {
+            if (!item.projectId) continue;
+            await addMessBooking({
+              projectId: item.projectId,
+              fromDate: item.fromDate || new Date().toISOString().split('T')[0],
+              toDate: item.toDate || new Date().toISOString().split('T')[0],
+              workerCount: Number(item.workerCount) || 1,
+              ratePerWeek: Number(item.ratePerWeek) || 1400,
+              totalComputed: Number(item.totalComputed) || 0,
+              amountPaid: Number(item.amountPaid) || 0,
+              amountDue: Number(item.amountDue) || 0,
+              paidTo: item.paidTo || '',
+              paymentDate: item.paymentDate || '',
+              remarks: item.remarks || '',
+              postedExpenseId: ''
+            });
+          }
+        }}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -33,12 +33,15 @@ interface AppState {
   trackedBills: TrackedBill[];
   billTimelines: BillTimelineEntry[];
   financialYears: FinancialYear[];
+  staff: Staff[];
+  floorAbstracts: FloorAbstract[];
 }
+
 
 interface AppContextType extends AppState {
   isDbLoaded: boolean;
-  user: { username: string; name: string } | null;
-  setUser: (user: { username: string; name: string } | null) => void;
+  user: { username: string; name: string; role?: string; allowedModules?: string[]; allowedProjects?: string[] } | null;
+  setUser: (user: { username: string; name: string; role?: string; allowedModules?: string[]; allowedProjects?: string[] } | null) => void;
   importBackup: (backupState: AppState) => Promise<boolean>;
   addProject: (project: Omit<Project, 'id'>) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
@@ -76,6 +79,9 @@ interface AppContextType extends AppState {
   addExpenseEntry: (expense: Omit<ExpenseEntry, 'id'>) => void;
   updateExpenseEntry: (id: string, expense: Partial<ExpenseEntry>) => void;
   deleteExpenseEntry: (id: string) => void;
+  addStaff: (staffMember: Omit<Staff, 'createdDate'>) => void;
+  updateStaff: (id: string, staffMember: Partial<Staff>) => void;
+  deleteStaff: (id: string) => void;
   addMessBooking: (booking: Omit<MessBooking, 'id'>) => void;
   updateMessBooking: (id: string, booking: Partial<MessBooking>) => void;
   deleteMessBooking: (id: string) => void;
@@ -118,6 +124,9 @@ interface AppContextType extends AppState {
   addFinancialYear: (fy: Omit<FinancialYear, 'id'>) => Promise<void>;
   updateFinancialYear: (id: string, fy: Partial<FinancialYear>) => Promise<void>;
   deleteFinancialYear: (id: string) => Promise<void>;
+  addFloorAbstract: (floorAbstract: Omit<FloorAbstract, 'id'>) => Promise<void>;
+  updateFloorAbstract: (id: string, floorAbstract: Partial<FloorAbstract>) => Promise<void>;
+  deleteFloorAbstract: (id: string) => Promise<void>;
 }
 
 const initialState: AppState = {
@@ -187,12 +196,14 @@ const initialState: AppState = {
   trackedBills: [],
   billTimelines: [],
   financialYears: [],
+  staff: [],
+  floorAbstracts: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUserState] = useState<{ username: string; name: string } | null>(() => {
+  const [user, setUserState] = useState<AppContextType['user']>(() => {
     try {
       const saved = localStorage.getItem('erp_auth_user');
       return saved ? JSON.parse(saved) : null;
@@ -201,7 +212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  const setUser = (usr: { username: string; name: string } | null) => {
+  const setUser = (usr: AppContextType['user']) => {
     if (usr) {
       localStorage.setItem('erp_auth_user', JSON.stringify(usr));
     } else {
@@ -241,6 +252,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     trackedBills: [],
     billTimelines: [],
     financialYears: [],
+    staff: [],
+    floorAbstracts: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
@@ -249,7 +262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const [
           pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes, assetsRes, assetTransfersRes, assetMaintenancesRes,
-          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes
+          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes, staffRes, faRes
         ] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
@@ -280,7 +293,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/attendance').then(r => r.json()).catch(() => []),
           fetch('/api/tracked-bills').then(r => r.json()).catch(() => []),
           fetch('/api/bill-timelines').then(r => r.json()).catch(() => []),
-          fetch('/api/financial-years').then(r => r.json()).catch(() => [])
+          fetch('/api/financial-years').then(r => r.json()).catch(() => []),
+          fetch('/api/staff').then(r => r.json()).catch(() => []),
+          fetch('/api/floor-abstracts').then(r => r.json()).catch(() => [])
         ]);
 
         const stateObj: AppState = {
@@ -313,7 +328,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           attendance: attRes || [],
           trackedBills: tbRes || [],
           billTimelines: tlRes || [],
-          financialYears: fyRes || []
+          financialYears: fyRes || [],
+          staff: staffRes || [],
+          floorAbstracts: faRes || []
         };
         setState(stateObj);
 
@@ -344,6 +361,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('trackedBills', tbRes || []).catch(() => {});
         await saveAllToStore('billTimelines', tlRes || []).catch(() => {});
         await saveAllToStore('financialYears', fyRes || []).catch(() => {});
+        await saveAllToStore('floorAbstracts', faRes || []).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -377,6 +395,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const trackedBills = await getAllFromStore('trackedBills').catch(() => []);
           const billTimelines = await getAllFromStore('billTimelines').catch(() => []);
           const financialYears = await getAllFromStore('financialYears').catch(() => []);
+          const staff = await getAllFromStore('staff').catch(() => []);
+          const floorAbstracts = await getAllFromStore('floorAbstracts').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
@@ -387,7 +407,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                             labourPlannings.length === 0 && workerTransfers.length === 0 && assets.length === 0 &&
                             assetTransfers.length === 0 && assetMaintenances.length === 0 &&
                             workerLedger.length === 0 && workerHolds.length === 0 && workerRecoveryAuditTrail.length === 0 && attendance.length === 0 &&
-                            trackedBills.length === 0 && billTimelines.length === 0 && financialYears.length === 0;
+                            trackedBills.length === 0 && billTimelines.length === 0 && financialYears.length === 0 && staff.length === 0 && floorAbstracts.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -422,7 +442,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               attendance,
               trackedBills,
               billTimelines,
-              financialYears
+              financialYears,
+              staff,
+              floorAbstracts
             });
           }
         } catch (e) {
@@ -464,6 +486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await saveAllToStore('trackedBills', backupState.trackedBills || []).catch(() => {});
       await saveAllToStore('billTimelines', backupState.billTimelines || []).catch(() => {});
       await saveAllToStore('financialYears', backupState.financialYears || []).catch(() => {});
+      await saveAllToStore('floorAbstracts', backupState.floorAbstracts || []).catch(() => {});
 
       setState(backupState);
       return true;
@@ -1830,10 +1853,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addFloorAbstract = async (floorAbstract: Omit<FloorAbstract, 'id'>) => {
+    const newFa = { ...floorAbstract, id: generateId() };
+    setState(s => {
+      const updated = [...s.floorAbstracts, newFa as FloorAbstract];
+      saveAllToStore('floorAbstracts', updated).catch(() => {});
+      return { ...s, floorAbstracts: updated };
+    });
+    triggerSuccess('Floor Abstract saved.');
+    try {
+      await fetch('/api/floor-abstracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newFa)
+      });
+    } catch (e) { console.error(e); }
+  };
+
+  const updateFloorAbstract = async (id: string, floorAbstract: Partial<FloorAbstract>) => {
+    setState(s => {
+      const updated = s.floorAbstracts.map(f => f.id === id ? { ...f, ...floorAbstract } : f);
+      saveAllToStore('floorAbstracts', updated).catch(() => {});
+      return { ...s, floorAbstracts: updated };
+    });
+    triggerSuccess('Floor Abstract updated.');
+    try {
+      const existing = state.floorAbstracts.find(f => f.id === id);
+      if (existing) {
+        const merged = { ...existing, ...floorAbstract };
+        await fetch(`/api/floor-abstracts/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteFloorAbstract = async (id: string) => {
+    setState(s => {
+      const updated = s.floorAbstracts.filter(f => f.id !== id);
+      saveAllToStore('floorAbstracts', updated).catch(() => {});
+      return { ...s, floorAbstracts: updated };
+    });
+    triggerSuccess('Floor Abstract deleted.');
+    try {
+      await fetch(`/api/floor-abstracts/${id}`, { method: 'DELETE' });
+    } catch (e) { console.error(e); }
+  };
+
+  const addStaff = async (staffMember: Omit<Staff, 'createdDate'>) => {
+    const newStaff: Staff = { ...staffMember, createdDate: new Date().toISOString() };
+    setState(s => ({ ...s, staff: [...s.staff, newStaff] }));
+    triggerSuccess('New Staff account successfully registered: ' + newStaff.name);
+    try {
+      await fetch('/api/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newStaff)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateStaff = async (id: string, staffMember: Partial<Staff>) => {
+    setState(s => ({
+      ...s,
+      staff: s.staff.map(st => st.id === id ? { ...st, ...staffMember } as Staff : st)
+    }));
+    triggerSuccess('Staff account successfully updated.');
+    try {
+      await fetch(`/api/staff/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(staffMember)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteStaff = async (id: string) => {
+    setState(s => ({
+      ...s,
+      staff: s.staff.filter(st => st.id !== id)
+    }));
+    triggerSuccess('Staff account successfully deleted.');
+    try {
+      await fetch(`/api/staff/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
 
   return (
     <AppContext.Provider value={{
       ...state,
+      projects: user?.role === 'staff' && user?.allowedProjects
+        ? state.projects.filter(p => user.allowedProjects?.includes(p.id))
+        : state.projects,
       isDbLoaded,
       user,
       setUser,
@@ -1874,6 +1996,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addExpenseEntry,
       updateExpenseEntry,
       deleteExpenseEntry,
+      addStaff,
+      updateStaff,
+      deleteStaff,
       addMessBooking,
       updateMessBooking,
       deleteMessBooking,
@@ -1915,7 +2040,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addBillTimeline,
       addFinancialYear,
       updateFinancialYear,
-      deleteFinancialYear
+      deleteFinancialYear,
+      addFloorAbstract,
+      updateFloorAbstract,
+      deleteFloorAbstract
     }}>
       {children}
     </AppContext.Provider>

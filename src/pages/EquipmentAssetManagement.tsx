@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Asset, AssetCategory, AssetStatus, AssetTransfer, AssetMaintenance } from '../types';
 import { PDFExportButton } from '../components/PDFExportButton';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 
 const CATEGORIES: AssetCategory[] = [
   'Vibrator',
@@ -57,6 +58,7 @@ export const EquipmentAssetManagement: React.FC = () => {
 
   // Modal / Form trigger states
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
 
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -853,6 +855,10 @@ export const EquipmentAssetManagement: React.FC = () => {
               <button onClick={handleOpenAssetAdd} className="sap-btn bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center space-x-1 p-1 px-2.5">
                 <Plus size={11} />
                 <span>Add Asset</span>
+              </button>
+              <button onClick={() => setIsExcelImportOpen(true)} className="sap-btn bg-green-50 text-green-700 hover:bg-green-100 flex items-center space-x-1 p-1 px-2.5 border border-green-300">
+                <FileSpreadsheet size={11} className="text-green-650" />
+                <span>Import Excel</span>
               </button>
               <button onClick={handleExportCSV} className="sap-btn bg-slate-50 text-slate-700 flex items-center space-x-1 p-1 hover:bg-slate-150 border" title="Export selection to CSV Spreadsheet">
                 <FileSpreadsheet size={11} className="text-emerald-700" />
@@ -1788,6 +1794,30 @@ export const EquipmentAssetManagement: React.FC = () => {
         </div>
       )}
 
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['name', 'category', 'assetCode', 'brand', 'purchaseDate', 'purchaseCost', 'remarks']}
+        entityName="Equipment Capital Assets"
+        projectsContext={projects}
+        onUpload={async (data) => {
+          for (const item of data) {
+            if (!item.name || !item.assetCode) continue;
+            await addAsset({
+              name: item.name,
+              category: (item.category || 'Other') as any,
+              assetCode: item.assetCode,
+              brand: item.brand || 'Generic',
+              purchaseDate: item.purchaseDate || new Date().toISOString().split('T')[0],
+              purchaseCost: Number(item.purchaseCost) || 0,
+              currentSiteId: 'general_pool',
+              assignedTo: '',
+              status: 'Available',
+              remarks: item.remarks || ''
+            });
+          }
+        }}
+      />
     </div>
   );
 };

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip, Printer } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip, Printer, FileSpreadsheet } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import { checkBillingDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
@@ -12,6 +13,7 @@ export const Billing: React.FC = () => {
   const { user, billings, projects, addBilling, updateBilling, deleteBilling } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [printingBill, setPrintingBill] = useState<BillingType | null>(null);
   
@@ -459,10 +461,16 @@ export const Billing: React.FC = () => {
       <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1 justify-between">
         <div className="flex items-center space-x-2">
           {!isReadOnly ? (
-            <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
-              {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-              <span>{isAdding ? 'Cancel' : 'New Bill'}</span>
-            </button>
+            <>
+              <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+                {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+                <span>{isAdding ? 'Cancel' : 'New Bill'}</span>
+              </button>
+              <button onClick={() => setIsExcelImportOpen(true)} className="sap-btn flex items-center space-x-1 bg-green-50 text-green-700 border-green-300 hover:bg-green-100">
+                <FileSpreadsheet size={12} className="text-green-600"/>
+                <span>Import Excel</span>
+              </button>
+            </>
           ) : (
             <div className="font-semibold text-gray-700 px-1 py-0.5">Billing Directory (Read Only)</div>
           )}
@@ -1285,6 +1293,35 @@ export const Billing: React.FC = () => {
           </div>
         </div>
       )}
+
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['billNo', 'projectId', 'workNature', 'amount', 'month', 'certifyDate', 'billType']}
+        entityName="Contracts Billing"
+        projectsContext={projects}
+        onUpload={async (data) => {
+          for (const item of data) {
+            if (!item.projectId || !item.billNo) continue;
+            await addBilling({
+              srNo: item.srNo || `SR-${Math.floor(1000 + Math.random() * 9000)}`,
+              billNo: item.billNo,
+              projectId: item.projectId,
+              workNature: item.workNature || 'General Civil Work',
+              amount: Number(item.amount) || 0,
+              month: item.month || new Date().toISOString().substring(0, 7),
+              certifyDate: item.certifyDate || new Date().toISOString().split('T')[0],
+              billType: item.billType || 'Contractor',
+              tds: 0,
+              retention: 0,
+              gst: 0,
+              debitAmount: 0,
+              debitReason: '',
+              measurementItems: []
+            });
+          }
+        }}
+      />
     </div>
   );
 };

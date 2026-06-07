@@ -53,6 +53,7 @@ function initDbSchema() {
       designation TEXT NOT NULL,
       joiningDate TEXT NOT NULL,
       exitDate TEXT,
+      dailyRate REAL,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -615,6 +616,32 @@ function initDbSchema() {
       generatedAt TEXT NOT NULL,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS staff (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      name TEXT NOT NULL,
+      allowedModules TEXT, -- JSON array of module string keys
+      allowedProjects TEXT, -- JSON array of project ID strings
+      createdDate TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS floor_abstracts (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      category TEXT NOT NULL,
+      level TEXT NOT NULL,
+      srNo TEXT,
+      flatNo TEXT,
+      amount REAL,
+      averageRate REAL,
+      totalHajira REAL,
+      flatHajira REAL,
+      workers TEXT, -- JSON array of worker entries
+      remarks TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `);
 
 
@@ -724,11 +751,21 @@ function initDbSchema() {
     }
   }
   
-  try {
-    db.exec("ALTER TABLE material_items ADD COLUMN materialType TEXT DEFAULT 'Consumable'");
-  } catch (e) {
-    // Column already exists, safe to ignore
-  }
+  try { db.exec("ALTER TABLE material_items ADD COLUMN materialType TEXT DEFAULT 'Consumable'"); } catch (e) {}
+
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN billId TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN paymentReference TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN paymentMode TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN bankName TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN utrChequeNo TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN attachment TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN isRetentionPayment INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN retentionReleaseDate TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE client_payments ADD COLUMN category TEXT"); } catch(e) {}
+
+  try { db.exec("ALTER TABLE billings ADD COLUMN tdsCertificateReceived INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE billings ADD COLUMN tdsCertificatePending INTEGER DEFAULT 1"); } catch(e) {}
+  try { db.exec("ALTER TABLE billings ADD COLUMN gstStatus TEXT"); } catch(e) {}
 }
 
 initDbSchema();
@@ -765,6 +802,173 @@ async function startServer() {
   });
 
   // API Routes
+
+  // Auth Endpoints
+  app.post("/api/login", (req, res) => {
+    try {
+      const { username, password } = req.body;
+      const normalizedUser = username ? username.trim() : "";
+      
+      // Check hardcoded super admins / owners
+      if (normalizedUser === 'rejatousifsne' && password === 'Tousif09@') {
+        return res.json({
+          username: normalizedUser,
+          name: 'Reja Tousif',
+          role: 'admin',
+          allowedModules: [], // empty means all / unrestricted
+          allowedProjects: [] // empty means all / unrestricted
+        });
+      } else if (normalizedUser === 'saddamsne' && password === 'Saddam09@') {
+        return res.json({
+          username: normalizedUser,
+          name: 'Saddam Hussain',
+          role: 'admin',
+          allowedModules: [],
+          allowedProjects: []
+        });
+      }
+      
+      // Check database staff
+      const userRow = db.prepare("SELECT * FROM staff WHERE username = ?").get(normalizedUser) as any;
+      if (userRow && userRow.password === password) {
+        return res.json({
+          username: userRow.username,
+          name: userRow.name,
+          role: 'staff',
+          allowedModules: JSON.parse(userRow.allowedModules || '[]'),
+          allowedProjects: JSON.parse(userRow.allowedProjects || '[]')
+        });
+      }
+      
+      res.status(401).json({ error: "Logon failed: Incorrect User ID or Password." });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Staff CRUD Endpoints
+  app.get("/api/staff", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM staff").all() as any[];
+      const processed = rows.map(r => ({
+        ...r,
+        allowedModules: JSON.parse(r.allowedModules || '[]'),
+        allowedProjects: JSON.parse(r.allowedProjects || '[]')
+      }));
+      res.json(processed);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/staff", (req, res) => {
+    try {
+      const { id, username, password, name, allowedModules, allowedProjects } = req.body;
+      const createdDate = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO staff (id, username, password, name, allowedModules, allowedProjects, createdDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, 
+        username.trim(), 
+        password, 
+        name, 
+        JSON.stringify(allowedModules || []), 
+        JSON.stringify(allowedProjects || []), 
+        createdDate
+      );
+      res.status(201).json({ id, username, password, name, allowedModules, allowedProjects, createdDate });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/staff/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { username, password, name, allowedModules, allowedProjects } = req.body;
+      db.prepare(`
+        UPDATE staff
+        SET username = ?, password = ?, name = ?, allowedModules = ?, allowedProjects = ?
+        WHERE id = ?
+      `).run(
+        username.trim(), 
+        password, 
+        name, 
+        JSON.stringify(allowedModules || []), 
+        JSON.stringify(allowedProjects || []), 
+        id
+      );
+      res.json({ id, username, password, name, allowedModules, allowedProjects });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/staff/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM staff WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/floor-abstracts", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM floor_abstracts").all() as any[];
+      const processed = rows.map(r => ({
+        ...r,
+        workers: JSON.parse(r.workers || '[]')
+      }));
+      res.json(processed);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/floor-abstracts", (req, res) => {
+    try {
+      const { id, projectId, category, level, srNo, flatNo, amount, averageRate, totalHajira, flatHajira, workers, remarks } = req.body;
+      db.prepare(`
+        INSERT INTO floor_abstracts (id, projectId, category, level, srNo, flatNo, amount, averageRate, totalHajira, flatHajira, workers, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, projectId, category, level, srNo, flatNo, amount || null, averageRate || null, totalHajira || null, flatHajira || null, JSON.stringify(workers || []), remarks || ""
+      );
+      res.json({ id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/floor-abstracts/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { projectId, category, level, srNo, flatNo, amount, averageRate, totalHajira, flatHajira, workers, remarks } = req.body;
+      db.prepare(`
+        UPDATE floor_abstracts SET 
+          projectId = ?, category = ?, level = ?, srNo = ?, flatNo = ?, amount = ?, averageRate = ?, totalHajira = ?, flatHajira = ?, workers = ?, remarks = ?
+        WHERE id = ?
+      `).run(
+        projectId, category, level, srNo, flatNo, amount || null, averageRate || null, totalHajira || null, flatHajira || null, JSON.stringify(workers || []), remarks || "", id
+      );
+      res.json({ id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/floor-abstracts/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.prepare("DELETE FROM floor_abstracts WHERE id = ?").run(id);
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // 1. Projects
   app.get("/api/projects", (req, res) => {
@@ -873,11 +1077,11 @@ async function startServer() {
 
   app.post("/api/workers", (req, res) => {
     try {
-      const { id, serialNo, workerId, name, projectId, designation, joiningDate, exitDate } = req.body;
+      const { id, serialNo, workerId, name, projectId, designation, joiningDate, exitDate, dailyRate } = req.body;
       db.prepare(`
-        INSERT INTO workers (id, serialNo, workerId, name, projectId, designation, joiningDate, exitDate)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, serialNo || null, workerId, name, projectId, designation, joiningDate, exitDate || null);
+        INSERT INTO workers (id, serialNo, workerId, name, projectId, designation, joiningDate, exitDate, dailyRate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, serialNo || null, workerId, name, projectId, designation, joiningDate, exitDate || null, dailyRate || null);
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -887,12 +1091,12 @@ async function startServer() {
   app.put("/api/workers/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { serialNo, workerId, name, projectId, designation, joiningDate, exitDate } = req.body;
+      const { serialNo, workerId, name, projectId, designation, joiningDate, exitDate, dailyRate } = req.body;
       db.prepare(`
         UPDATE workers
-        SET serialNo = ?, workerId = ?, name = ?, projectId = ?, designation = ?, joiningDate = ?, exitDate = ?
+        SET serialNo = ?, workerId = ?, name = ?, projectId = ?, designation = ?, joiningDate = ?, exitDate = ?, dailyRate = ?
         WHERE id = ?
-      `).run(serialNo || null, workerId, name, projectId, designation, joiningDate, exitDate || null, id);
+      `).run(serialNo || null, workerId, name, projectId, designation, joiningDate, exitDate || null, dailyRate || null, id);
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -935,11 +1139,11 @@ async function startServer() {
 
   app.post("/api/billings", (req, res) => {
     try {
-      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems } = req.body;
+      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
       const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
-        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType, tdsCertificateReceived, tdsCertificatePending, gstStatus)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         srNo || null,
@@ -958,7 +1162,10 @@ async function startServer() {
         mItemsStr,
         hardCopyFile || null,
         hardCopyFileName || null,
-        hardCopyFileType || null
+        hardCopyFileType || null,
+        tdsCertificateReceived ? 1 : 0,
+        tdsCertificatePending ? 1 : 0,
+        gstStatus || null
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -969,11 +1176,11 @@ async function startServer() {
   app.put("/api/billings/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems } = req.body;
+      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
       const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
         UPDATE billings
-        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, debitAmount = ?, debitReason = ?, billType = ?, measurementItems = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?
+        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, debitAmount = ?, debitReason = ?, billType = ?, measurementItems = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?, tdsCertificateReceived = ?, tdsCertificatePending = ?, gstStatus = ?
         WHERE id = ?
       `).run(
         srNo || null,
@@ -993,6 +1200,9 @@ async function startServer() {
         hardCopyFile || null,
         hardCopyFileName || null,
         hardCopyFileType || null,
+        tdsCertificateReceived ? 1 : 0,
+        tdsCertificatePending ? 1 : 0,
+        gstStatus || null,
         id
       );
       res.json(req.body);
@@ -1022,7 +1232,16 @@ async function startServer() {
         amountReceived: row.amountReceived,
         date: row.date,
         remarks: row.remarks,
-        status: row.status
+        status: row.status,
+        billId: row.billId,
+        paymentReference: row.paymentReference,
+        paymentMode: row.paymentMode,
+        bankName: row.bankName,
+        utrChequeNo: row.utrChequeNo,
+        attachment: row.attachment,
+        isRetentionPayment: row.isRetentionPayment,
+        retentionReleaseDate: row.retentionReleaseDate,
+        category: row.category
       }));
       res.json(formatted);
     } catch (err: any) {
@@ -1032,11 +1251,11 @@ async function startServer() {
 
   app.post("/api/client-payments", (req, res) => {
     try {
-      const { id, projectId, amountReceived, date, remarks, status } = req.body;
+      const { id, projectId, amountReceived, date, remarks, status, billId, paymentReference, paymentMode, bankName, utrChequeNo, attachment, isRetentionPayment, retentionReleaseDate, category } = req.body;
       db.prepare(`
-        INSERT INTO client_payments (id, projectId, amountReceived, date, remarks, status)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, projectId, parseFloat(amountReceived), date, remarks || "", status || "Received");
+        INSERT INTO client_payments (id, projectId, amountReceived, date, remarks, status, billId, paymentReference, paymentMode, bankName, utrChequeNo, attachment, isRetentionPayment, retentionReleaseDate, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, projectId, parseFloat(amountReceived), date, remarks || "", status || "Received", billId || null, paymentReference || null, paymentMode || null, bankName || null, utrChequeNo || null, attachment || null, isRetentionPayment ? 1 : 0, retentionReleaseDate || null, category || null);
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1046,12 +1265,12 @@ async function startServer() {
   app.put("/api/client-payments/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, amountReceived, date, remarks, status } = req.body;
+      const { projectId, amountReceived, date, remarks, status, billId, paymentReference, paymentMode, bankName, utrChequeNo, attachment, isRetentionPayment, retentionReleaseDate, category } = req.body;
       db.prepare(`
         UPDATE client_payments
-        SET projectId = ?, amountReceived = ?, date = ?, remarks = ?, status = ?
+        SET projectId = ?, amountReceived = ?, date = ?, remarks = ?, status = ?, billId = ?, paymentReference = ?, paymentMode = ?, bankName = ?, utrChequeNo = ?, attachment = ?, isRetentionPayment = ?, retentionReleaseDate = ?, category = ?
         WHERE id = ?
-      `).run(projectId, parseFloat(amountReceived), date, remarks || "", status || "Received", id);
+      `).run(projectId, parseFloat(amountReceived), date, remarks || "", status || "Received", billId || null, paymentReference || null, paymentMode || null, bankName || null, utrChequeNo || null, attachment || null, isRetentionPayment ? 1 : 0, retentionReleaseDate || null, category || null, id);
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });

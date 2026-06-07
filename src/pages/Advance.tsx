@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
-import { Save, Edit, X, Trash2 } from 'lucide-react';
+import { Save, Edit, X, Trash2, FileSpreadsheet } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import { checkWorkerAdvanceDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
@@ -11,6 +12,7 @@ export const Advance: React.FC = () => {
   const { user, advances, projects, workers, addAdvance, updateAdvance, deleteAdvance, advanceSheetApprovals, addAdvanceSheetApproval } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [selectedProject, setSelectedProject] = useState('');
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   
   // Duplicate verification states
@@ -347,27 +349,38 @@ export const Advance: React.FC = () => {
               <span className="font-bold text-red-700">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalAdvance)}</span>
             </div>
             
-            <PDFExportButton
-              title="Advance Register Report"
-              siteName={projects.find(p => p.id === selectedProject)?.name}
-              headers={['Sr No', 'ID No', 'Name', 'Date', 'Paid By', 'Remarks', 'Deduction Info', 'Amount']}
-              data={filteredAdvances.map(a => {
-                const w = getWorkerDetails(a.workerId);
-                return [
-                  w.srNo,
-                  w.idNo,
-                  w.name,
-                  a.date,
-                  a.paidBy === 'Other' ? a.paidByDetails : a.paidBy,
-                  a.remarks,
-                  a.isDeducted ? `Yes (${a.deductionMonth}, ₹${a.deductionAmount})` : 'No',
-                  `Rs. ${Number(a.amount).toLocaleString('en-IN')}`
-                ];
-              })}
-              totals={[
-                '', '', '', '', '', '', 'Total Advance:', `Rs. ${totalAdvance.toLocaleString('en-IN')}`
-              ]}
-            />
+            <div className="flex items-center space-x-2">
+              {!isReadOnly && (
+                <button 
+                  onClick={() => setIsExcelImportOpen(true)}
+                  className="sap-btn flex items-center space-x-1 bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+                >
+                  <FileSpreadsheet size={12} className="text-green-600" />
+                  <span>Import Excel</span>
+                </button>
+              )}
+              <PDFExportButton
+                title="Advance Register Report"
+                siteName={projects.find(p => p.id === selectedProject)?.name}
+                headers={['Sr No', 'ID No', 'Name', 'Date', 'Paid By', 'Remarks', 'Deduction Info', 'Amount']}
+                data={filteredAdvances.map(a => {
+                  const w = getWorkerDetails(a.workerId);
+                  return [
+                    w.srNo,
+                    w.idNo,
+                    w.name,
+                    a.date,
+                    a.paidBy === 'Other' ? a.paidByDetails : a.paidBy,
+                    a.remarks,
+                    a.isDeducted ? `Yes (${a.deductionMonth}, ₹${a.deductionAmount})` : 'No',
+                    `Rs. ${Number(a.amount).toLocaleString('en-IN')}`
+                  ];
+                })}
+                totals={[
+                  '', '', '', '', '', '', 'Total Advance:', `Rs. ${totalAdvance.toLocaleString('en-IN')}`
+                ]}
+              />
+            </div>
           </div>
 
           <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
@@ -525,6 +538,31 @@ export const Advance: React.FC = () => {
         onViewExisting={(record) => {
           setDupModalOpen(false);
           handleEdit(record);
+        }}
+      />
+
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['projectId', 'workerId', 'amount', 'paidBy', 'paidByDetails', 'remarks', 'date']}
+        entityName="Worker Advance"
+        projectsContext={projects}
+        workersContext={workers}
+        onUpload={async (data) => {
+          for (const item of data) {
+            const pId = item.projectId || selectedProject;
+            if (!pId || !item.workerId) continue;
+            await addAdvance({
+              projectId: pId,
+              workerId: item.workerId,
+              amount: Number(item.amount) || 0,
+              paidBy: item.paidBy || 'Admin',
+              paidByDetails: item.paidByDetails || '',
+              remarks: item.remarks || '',
+              date: item.date || new Date().toISOString().split('T')[0],
+              isDeducted: false
+            });
+          }
         }}
       />
     </div>

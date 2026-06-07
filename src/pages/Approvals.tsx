@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck, History } from 'lucide-react';
+import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck, History, Eye } from 'lucide-react';
+import { SheetPreviewModal } from '../components/SheetPreviewModal';
 
 interface AlertNotification {
   id: string;
@@ -30,7 +31,10 @@ export const Approvals: React.FC = () => {
     deletePaymentSheetApproval,
     updateKharchiApproval,
     deleteKharchiApproval,
-    updateExpenseEntry
+    updateExpenseEntry,
+    workerPayments = [],
+    kharchis = [],
+    advances = []
   } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'advances' | 'paymentSheets' | 'kharchiSheets' | 'advanceSheets' | 'expenses' | 'history'>('advances');
@@ -54,6 +58,13 @@ export const Approvals: React.FC = () => {
   });
 
   const [notifications, setNotifications] = useState<AlertNotification[]>([]);
+  const [viewingSheet, setViewingSheet] = useState<{
+    type: 'paymentSheet' | 'kharchiSheet' | 'advanceSheet' | 'expenseSheet';
+    projectId: string;
+    month?: string;
+    expenseId?: string;
+    projectName: string;
+  } | null>(null);
   const prevApprovalsRef = useRef<Record<string, 'Pending' | 'Approved' | 'Rejected'>>({});
   const prevSheetApprovalsRef = useRef<Record<string, 'Pending' | 'Approved' | 'Rejected'>>({});
 
@@ -334,6 +345,8 @@ export const Approvals: React.FC = () => {
         logs.push({
           id: `ps-${a.id}`,
           type: 'Payment Sheet',
+          projectId: a.projectId,
+          month: a.month,
           projectName,
           details: `Month: ${a.month}`,
           amount: a.totalAmount,
@@ -354,6 +367,8 @@ export const Approvals: React.FC = () => {
         logs.push({
           id: `ks-${a.id}`,
           type: 'Kharchi Sheet',
+          projectId: a.projectId,
+          month: a.month,
           projectName,
           details: `Month: ${a.month}`,
           amount: a.totalAmount,
@@ -374,6 +389,8 @@ export const Approvals: React.FC = () => {
         logs.push({
           id: `as-${a.id}`,
           type: 'Advance Sheet',
+          projectId: a.projectId,
+          month: a.month,
           projectName,
           details: `Month: ${a.month}`,
           amount: a.totalAmount,
@@ -395,6 +412,8 @@ export const Approvals: React.FC = () => {
         logs.push({
           id: `ex-${e.id}`,
           type: 'Expense Sheet',
+          projectId: e.projectId,
+          expenseId: e.id,
           projectName: projectName || 'General',
           details: e.description,
           amount: totalExp,
@@ -856,7 +875,25 @@ export const Approvals: React.FC = () => {
                 return (
                   <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={sheet.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getProjectName(sheet.projectId)}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">
+                      <div className="flex items-center justify-between">
+                        <span>{getProjectName(sheet.projectId)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setViewingSheet({
+                            type: 'paymentSheet',
+                            projectId: sheet.projectId,
+                            month: sheet.month,
+                            projectName: getProjectName(sheet.projectId)
+                          })}
+                          className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                          title="View entire monthly payment sheet workers and totals"
+                        >
+                          <Eye size={10} />
+                          <span>View Sheet</span>
+                        </button>
+                      </div>
+                    </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono font-bold">{sheet.month}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
@@ -980,7 +1017,25 @@ export const Approvals: React.FC = () => {
                 return (
                   <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={sheet.id} className="hover:bg-[#e6f2ff] cursor-default font-mono">
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{getProjectName(sheet.projectId)}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">
+                      <div className="flex items-center justify-between">
+                        <span>{getProjectName(sheet.projectId)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setViewingSheet({
+                            type: 'kharchiSheet',
+                            projectId: sheet.projectId,
+                            month: sheet.month,
+                            projectName: getProjectName(sheet.projectId)
+                          })}
+                          className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                          title="View entire monthly kharchi details and sum sheet"
+                        >
+                          <Eye size={10} />
+                          <span>View Sheet</span>
+                        </button>
+                      </div>
+                    </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono font-bold">{sheet.month}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
@@ -1093,7 +1148,25 @@ export const Approvals: React.FC = () => {
                 >
                   <td className="border border-[#8c9ba8] px-2 py-1">{sheet.date.split('-').reverse().join('-')}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800 tracking-tight">Advance Sheet</td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{getProjectName(sheet.projectId)}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">
+                    <div className="flex items-center justify-between">
+                      <span>{getProjectName(sheet.projectId)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setViewingSheet({
+                          type: 'advanceSheet',
+                          projectId: sheet.projectId,
+                          month: sheet.month,
+                          projectName: getProjectName(sheet.projectId)
+                        })}
+                        className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                        title="View entire monthly advance list sheet"
+                      >
+                        <Eye size={10} />
+                        <span>View Sheet</span>
+                      </button>
+                    </div>
+                  </td>
                   <td className="border border-[#8c9ba8] px-2 py-1">{sheet.month}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(sheet.requestAmount || sheet.totalAmount).toLocaleString('en-IN')}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
@@ -1207,7 +1280,25 @@ export const Approvals: React.FC = () => {
                 >
                   <td className="border border-[#8c9ba8] px-2 py-1">{exp.date.split('-').reverse().join('-')}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800 tracking-tight">Expense Entry</td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{getProjectName(exp.projectId)}</td>
+                  <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">
+                    <div className="flex items-center justify-between">
+                      <span>{getProjectName(exp.projectId)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setViewingSheet({
+                          type: 'expenseSheet',
+                          projectId: exp.projectId || '',
+                          expenseId: exp.id,
+                          projectName: getProjectName(exp.projectId)
+                        })}
+                        className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                        title="View breakdown cost categories and support invoice"
+                      >
+                        <Eye size={10} />
+                        <span>View Details</span>
+                      </button>
+                    </div>
+                  </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium text-gray-700 bg-blue-50/20">₹{(exp.requestAmount || exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}</td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-gray-900 bg-green-50/20">
                     {exp.status === 'Approved' ? `₹${(exp.approvedAmount || exp.requestAmount || exp.crBalance + exp.kharchi + exp.mess + exp.workerAdvance + exp.tiffin + exp.travel + exp.machineryMaterial + exp.workerPayment + exp.stationery + exp.others).toLocaleString('en-IN')}` : exp.status === 'Rejected' ? 'Rejected' : '-'}
@@ -1321,7 +1412,36 @@ export const Approvals: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] font-mono">{idx + 1}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1">{log.date}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-bold text-[#0056b3]">{log.type}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">{log.projectName}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-bold text-gray-800">
+                      <div className="flex items-center justify-between">
+                        <span>{log.projectName}</span>
+                        {['Payment Sheet', 'Kharchi Sheet', 'Advance Sheet', 'Expense Sheet'].includes(log.type) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const typeMap: Record<string, string> = {
+                                'Payment Sheet': 'paymentSheet',
+                                'Kharchi Sheet': 'kharchiSheet',
+                                'Advance Sheet': 'advanceSheet',
+                                'Expense Sheet': 'expenseSheet'
+                              };
+                              setViewingSheet({
+                                type: typeMap[log.type] as any,
+                                projectId: log.projectId || '',
+                                month: log.month || '',
+                                expenseId: log.expenseId || '',
+                                projectName: log.projectName
+                              });
+                            }}
+                            className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                            title="View historical sheet details"
+                          >
+                            <Eye size={10} />
+                            <span>View</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono text-gray-700">{log.details}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium font-mono text-gray-700 bg-blue-50/20">
                       ₹{(log.requestAmount || log.amount).toLocaleString('en-IN')}
@@ -1413,6 +1533,25 @@ export const Approvals: React.FC = () => {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {viewingSheet && (
+          <SheetPreviewModal
+            isOpen={true}
+            onClose={() => setViewingSheet(null)}
+            type={viewingSheet.type}
+            projectId={viewingSheet.projectId}
+            month={viewingSheet.month}
+            expenseId={viewingSheet.expenseId}
+            projectName={viewingSheet.projectName}
+            workerPayments={workerPayments}
+            kharchis={kharchis}
+            advances={advances}
+            expensesLedger={expensesLedger}
+            workers={workers}
+          />
         )}
       </AnimatePresence>
 

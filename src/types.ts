@@ -35,6 +35,7 @@ export interface Worker {
   exitDate?: string;
   mobileNo?: string;
   openingAdvance?: number;
+  dailyRate?: number;
 }
 
 export interface MeasurementItem {
@@ -67,6 +68,9 @@ export interface Billing {
   hardCopyFile?: string;
   hardCopyFileName?: string;
   hardCopyFileType?: string;
+  tdsCertificateReceived?: number;
+  tdsCertificatePending?: number;
+  gstStatus?: string;
 }
 
 export interface ClientPayment {
@@ -76,6 +80,15 @@ export interface ClientPayment {
   date: string;
   remarks: string;
   status?: string;
+  billId?: string;
+  paymentReference?: string;
+  paymentMode?: string;
+  bankName?: string;
+  utrChequeNo?: string;
+  attachment?: string;
+  isRetentionPayment?: number;
+  retentionReleaseDate?: string;
+  category?: string;
 }
 
 export interface Kharchi {
@@ -520,6 +533,42 @@ export interface FinancialYear {
   profitLoss: number;
   closedBy?: string;
   closedDate?: string;
+}
+
+export interface Staff {
+  id: string;
+  username: string;
+  password?: string;
+  name: string;
+  allowedModules: string[];
+  allowedProjects: string[];
+  createdDate: string;
+}
+
+export interface FloorAbstractWorker {
+  id: string;
+  workerId: string;
+  rate: number;
+  hajiraPerWorker?: number;
+  payableAmount: number;
+  sharePercentage?: number;
+  workerHajira?: number;
+  includeInAvg?: boolean;
+}
+
+export interface FloorAbstract {
+  id: string;
+  projectId: string;
+  category: 'Amount' | 'Hajira';
+  level: string;
+  srNo: string;
+  flatNo: string;
+  amount?: number;
+  averageRate?: number;
+  totalHajira?: number;
+  flatHajira?: number;
+  workers: FloorAbstractWorker[];
+  remarks?: string;
 }
 
 

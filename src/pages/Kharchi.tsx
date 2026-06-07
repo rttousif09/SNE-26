@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
-import { Save, Edit, X, Trash2, Table as TableIcon, List as ListIcon, Printer } from 'lucide-react';
+import { Save, Edit, X, Trash2, Table as TableIcon, List as ListIcon, Printer, FileSpreadsheet } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import { KharchiApproval } from '../types';
 
 export const Kharchi: React.FC = () => {
   const { user, kharchis, projects, workers, kharchiApprovals, addKharchi, updateKharchi, deleteKharchi, addKharchiApproval } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -234,6 +236,15 @@ export const Kharchi: React.FC = () => {
             </button>
             {!isReadOnly && !currentApproval && (
               <button 
+                onClick={() => setIsExcelImportOpen(true)}
+                className="sap-btn flex items-center space-x-1 ml-2 bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+              >
+                <FileSpreadsheet size={14} className="text-green-600" />
+                <span>Import Excel</span>
+              </button>
+            )}
+            {!isReadOnly && !currentApproval && (
+              <button 
                 onClick={handleSendToApproval}
                 disabled={grandTotal <= 0}
                 className={`sap-btn flex items-center space-x-1 ml-2 ${grandTotal > 0 ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600' : 'opacity-50 cursor-not-allowed'}`}
@@ -451,6 +462,27 @@ export const Kharchi: React.FC = () => {
           setDeleteId(null);
         }}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['projectId', 'workerId', 'date', 'amount']}
+        entityName="Kharchi"
+        projectsContext={projects}
+        workersContext={workers}
+        onUpload={async (data) => {
+          for (const item of data) {
+            const pId = item.projectId || selectedProject;
+            if (!pId || !item.workerId) continue;
+            await addKharchi({
+              projectId: pId,
+              workerId: item.workerId,
+              date: item.date || new Date().toISOString().split('T')[0],
+              amount: Number(item.amount) || 0
+            });
+          }
+        }}
       />
     </div>
   );

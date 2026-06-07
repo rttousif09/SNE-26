@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2, Search, FileText, Info } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Search, FileText, Info, FileSpreadsheet } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -11,6 +12,7 @@ export const Projects: React.FC = () => {
   const { user, projects, addProject, updateProject, deleteProject, billings, clientPayments, workerPayments, advances, expensesLedger } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const [isAdding, setIsAdding] = useState(false);
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewDetailsId, setViewDetailsId] = useState<string | null>(null);
@@ -270,10 +272,16 @@ export const Projects: React.FC = () => {
       <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
         <div className="flex items-center space-x-2">
           {!isReadOnly ? (
-            <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
-              {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
-              <span>{isAdding ? 'Cancel' : 'New Project'}</span>
-            </button>
+            <>
+              <button onClick={isAdding ? handleCancel : () => setIsAdding(true)} className="sap-btn flex items-center space-x-1">
+                {isAdding ? <X size={12} className="text-red-600"/> : <Plus size={12} className="text-green-600"/>}
+                <span>{isAdding ? 'Cancel' : 'New Project'}</span>
+              </button>
+              <button onClick={() => setIsExcelImportOpen(true)} className="sap-btn flex items-center space-x-1 bg-green-50 text-green-700 border-green-300 hover:bg-green-100">
+                <FileSpreadsheet size={12} className="text-green-600"/>
+                <span>Import Excel / CSV</span>
+              </button>
+            </>
           ) : (
             <div className="font-semibold text-gray-700 px-1 py-0.5">Projects List (Read Only)</div>
           )}
@@ -721,6 +729,33 @@ export const Projects: React.FC = () => {
           setDeleteId(null);
         }}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <BulkUploadModal
+        isOpen={isExcelImportOpen}
+        onClose={() => setIsExcelImportOpen(false)}
+        expectedColumns={['name', 'clientName', 'startDate', 'completionDate', 'address', 'budget', 'projectType', 'workOrderNo', 'scopeOfWork', 'rateType', 'projectManager', 'pmContact', 'status']}
+        entityName="Projects"
+        onUpload={async (data) => {
+          for (const item of data) {
+            const payload = {
+              name: item.name || '',
+              clientName: item.clientName || '',
+              startDate: item.startDate || new Date().toISOString().split('T')[0],
+              completionDate: item.completionDate || '',
+              address: item.address || '',
+              budget: Number(item.budget) || 0,
+              projectType: (item.projectType || 'Residential') as any,
+              workOrderNo: item.workOrderNo || '',
+              scopeOfWork: item.scopeOfWork || '',
+              rateType: (item.rateType || 'Item Rate') as any,
+              projectManager: item.projectManager || '',
+              pmContact: item.pmContact || '',
+              status: (item.status || 'Ongoing') as any
+            };
+            await addProject(payload);
+          }
+        }}
       />
     </div>
   );
