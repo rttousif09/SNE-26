@@ -130,6 +130,7 @@ function initDbSchema() {
       allowance REAL,
       supplyAmount REAL DEFAULT 0,
       supplyDetails TEXT,
+      floorAbstractsJson TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
       FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE
     );
@@ -530,6 +531,7 @@ function initDbSchema() {
 
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeduction REAL DEFAULT 0"); } catch (e) {}
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeductionDetails TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN floorAbstractsJson TEXT"); } catch (e) {}
 
   try { db.exec("ALTER TABLE approvals ADD COLUMN requestAmount REAL DEFAULT 0"); } catch (e) {}
   try { db.exec("ALTER TABLE approvals ADD COLUMN approvedAmount REAL DEFAULT 0"); } catch (e) {}
@@ -1404,10 +1406,10 @@ async function startServer() {
 
   app.post("/api/worker-payments", (req, res) => {
     try {
-      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails } = req.body;
+      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails, floorAbstractsJson } = req.body;
       db.prepare(`
-        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails, floorAbstractsJson)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         projectId,
@@ -1430,7 +1432,8 @@ async function startServer() {
         parseFloat(recoveryAmount || 0),
         paymentStatus || 'Pending',
         parseFloat(otherDeduction || 0),
-        otherDeductionDetails || ""
+        otherDeductionDetails || "",
+        floorAbstractsJson || null
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -1441,10 +1444,10 @@ async function startServer() {
   app.put("/api/worker-payments/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails } = req.body;
+      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails, floorAbstractsJson } = req.body;
       db.prepare(`
         UPDATE worker_payments
-        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, workCategory = ?, workDays = ?, ratePerDay = ?, overtimeHours = ?, allowance = ?, supplyAmount = ?, supplyDetails = ?, recoveryAmount = ?, paymentStatus = ?, otherDeduction = ?, otherDeductionDetails = ?
+        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, workCategory = ?, workDays = ?, ratePerDay = ?, overtimeHours = ?, allowance = ?, supplyAmount = ?, supplyDetails = ?, recoveryAmount = ?, paymentStatus = ?, otherDeduction = ?, otherDeductionDetails = ?, floorAbstractsJson = ?
         WHERE id = ?
       `).run(
         projectId,
@@ -1468,6 +1471,7 @@ async function startServer() {
         paymentStatus || 'Pending',
         parseFloat(otherDeduction || 0),
         otherDeductionDetails || "",
+        floorAbstractsJson || null,
         id
       );
       res.json(req.body);

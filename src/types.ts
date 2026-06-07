@@ -22,6 +22,8 @@ export interface Project {
   ourRepresentatives?: string;
   repContact?: string;
   status: 'Ongoing' | 'Completed' | 'On Hold' | 'Cancelled' | 'Archived';
+  towersCount?: number;
+  towerNames?: string[];
 }
 
 export interface Worker {
@@ -148,6 +150,8 @@ export interface WorkerPayment {
   paymentStatus?: 'Pending' | 'Paid';
   otherDeduction?: number;
   otherDeductionDetails?: string;
+  floorAbstractsJson?: string;
+  towerName?: string;
 }
 
 export interface WorkerLedgerEntry {
@@ -559,6 +563,7 @@ export interface FloorAbstractWorker {
 export interface FloorAbstract {
   id: string;
   projectId: string;
+  towerName?: string;
   category: 'Amount' | 'Hajira';
   level: string;
   srNo: string;

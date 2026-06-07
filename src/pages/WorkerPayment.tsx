@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
-import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkWorkerPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
+import * as XLSX from 'xlsx';
 
 export const WorkerPayment: React.FC = () => {
   const { 
@@ -17,6 +18,7 @@ export const WorkerPayment: React.FC = () => {
     advances, 
     paymentSheetApprovals = [],
     workerLedger = [],
+    floorAbstracts = [],
     addWorkerPayment, 
     updateWorkerPayment, 
     deleteWorkerPayment,
@@ -37,6 +39,7 @@ export const WorkerPayment: React.FC = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedCategory, setSelectedCategory] = useState('Monthly work');
+  const [selectedTower, setSelectedTower] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,6 +50,11 @@ export const WorkerPayment: React.FC = () => {
   const [showSupplyReport, setShowSupplyReport] = useState(false);
   const [showPaymentSheetReport, setShowPaymentSheetReport] = useState(false);
   const [supplyEntry, setSupplyEntry] = useState({ description: '', hours: '', rate: '' });
+
+  // Floor Abstract state
+  const [showFloorAbstractPopup, setShowFloorAbstractPopup] = useState(false);
+  const [floorFilterLevel, setFloorFilterLevel] = useState('');
+  const [tempFloorSelections, setTempFloorSelections] = useState<Array<{ floorAbstractId: string; level: string; flatNo: string; hajira: number; amount: number }>>([]);
 
   const [formData, setFormData] = useState({
     workerId: '', 
@@ -59,13 +67,15 @@ export const WorkerPayment: React.FC = () => {
     manualKharchi: '',
     messDeduction: '', 
     level: '',
+    towerName: '',
     supplyAmount: '',
     date: new Date().toISOString().split('T')[0],
     supplyDetails: [] as import('../types').SupplyDetail[],
     recoveryAmount: '',
     otherDeduction: '',
     otherDeductionDetails: '',
-    paymentStatus: 'Pending'
+    paymentStatus: 'Pending',
+    selectedFloorAbstracts: [] as Array<{ floorAbstractId: string; level: string; flatNo: string; hajira: number; amount: number }>
   });
 
   // Keep month field updated with month selector unless editing a different month
@@ -87,13 +97,15 @@ export const WorkerPayment: React.FC = () => {
       manualKharchi: payment.kharchiDeduction ? payment.kharchiDeduction.toString() : '',
       messDeduction: payment.messDeduction.toString(),
       level: payment.level || '',
+      towerName: payment.towerName || '',
       supplyAmount: (payment.supplyAmount || 0).toString(),
       date: payment.date,
       supplyDetails: payment.supplyDetails ? JSON.parse(payment.supplyDetails) : [],
       recoveryAmount: payment.recoveryAmount ? payment.recoveryAmount.toString() : '',
       otherDeduction: payment.otherDeduction ? payment.otherDeduction.toString() : '',
       otherDeductionDetails: payment.otherDeductionDetails || '',
-      paymentStatus: payment.paymentStatus || 'Pending'
+      paymentStatus: payment.paymentStatus || 'Pending',
+      selectedFloorAbstracts: payment.floorAbstractsJson ? JSON.parse(payment.floorAbstractsJson) : []
     });
     setEditingId(payment.id);
   };
@@ -111,15 +123,25 @@ export const WorkerPayment: React.FC = () => {
       manualKharchi: '',
       messDeduction: '', 
       level: '',
+      towerName: '',
       supplyAmount: '',
       date: new Date().toISOString().split('T')[0],
       supplyDetails: [],
       recoveryAmount: '',
       otherDeduction: '',
       otherDeductionDetails: '',
-      paymentStatus: 'Pending'
+      paymentStatus: 'Pending',
+      selectedFloorAbstracts: []
     });
   };
+
+  const selectedProjectObj = useMemo(() => {
+    return projects.find(p => p.id === selectedProject);
+  }, [selectedProject, projects]);
+
+  const availableTowers = useMemo(() => {
+    return selectedProjectObj?.towerNames || [];
+  }, [selectedProjectObj]);
 
   const projectWorkers = useMemo(() => {
     if (!selectedProject) return [];
@@ -132,9 +154,10 @@ export const WorkerPayment: React.FC = () => {
     return workerPayments.filter(p => 
       p.projectId === selectedProject && 
       p.month === selectedMonth && 
-      (p.workCategory || 'Monthly work') === selectedCategory
+      (p.workCategory || 'Monthly work') === selectedCategory &&
+      (!selectedTower || p.towerName === selectedTower)
     );
-  }, [selectedProject, selectedMonth, selectedCategory, workerPayments]);
+  }, [selectedProject, selectedMonth, selectedCategory, selectedTower, workerPayments]);
 
   const searchFilteredPayments = useMemo(() => {
     if (!searchQuery.trim()) return filteredPayments;
@@ -143,7 +166,9 @@ export const WorkerPayment: React.FC = () => {
       const worker = workers.find(w => w.id === p.workerId);
       const name = worker?.name.toLowerCase() || '';
       const idNo = worker?.workerId.toLowerCase() || '';
-      return name.includes(q) || idNo.includes(q);
+      const tower = p.towerName?.toLowerCase() || '';
+      const level = p.level?.toLowerCase() || '';
+      return name.includes(q) || idNo.includes(q) || tower.includes(q) || level.includes(q);
     });
   }, [filteredPayments, searchQuery, workers]);
 
@@ -259,6 +284,93 @@ export const WorkerPayment: React.FC = () => {
     });
   }, [searchFilteredPayments, workers]);
 
+  // Floor Abstract Memos
+  const matchingFloorAbstractsForWorker = useMemo(() => {
+    if (!selectedProject || !formData.workerId) return [];
+    const targetWorker = workers.find(w => w.id === formData.workerId);
+    const targetWorkerDbId = targetWorker?.id;
+    const targetWorkerIdNo = targetWorker?.workerId;
+    
+    return floorAbstracts.filter(fa => {
+      if (fa.projectId !== selectedProject) return false;
+      return fa.workers && fa.workers.some(w => w.workerId === targetWorkerDbId || w.workerId === targetWorkerIdNo);
+    });
+  }, [selectedProject, formData.workerId, floorAbstracts, workers]);
+
+  const filteredMatchingFloorAbstracts = useMemo(() => {
+    if (!floorFilterLevel) return matchingFloorAbstractsForWorker;
+    return matchingFloorAbstractsForWorker.filter(fa => fa.level === floorFilterLevel);
+  }, [matchingFloorAbstractsForWorker, floorFilterLevel]);
+
+  const uniqueLevelsForWorker = useMemo(() => {
+    const levels = matchingFloorAbstractsForWorker.map(fa => fa.level).filter(Boolean);
+    return Array.from(new Set(levels)).sort();
+  }, [matchingFloorAbstractsForWorker]);
+
+  const popupSummary = useMemo(() => {
+    const selectedFloorsSet = new Set(tempFloorSelections.map(x => x.level));
+    const totalHajira = tempFloorSelections.reduce((sum, x) => sum + (x.hajira || 0), 0);
+    const totalAmount = tempFloorSelections.reduce((sum, x) => sum + (x.amount || 0), 0);
+    return {
+      floors: Array.from(selectedFloorsSet).join(', ') || 'None',
+      totalHajira,
+      totalAmount
+    };
+  }, [tempFloorSelections]);
+
+  const exportToExcel = () => {
+    if (!selectedProject) return;
+
+    const project = projects.find(p => p.id === selectedProject);
+    const projectName = project ? project.name : 'Unknown Project';
+
+    const tableData: any[] = searchFilteredPayments.map(p => {
+      const w = getWorkerDetails(p.workerId);
+      const totalDed = p.messDeduction + p.kharchiDeduction + p.advanceDeduction + (p.recoveryAmount || 0) + (p.otherDeduction || 0);
+      return {
+        'Sr No': w.srNo || '',
+        'ID No': w.idNo || '',
+        'Worker Name': w.name,
+        'Tower/Block': p.towerName || '-',
+        'Work Area': p.level || '-',
+        'Month': p.month,
+        'Gross Wages (INR)': p.workAmount,
+        'Supply Amt (INR)': p.supplyAmount || 0,
+        'Mess Deduction (INR)': p.messDeduction,
+        'Kharchi Deduction (INR)': p.kharchiDeduction,
+        'Advance Deduction (INR)': p.advanceDeduction,
+        'Recovery (Adv) (INR)': p.recoveryAmount || 0,
+        'Other Deduction (INR)': p.otherDeduction || 0,
+        'Net Payable (INR)': p.netPayment,
+        'Status': p.paymentStatus || 'Pending'
+      };
+    });
+
+    // Append total row
+    tableData.push({
+      'Sr No': 'Totals',
+      'ID No': '',
+      'Worker Name': '',
+      'Tower/Block': '',
+      'Work Area': '',
+      'Month': '',
+      'Gross Wages (INR)': totals.gross,
+      'Supply Amt (INR)': totals.supply,
+      'Mess Deduction (INR)': totals.mess,
+      'Kharchi Deduction (INR)': totals.kharchi,
+      'Advance Deduction (INR)': totals.advance,
+      'Recovery (Adv) (INR)': totals.recovery,
+      'Other Deduction (INR)': totals.otherDeduction,
+      'Net Payable (INR)': totals.net,
+      'Status': ''
+    });
+
+    const ws = XLSX.utils.json_to_sheet(tableData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Wage Ledger");
+    XLSX.writeFile(wb, `Wage_Ledger_${projectName.replace(/\s+/g, '_')}_${selectedMonth}_${selectedCategory.replace(/\s+/g, '_')}.xlsx`);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject || isLocked) return;
@@ -290,7 +402,9 @@ export const WorkerPayment: React.FC = () => {
       recoveryAmount: Number(formData.recoveryAmount || 0),
       otherDeduction: Number(formData.otherDeduction || 0),
       otherDeductionDetails: formData.otherDeductionDetails,
-      paymentStatus: (formData.paymentStatus || 'Pending') as 'Pending' | 'Paid'
+      paymentStatus: (formData.paymentStatus || 'Pending') as 'Pending' | 'Paid',
+      floorAbstractsJson: formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 ? JSON.stringify(formData.selectedFloorAbstracts) : undefined,
+      towerName: formData.towerName || undefined
     };
 
     const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
@@ -384,7 +498,10 @@ export const WorkerPayment: React.FC = () => {
           <select 
             className="sap-input w-48 font-semibold" 
             value={selectedProject} 
-            onChange={e => setSelectedProject(e.target.value)}
+            onChange={e => {
+              setSelectedProject(e.target.value);
+              setSelectedTower('');
+            }}
           >
             <option value="">-- Choose Project --</option>
             {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
@@ -429,6 +546,23 @@ export const WorkerPayment: React.FC = () => {
               >
                 <option value="Monthly work">Monthly work</option>
                 <option value="Contract work">Contract work</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <label className="font-bold text-gray-700">Tower/Block:</label>
+              <select 
+                className="sap-input w-40 font-semibold text-indigo-700 bg-indigo-50 border-indigo-300" 
+                value={selectedTower} 
+                onChange={e => {
+                  setSelectedTower(e.target.value);
+                  handleCancel();
+                }}
+              >
+                <option value="">All Towers</option>
+                {availableTowers.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
               </select>
             </div>
             
@@ -591,17 +725,79 @@ export const WorkerPayment: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-3">
               {selectedCategory === 'Contract work' && (
-                <div className="flex flex-col">
-                  <label className="font-semibold text-gray-600 mb-1">Gross Work Amount (INR):</label>
+                <div className="flex flex-col space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-gray-600">Gross Work Amount (INR):</label>
+                    {formData.workerId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                          setFloorFilterLevel('');
+                          setShowFloorAbstractPopup(true);
+                        }}
+                        className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] font-bold py-1 px-2.5 rounded border border-blue-700 transition"
+                      >
+                        Import From Floor Abstract
+                      </button>
+                    )}
+                  </div>
                   <input 
                     required 
                     type="number" 
                     step="any"
                     className="sap-input font-bold" 
-                    placeholder="₹ Earned before savings/advances"
+                    placeholder="₹ Gross amount"
                     value={formData.workAmount} 
                     onChange={e => setFormData({...formData, workAmount: e.target.value})} 
                   />
+
+                  {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[10px] space-y-1.5 mt-1.5">
+                      <div className="flex justify-between items-center font-bold text-blue-800 border-b border-blue-200 pb-1">
+                        <span>Linked Floor Abstracts ({formData.selectedFloorAbstracts.length})</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                            setFloorFilterLevel('');
+                            setShowFloorAbstractPopup(true);
+                          }}
+                          className="text-blue-700 hover:underline font-semibold"
+                        >
+                          + Add More
+                        </button>
+                      </div>
+                      <div className="max-h-24 overflow-y-auto divide-y divide-blue-105">
+                        {formData.selectedFloorAbstracts.map((item) => (
+                          <div key={item.floorAbstractId} className="flex items-center justify-between py-1 text-gray-700 font-sans">
+                            <span>
+                              Floor {item.level} (Flat {item.flatNo})
+                            </span>
+                            <div className="flex items-center space-x-2 font-mono">
+                              <span className="font-bold">₹{item.amount.toLocaleString('en-IN')}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formData.selectedFloorAbstracts.filter(x => x.floorAbstractId !== item.floorAbstractId);
+                                  const totalAmount = updated.reduce((sum, x) => sum + x.amount, 0);
+                                  setFormData({
+                                    ...formData,
+                                    selectedFloorAbstracts: updated,
+                                    workAmount: totalAmount.toString()
+                                  });
+                                }}
+                                className="text-red-500 hover:text-red-750 font-bold px-1 text-xs"
+                                title="Remove"
+                              >
+                                &times;
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {selectedCategory === 'Monthly work' && (
@@ -632,7 +828,22 @@ export const WorkerPayment: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col">
+                <label className="font-semibold text-gray-600 mb-1">Tower / Block:</label>
+                <select 
+                  className="sap-input font-semibold" 
+                  value={formData.towerName} 
+                  onChange={e => setFormData({...formData, towerName: e.target.value})}
+                  disabled={availableTowers.length === 0}
+                >
+                  <option value="">{availableTowers.length === 0 ? 'No Towers Listed' : '-- Select Tower --'}</option>
+                  {availableTowers.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex flex-col">
                 <label className="font-semibold text-gray-600 mb-1">Work Area / Location (Level):</label>
                 <input 
@@ -780,7 +991,7 @@ export const WorkerPayment: React.FC = () => {
                 title={`${selectedCategory} Payment Sheet`}
                 subtitle={`Month: ${selectedMonth}`}
                 siteName={projects.find(p => p.id === selectedProject)?.name}
-                headers={['Sr No', 'ID No', 'Worker Name', 'Work Area', 'Gross Wages', 'Total Deductions', 'Net Payable', 'Status']}
+                headers={['Sr No', 'ID No', 'Worker Name', 'Tower / Block', 'Work Area', 'Gross Wages', 'Total Deductions', 'Net Payable', 'Status']}
                 data={searchFilteredPayments.map(p => {
                   const w = getWorkerDetails(p.workerId);
                   const totalDed = p.messDeduction + p.kharchiDeduction + p.advanceDeduction + (p.recoveryAmount || 0) + (p.otherDeduction || 0);
@@ -788,6 +999,7 @@ export const WorkerPayment: React.FC = () => {
                     w.srNo,
                     w.idNo,
                     w.name,
+                    p.towerName || '-',
                     p.level || '-',
                     `Rs. ${p.workAmount.toLocaleString('en-IN')}`,
                     `Rs. ${totalDed.toLocaleString('en-IN')}`,
@@ -796,13 +1008,22 @@ export const WorkerPayment: React.FC = () => {
                   ];
                 })}
                 totals={[
-                  '', '', '', 'Totals:', 
+                  '', '', '', '', 'Totals:', 
                   `Rs. ${totals.gross.toLocaleString('en-IN')}`, 
                   `Rs. ${(totals.mess + totals.kharchi + totals.advance + totals.recovery + totals.otherDeduction).toLocaleString('en-IN')}`, 
                   `Rs. ${totals.net.toLocaleString('en-IN')}`, 
                   ''
                 ]}
               />
+              <button
+                onClick={exportToExcel}
+                disabled={searchFilteredPayments.length === 0}
+                className="sap-btn bg-[#107c41]/10 text-[#107c41] border-[#107c41]/30 hover:bg-[#107c41] hover:text-white disabled:opacity-50 disabled:bg-transparent disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed font-bold flex items-center space-x-1 py-1 text-xs"
+                title="Export this wage ledger sheet to Excel"
+              >
+                <FileSpreadsheet size={11} />
+                <span>Export Excel</span>
+              </button>
               {searchFilteredPayments.length > 0 && (
                 <>
                   <button
@@ -858,6 +1079,7 @@ export const WorkerPayment: React.FC = () => {
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-12">Sr No</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-16">ID No</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Worker Name</th>
+                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-24">Tower/Block</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-28">Work Area / Location</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-16">Month</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-gray-50 w-24">Gross wages</th>
@@ -888,6 +1110,7 @@ export const WorkerPayment: React.FC = () => {
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.srNo || '-'}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.idNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{worker.name}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-indigo-900 font-semibold bg-indigo-50/10">{payment.towerName || <span className="text-gray-400 italic font-normal font-sans font-mono">-</span>}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700">{payment.level || <span className="text-gray-400 italic">None</span>}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono">{payment.month}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{payment.workAmount.toLocaleString('en-IN')}</td>
@@ -928,7 +1151,7 @@ export const WorkerPayment: React.FC = () => {
               {/* Total Aggregate Sum Row (Excel structure matching) */}
               {searchFilteredPayments.length > 0 && (
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-mono font-bold text-gray-900 border-t-2 border-[#8c9ba8]">
-                  <td colSpan={5} className="border border-[#8c9ba8] px-2 py-1 text-right font-sans uppercase text-[10px]">
+                  <td colSpan={6} className="border border-[#8c9ba8] px-2 py-1 text-right font-sans uppercase text-[10px]">
                     Total Month Summary:
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right">
@@ -962,7 +1185,7 @@ export const WorkerPayment: React.FC = () => {
 
               {searchFilteredPayments.length === 0 && (
                 <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isLocked ? 13 : 14} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
+                  <td colSpan={isLocked ? 14 : 15} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
                     No payment records found for {selectedMonth} in this project. Use controls above to record new wage ledgers.
                   </td>
                 </motion.tr>
@@ -1339,16 +1562,174 @@ export const WorkerPayment: React.FC = () => {
             manualKharchi: '',
             messDeduction: String(record.messDeduction || ''),
             level: record.level || '',
+            towerName: record.towerName || '',
             supplyAmount: String(record.supplyAmount || ''),
             date: record.date || new Date().toISOString().split('T')[0],
             supplyDetails: record.supplyDetails ? JSON.parse(record.supplyDetails) : [],
             recoveryAmount: String(record.recoveryAmount || ''),
             otherDeduction: String(record.otherDeduction || ''),
             otherDeductionDetails: record.otherDeductionDetails || '',
-            paymentStatus: record.paymentStatus || 'Pending'
+            paymentStatus: record.paymentStatus || 'Pending',
+            selectedFloorAbstracts: record.floorAbstractsJson ? JSON.parse(record.floorAbstractsJson) : []
           });
         }}
       />
+
+      {/* Floor Abstract Selection Popup */}
+      {showFloorAbstractPopup && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-400">
+            {/* Header */}
+            <div className="bg-[#002f6c] text-white px-3.5 py-2 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-xs uppercase tracking-wider">Import Flat/Floor Abstract Records</h3>
+              <button 
+                type="button" 
+                onClick={() => setShowFloorAbstractPopup(false)}
+                className="text-white hover:text-gray-300 font-bold text-lg leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Filter and Details section */}
+            <div className="bg-[#eef2f6] border-b border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-gray-700">Filter Level:</span>
+                <select
+                  className="sap-input w-44 bg-white font-normal"
+                  value={floorFilterLevel}
+                  onChange={e => setFloorFilterLevel(e.target.value)}
+                >
+                  <option value="">-- All Levels --</option>
+                  {uniqueLevelsForWorker.map(lvl => (
+                    <option key={lvl} value={lvl}>{lvl}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="text-[10px] text-gray-600 font-bold font-mono">
+                Worker: <span className="text-[#0056b3]">{workers.find(w => w.id === formData.workerId)?.name}</span> ({workers.find(w => w.id === formData.workerId)?.workerId})
+              </div>
+            </div>
+
+            {/* List Table */}
+            <div className="overflow-y-auto p-3 flex-1">
+              {filteredMatchingFloorAbstracts.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 font-sans italic">
+                  No matching Floor Abstract records found for this worker in the selected Project.
+                </div>
+              ) : (
+                <div className="border border-[#8c9ba8] rounded-sm overflow-hidden bg-white">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-[#eef2f6] text-[#002f6c] font-bold border-b border-[#8c9ba8] text-[10px]">
+                        <th className="p-2 border-r border-[#8c9ba8] w-12 text-center">Select</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Level / Floor</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Flat No</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Worker Name</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Worker ID</th>
+                        <th className="p-2 border-r border-[#8c9ba8] text-right">Hajira</th>
+                        <th className="p-2 border-r border-[#8c9ba8] text-right">Payable Amount</th>
+                        <th className="p-2">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredMatchingFloorAbstracts.map(fa => {
+                        const workerDetail = workers.find(w => w.id === formData.workerId);
+                        const wRow = fa.workers?.find(w => w.workerId === workerDetail?.id || w.workerId === workerDetail?.workerId);
+                        const hajiraVal = wRow?.hajiraPerWorker ?? wRow?.workerHajira ?? 0;
+                        const payAmount = wRow?.payableAmount ?? 0;
+                        const isSelected = tempFloorSelections.some(item => item.floorAbstractId === fa.id);
+
+                        return (
+                          <tr 
+                            key={fa.id} 
+                            className={`hover:bg-gray-50 text-[10px] ${isSelected ? 'bg-blue-50/70' : ''}`}
+                          >
+                            <td className="p-2 border-r border-gray-200 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setTempFloorSelections(prev => [
+                                      ...prev,
+                                      {
+                                        floorAbstractId: fa.id,
+                                        level: fa.level,
+                                        flatNo: fa.flatNo,
+                                        hajira: Number(hajiraVal) || 0,
+                                        amount: Number(payAmount) || 0
+                                      }
+                                    ]);
+                                  } else {
+                                    setTempFloorSelections(prev => prev.filter(item => item.floorAbstractId !== fa.id));
+                                  }
+                                }}
+                                className="rounded cursor-pointer"
+                              />
+                            </td>
+                            <td className="p-2 border-r border-gray-200 font-mono font-bold text-gray-700">{fa.level}</td>
+                            <td className="p-2 border-r border-gray-200 font-mono font-medium">{fa.flatNo}</td>
+                            <td className="p-2 border-r border-gray-200">{workerDetail?.name}</td>
+                            <td className="p-2 border-r border-gray-200 font-mono text-gray-500">{workerDetail?.workerId}</td>
+                            <td className="p-2 border-r border-gray-200 text-right font-mono font-semibold">{hajiraVal}</td>
+                            <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-blue-900">₹{payAmount.toLocaleString('en-IN')}</td>
+                            <td className="p-2 text-gray-500 italic max-w-xs truncate" title={fa.remarks}>{fa.remarks || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Summary & Buttons footer */}
+            <div className="bg-[#f8f9fa] border-t border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-3 text-[10px]">
+              <div className="flex flex-wrap gap-4 text-gray-800 bg-white px-3 py-2 rounded border border-[#8c9ba8]">
+                <div>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Selected Floors:</span>
+                  <span className="font-bold text-blue-900 font-mono truncate max-w-xs block">{popupSummary.floors}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Hajira:</span>
+                  <span className="font-bold font-mono text-gray-900">{popupSummary.totalHajira}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Amount:</span>
+                  <span className="font-black font-mono text-[#0056b3]">₹{popupSummary.totalAmount.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      selectedFloorAbstracts: tempFloorSelections,
+                      workAmount: popupSummary.totalAmount.toString()
+                    });
+                    setShowFloorAbstractPopup(false);
+                  }}
+                  disabled={tempFloorSelections.length === 0}
+                  className="sap-btn sap-btn-blue text-[10px] font-bold py-1.5 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Import Selected (₹{popupSummary.totalAmount.toLocaleString('en-IN')})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFloorAbstractPopup(false)}
+                  className="sap-btn bg-gray-600 hover:bg-gray-700 border-gray-700 text-white font-bold py-1.5 px-4"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

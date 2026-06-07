@@ -22,8 +22,10 @@ import {
   X, 
   ShieldAlert,
   Sliders,
-  Sparkles
+  Sparkles,
+  FileSpreadsheet
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export const WorkerLedger: React.FC = () => {
   const {
@@ -245,6 +247,34 @@ export const WorkerLedger: React.FC = () => {
   const recoveryAudits = useMemo(() => {
     return workerRecoveryAuditTrail.filter(a => a.workerId === selectedWorkerId);
   }, [selectedWorkerId, workerRecoveryAuditTrail]);
+
+  const exportToExcel = () => {
+    if (!activeWorker) return;
+
+    const tableData: any[] = ledgerEntries.map(e => ({
+      'Date': e.date,
+      'Voucher No': e.voucherNo,
+      'Description': e.description,
+      'Debit (Adv Given)': e.debit || 0,
+      'Credit (Adjusted/Paid)': e.credit || 0,
+      'Running Balance': e.runningBalance
+    }));
+
+    // Add aggregate total row
+    tableData.push({
+      'Date': 'Totals',
+      'Voucher No': '',
+      'Description': '',
+      'Debit (Adv Given)': summaryMetrics.totalDebits,
+      'Credit (Adjusted/Paid)': summaryMetrics.totalCredits,
+      'Running Balance': summaryMetrics.balance
+    });
+
+    const ws = XLSX.utils.json_to_sheet(tableData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transaction Ledger");
+    XLSX.writeFile(wb, `Worker_Ledger_${activeWorker.name.replace(/\s+/g, '_')}_${activeWorker.workerId}.xlsx`);
+  };
 
   // Add Manual Ledger Entry
   const handleSaveManualEntry = (e: React.FormEvent) => {
@@ -585,6 +615,15 @@ export const WorkerLedger: React.FC = () => {
                         e.runningBalance.toString()
                       ])}
                     />
+                    <button
+                      onClick={exportToExcel}
+                      disabled={ledgerEntries.length === 0}
+                      className="sap-btn bg-[#107c41]/10 text-[#107c41] border-[#107c41]/30 hover:bg-[#107c41] hover:text-white disabled:opacity-50 disabled:bg-transparent disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed font-bold flex items-center space-x-1 py-1 text-xs px-2.5"
+                      title="Export this transaction ledger to Excel (.xlsx)"
+                    >
+                      <FileSpreadsheet size={11} />
+                      <span>Export Excel</span>
+                    </button>
                   </div>
                 </div>
 

@@ -27,6 +27,7 @@ export function FloorAbstracts() {
   const { projects, workers, floorAbstracts, addFloorAbstract, updateFloorAbstract, deleteFloorAbstract, user } = useAppContext();
   
   const [projectId, setProjectId] = useState<string>('');
+  const [towerName, setTowerName] = useState<string>('');
   const [category, setCategory] = useState<'Amount' | 'Hajira'>('Amount');
   const [level, setLevel] = useState<string>('');
   
@@ -52,6 +53,9 @@ export function FloorAbstracts() {
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterLevel, setFilterLevel] = useState<string>('');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterTower, setFilterTower] = useState<string>('');
 
   const updateRowWorkersAndAverage = (updatedWorkers: Partial<FloorAbstractWorker>[]) => {
     setRowWorkers(updatedWorkers);
@@ -66,15 +70,68 @@ export function FloorAbstracts() {
     }
   };
 
+  const selectedProjectObj = useMemo(() => {
+    return projects.find(p => p.id === projectId);
+  }, [projectId, projects]);
+
+  const availableTowers = useMemo(() => {
+    return selectedProjectObj?.towerNames || [];
+  }, [selectedProjectObj]);
+
+  const filterTowersList = useMemo(() => {
+    if (!projectId) {
+      return Array.from(new Set(floorAbstracts.map(f => f.towerName).filter(Boolean))) as string[];
+    }
+    return availableTowers;
+  }, [projectId, availableTowers, floorAbstracts]);
+
   const projectWorkers = useMemo(() => {
     if (!projectId) return [];
     return workers.filter(w => w.projectId === projectId && !w.exitDate);
   }, [projectId, workers]);
 
-  const filteredRecords = floorAbstracts.filter(f => 
-    (!projectId || f.projectId === projectId) &&
-    (!searchQuery || f.flatNo?.toLowerCase().includes(searchQuery.toLowerCase()) || f.srNo?.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredRecords = useMemo(() => {
+    return floorAbstracts.filter(f => {
+      // 1. Project Filter
+      if (projectId && f.projectId !== projectId) return false;
+
+      // 2. Level Filter
+      if (filterLevel && f.level !== filterLevel) return false;
+
+      // 3. Category Filter
+      if (filterCategory && f.category !== filterCategory) return false;
+
+      // 4. Tower Filter
+      if (filterTower && f.towerName !== filterTower) return false;
+
+      // 5. Search Filter
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+
+      // Check flatNo or srNo
+      if (f.flatNo?.toLowerCase().includes(query) || f.srNo?.toLowerCase().includes(query)) {
+        return true;
+      }
+
+      // Check level
+      if (f.level?.toLowerCase().includes(query)) return true;
+
+      // Check tower name
+      if (f.towerName?.toLowerCase().includes(query)) return true;
+
+      // Check worker names/IDs
+      const hasMatchingWorker = f.workers.some(w => {
+        const winfo = workers.find(x => x.id === w.workerId);
+        return (
+          winfo?.name?.toLowerCase().includes(query) || 
+          winfo?.workerId?.toLowerCase().includes(query)
+        );
+      });
+      if (hasMatchingWorker) return true;
+
+      return false;
+    });
+  }, [floorAbstracts, projectId, filterLevel, filterCategory, filterTower, searchQuery, workers]);
 
   const workerSummary = useMemo(() => {
     if (!projectId) return [];
@@ -160,6 +217,7 @@ export function FloorAbstracts() {
         rows.push({
           isFirstInFloor: workerIndex === 0,
           floorSr: floorSr,
+          towerName: record.towerName || '',
           flatNo: record.flatNo,
           totalAmount: record.category === 'Amount' ? record.amount : undefined,
           averageRate: record.averageRate,
@@ -170,7 +228,8 @@ export function FloorAbstracts() {
           workerHajira: record.category === 'Amount' ? w.hajiraPerWorker : w.workerHajira,
           payableAmount: w.payableAmount,
           sharePercentage: w.sharePercentage,
-          rowSpan: record.workers.length
+          rowSpan: record.workers.length,
+          remarks: record.remarks || ''
         });
       });
       floorSr++;
@@ -178,9 +237,21 @@ export function FloorAbstracts() {
     return rows;
   }, [filteredRecords, projectWorkers, summaryLevelFilter]);
 
+  const sortLevels = (levels: string[]) => {
+    return [...levels].sort((a, b) => {
+      const idxA = LEVEL_OPTIONS.indexOf(a);
+      const idxB = LEVEL_OPTIONS.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  };
+
   const exportToExcel = () => {
     const tableData = floorSummaryRows.map(row => ({
       'Floor SR': row.isFirstInFloor ? row.floorSr : '',
+      'Tower/Block': row.isFirstInFloor ? row.towerName : '',
       'Flat No': row.isFirstInFloor ? row.flatNo : '',
       'Total Flat Amount': row.isFirstInFloor ? (row.totalAmount || '') : '',
       'Average Rate': row.isFirstInFloor ? (row.averageRate || '') : '',
@@ -190,7 +261,8 @@ export function FloorAbstracts() {
       'Rate': row.workerRate,
       'Hajira Per Worker': row.workerHajira,
       'Amount Paid': row.payableAmount,
-      'Share%': row.sharePercentage ? `${row.sharePercentage}%` : ''
+      'Share%': row.sharePercentage ? `${row.sharePercentage}%` : '',
+      'Remarks': row.remarks || ''
     }));
 
     const ws = XLSX.utils.json_to_sheet(tableData);
@@ -200,37 +272,419 @@ export function FloorAbstracts() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF('landscape');
-    doc.text("Floor Wise Summary", 14, 15);
-    
-    const tableColumn = ["Floor SR", "Flat No", "Total Flat Amount", "Average Rate", "Total Hajira", "Worker SR", "Worker Name", "Rate", "Hajira Per Worker", "Amount Paid", "Share%"];
-    const tableRows = floorSummaryRows.map(row => [
-      row.isFirstInFloor ? row.floorSr : '',
-      row.isFirstInFloor ? row.flatNo : '',
-      row.isFirstInFloor ? (row.totalAmount?.toFixed(2) || '') : '',
-      row.isFirstInFloor ? (row.averageRate?.toFixed(2) || '') : '',
-      row.isFirstInFloor ? (row.totalHajira?.toFixed(2) || '') : '',
-      row.workerSr,
-      row.workerName,
-      row.workerRate?.toFixed(2) || '',
-      row.workerHajira?.toFixed(2) || '',
-      row.payableAmount?.toFixed(2) || '',
-      row.sharePercentage ? `${row.sharePercentage}%` : ''
-    ]);
+    if (!projectId) return;
 
-    // @ts-ignore
-    doc.autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 20,
-      styles: { fontSize: 8 },
-      theme: 'grid',
+    const project = projects.find(p => p.id === projectId);
+    const projectName = project ? project.name.toUpperCase() : 'UNKNOWN PROJECT';
+    const clientName = project ? (project.clientName || 'SN ENTERPRISES').toUpperCase() : 'SN ENTERPRISES';
+    const dateStr = new Date().toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
     });
+
+    const doc = new jsPDF('landscape');
     
-    doc.save(`Floor_Summary_${new Date().toISOString().split('T')[0]}.pdf`);
+    // Determine which levels to export
+    const levelsToExport = summaryLevelFilter 
+      ? [summaryLevelFilter] 
+      : sortLevels(Array.from(new Set(floorAbstracts.filter(f => f.projectId === projectId).map(r => r.level).filter(Boolean))));
+
+    if (levelsToExport.length === 0) {
+      alert("No floor abstract records found for this project.");
+      return;
+    }
+
+    let grandTotalAmount = 0;
+    let grandTotalHajira = 0;
+    let grandTotalWorkerPay = 0;
+    let tableIndex = 0;
+
+    // Helper to get rows for a level
+    const getLevelSummaryRows = (lvl: string) => {
+      const rows: any[] = [];
+      let floorSr = 1;
+      
+      const recordsToUse = floorAbstracts.filter(f => 
+        f.projectId === projectId && f.level === lvl
+      );
+
+      recordsToUse.forEach(record => {
+        if (record.workers.length === 0) return;
+        
+        record.workers.forEach((w, workerIndex) => {
+          const winfo = workers.find(pw => pw.id === w.workerId);
+          
+          rows.push({
+            isFirstInFloor: workerIndex === 0,
+            floorSr: floorSr,
+            towerName: record.towerName || '',
+            flatNo: record.flatNo,
+            totalAmount: record.category === 'Amount' ? record.amount : undefined,
+            averageRate: record.averageRate,
+            totalHajira: record.category === 'Amount' ? record.totalHajira : record.flatHajira,
+            workerSr: workerIndex + 1,
+            workerName: winfo?.name || 'Unknown',
+            workerRate: w.rate,
+            workerHajira: record.category === 'Amount' ? w.hajiraPerWorker : w.workerHajira,
+            payableAmount: w.payableAmount,
+            sharePercentage: w.sharePercentage,
+            rowSpan: record.workers.length,
+            remarks: record.remarks || ''
+          });
+        });
+        floorSr++;
+      });
+      return rows;
+    };
+
+    // Reusable function to draw A4 landscape page header frame
+    const drawPageHeaderBlock = (pdfDoc: typeof doc, pageNum: number) => {
+      const pdfWidth = pdfDoc.internal.pageSize.width; // 297mm
+      
+      // Page outer frame/border
+      pdfDoc.setDrawColor(0, 47, 108); // `#002f6c`
+      pdfDoc.setLineWidth(0.5);
+      pdfDoc.rect(10, 10, pdfWidth - 20, 190);
+      
+      // Secondary inline soft border
+      pdfDoc.setDrawColor(200, 210, 225);
+      pdfDoc.setLineWidth(0.1);
+      pdfDoc.rect(11, 11, pdfWidth - 22, 188);
+
+      // Main Brand Title header box
+      pdfDoc.setFillColor(238, 242, 246);
+      pdfDoc.rect(12, 12, pdfWidth - 24, 25, 'F');
+      
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(22);
+      pdfDoc.setTextColor(0, 47, 108); // deep blue
+      pdfDoc.text("SN ENTERPRISES", 16, 22);
+      
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.setFontSize(8);
+      pdfDoc.setTextColor(110, 120, 130);
+      pdfDoc.text("CIVIL CONTRACTORS & INFRASTRUCTURE DEVELOPERS", 16, 26);
+      pdfDoc.setDrawColor(0, 47, 108);
+      pdfDoc.setLineWidth(1);
+      pdfDoc.line(16, 28, 112, 28);
+      
+      // Document type on right
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(11);
+      pdfDoc.setTextColor(0, 47, 108);
+      pdfDoc.text("FLAT/FLOOR ABSTRACT WORK SHEET", pdfWidth - 110, 20);
+
+      // Info details grid row
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.setFontSize(8.5);
+      pdfDoc.setTextColor(50, 50, 50);
+      
+      pdfDoc.text("PROJECT SITE:", 16, 33);
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.text(projectName, 44, 33);
+
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.text("CLIENT / DEVELOPER:", 16, 36);
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.text(clientName, 53, 36);
+
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.text("DATE OF EXPORT:", pdfWidth - 110, 33);
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.text(dateStr, pdfWidth - 75, 33);
+
+      pdfDoc.setFont("helvetica", "bold");
+      pdfDoc.text("CATEGORY BASIS:", pdfWidth - 110, 36);
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.text(category.toUpperCase() + ' BASIS', pdfWidth - 75, 36);
+
+      // Page numbers & footer
+      pdfDoc.setFont("helvetica", "normal");
+      pdfDoc.setFontSize(8);
+      pdfDoc.setTextColor(120, 120, 120);
+      pdfDoc.text(`Page ${pageNum}`, pdfWidth - 25, 196);
+      pdfDoc.text("SN ENTERPRISES - SITE ABSTRACTS REPORT REGISTER", 14, 196);
+    };
+
+    // Draw separate tables for each level
+    levelsToExport.forEach((lvl) => {
+      const levelRows = getLevelSummaryRows(lvl);
+      if (levelRows.length === 0) return;
+
+      if (tableIndex > 0) {
+        doc.addPage();
+      }
+      tableIndex++;
+
+      const pageNum = doc.getNumberOfPages();
+      drawPageHeaderBlock(doc, pageNum);
+
+      // Floor Section label
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(0, 47, 108);
+      doc.text(`FLOOR LEVEL SUMMARY: ${lvl.toUpperCase()}`, 14, 44);
+
+      // Underline for floor level
+      doc.setDrawColor(0, 47, 108);
+      doc.setLineWidth(0.5);
+      doc.line(14, 46, doc.internal.pageSize.width - 14, 46);
+
+      const tableColumn = [
+        "Floor SR", 
+        "Tower/Block",
+        "Flat No", 
+        `Total Amount (${category === 'Amount' ? '₹' : '-'})`, 
+        "Average Rate (₹)", 
+        "Total Hajira", 
+        "Worker SR", 
+        "Worker Name", 
+        "Rate (₹)", 
+        "Worker Hajira", 
+        "Amount Paid (₹)", 
+        "Share %", 
+        "Remarks"
+      ];
+
+      const levelTotalAmount = levelRows
+        .filter(r => r.isFirstInFloor)
+        .reduce((sum, r) => sum + (r.totalAmount || 0), 0);
+      const levelTotalHajira = levelRows
+        .filter(r => r.isFirstInFloor)
+        .reduce((sum, r) => sum + (r.totalHajira || 0), 0);
+      const levelTotalWorkerPay = levelRows
+        .reduce((sum, r) => sum + (r.payableAmount || 0), 0);
+
+      // Accumulate Grand Totals
+      grandTotalAmount += levelTotalAmount;
+      grandTotalHajira += levelTotalHajira;
+      grandTotalWorkerPay += levelTotalWorkerPay;
+
+      const bodyData = levelRows.map(row => [
+        row.isFirstInFloor ? row.floorSr : '',
+        row.isFirstInFloor ? row.towerName : '',
+        row.isFirstInFloor ? row.flatNo : '',
+        row.isFirstInFloor ? (row.totalAmount !== undefined ? row.totalAmount.toFixed(2) : '') : '',
+        row.isFirstInFloor ? (row.averageRate !== undefined ? row.averageRate.toFixed(2) : '') : '',
+        row.isFirstInFloor ? (row.totalHajira !== undefined ? row.totalHajira.toFixed(2) : '') : '',
+        row.workerSr,
+        row.workerName,
+        row.workerRate !== undefined ? row.workerRate.toFixed(2) : '',
+        row.workerHajira !== undefined ? row.workerHajira.toFixed(3) : '',
+        row.payableAmount !== undefined ? row.payableAmount.toFixed(2) : '',
+        row.sharePercentage ? `${row.sharePercentage}%` : '',
+        row.remarks || ''
+      ]);
+
+      // Add subtotal row specifier
+      bodyData.push([
+        "SUBTOTAL", 
+        "", 
+        "", 
+        levelTotalAmount > 0 ? levelTotalAmount.toFixed(2) : "-", 
+        "", 
+        levelTotalHajira.toFixed(2), 
+        "", 
+        "", 
+        "", 
+        "", 
+        levelTotalWorkerPay.toFixed(2), 
+        "", 
+        `Totals for Level ${lvl}`
+      ]);
+
+      // @ts-ignore
+      doc.autoTable({
+        head: [tableColumn],
+        body: bodyData,
+        startY: 49,
+        margin: { left: 14, right: 14 },
+        styles: { 
+          fontSize: 7.5,
+          cellPadding: 1.5,
+          lineColor: [200, 200, 200],
+          lineWidth: 0.1
+        },
+        headStyles: { 
+          fillColor: [0, 47, 108], 
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center',
+          fontSize: 7.5
+        },
+        columnStyles: {
+          0: { cellWidth: 12, halign: 'center' }, // Floor SR
+          1: { cellWidth: 18, halign: 'left' },   // Tower/Block
+          2: { cellWidth: 15, halign: 'left' },   // Flat No
+          3: { cellWidth: 22, halign: 'right' },  // Total Flat Amount
+          4: { cellWidth: 18, halign: 'right' },  // Average Rate
+          5: { cellWidth: 18, halign: 'right' },  // Total Hajira
+          6: { cellWidth: 12, halign: 'center' }, // Worker SR
+          7: { cellWidth: 38, halign: 'left' },   // Worker Name
+          8: { cellWidth: 15, halign: 'right' },  // Rate
+          9: { cellWidth: 20, halign: 'right' },  // Hajira Paid
+          10: { cellWidth: 22, halign: 'right' }, // Amount Paid
+          11: { cellWidth: 15, halign: 'right' }, // Share %
+          12: { cellWidth: 30, halign: 'left' }   // Remarks
+        },
+        theme: 'grid',
+        didParseCell: function(data: any) {
+          const firstCellVal = data.row.cells[0]?.raw;
+          if (firstCellVal === 'SUBTOTAL' || firstCellVal === 'GRAND TOTAL') {
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fillColor = [238, 242, 246]; // `#eef2f6`
+            data.cell.styles.textColor = [0, 47, 108]; // Deep blue `#002f6c`
+          }
+        }
+      });
+    });
+
+    // Draw Grand Summary & Approval page
+    if (levelsToExport.length > 0) {
+      doc.addPage();
+      const pageNum = doc.getNumberOfPages();
+      drawPageHeaderBlock(doc, pageNum);
+
+      // Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(0, 47, 108);
+      doc.text("GRAND SUMMARY & APPROVAL REPORT", 14, 45);
+
+      doc.setDrawColor(0, 47, 108);
+      doc.setLineWidth(1);
+      doc.line(14, 47, doc.internal.pageSize.width - 14, 47);
+
+      const columnsSummary = [
+        "Description Profile", 
+        "Amount Basis Valuations (INR)", 
+        "Estimated Total Hajiras", 
+        "Total Net Worker Allocation Paid (INR)",
+        "Overall Ledger Status"
+      ];
+
+      const rowsSummary = [
+        [
+          "PROJECT WORK ABSTRACTS GRAND TOTALS",
+          grandTotalAmount > 0 ? `INR ${grandTotalAmount.toLocaleString('en-IN')}.00` : "Hajira-Only Work",
+          `${grandTotalHajira.toFixed(2)} Hajiras`,
+          `INR ${grandTotalWorkerPay.toLocaleString('en-IN')}.00`,
+          "READY FOR ACCOUNTS DISBURSAL"
+        ]
+      ];
+
+      // @ts-ignore
+      doc.autoTable({
+        head: [columnsSummary],
+        body: rowsSummary,
+        startY: 52,
+        margin: { left: 14, right: 14 },
+        styles: { 
+          fontSize: 9,
+          cellPadding: 4,
+          align: 'center',
+          lineColor: [0, 47, 108],
+          lineWidth: 0.3
+        },
+        headStyles: {
+          fillColor: [0, 47, 108],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        theme: 'grid'
+      });
+
+      // Quick visual cards
+      const startCardY = 85;
+      doc.setFillColor(250, 250, 252);
+      doc.setDrawColor(180, 190, 210);
+      doc.setLineWidth(0.1);
+      
+      // Card 1
+      doc.rect(14, startCardY, 82, 35, 'FD');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(110, 120, 130);
+      doc.text("TOTAL PROJECT VALUATION", 18, startCardY + 8);
+      doc.setFontSize(16);
+      doc.setTextColor(0, 47, 108);
+      doc.text(grandTotalAmount > 0 ? `₹${grandTotalAmount.toLocaleString('en-IN')}` : "Hajira Only", 18, startCardY + 22);
+      doc.setFontSize(7.5);
+      doc.setTextColor(120, 130, 140);
+      doc.text("Approved for site structural works.", 18, startCardY + 30);
+
+      // Card 2
+      doc.rect(106, startCardY, 82, 35, 'FD');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(110, 120, 130);
+      doc.text("TOTAL DESIGNATED HAJIRAS", 110, startCardY + 8);
+      doc.setFontSize(16);
+      doc.setTextColor(0, 47, 108);
+      doc.text(`${grandTotalHajira.toFixed(2)} HJ`, 110, startCardY + 22);
+      doc.setFontSize(7.5);
+      doc.setTextColor(120, 130, 140);
+      doc.text("Total labor effort days calculated.", 110, startCardY + 30);
+
+      // Card 3
+      doc.rect(198, startCardY, 85, 35, 'FD');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(110, 120, 130);
+      doc.text("ALLOCATED LABOUR PAYMENT", 202, startCardY + 8);
+      doc.setFontSize(16);
+      doc.setTextColor(150, 10, 10);
+      doc.text(`₹${grandTotalWorkerPay.toLocaleString('en-IN')}`, 202, startCardY + 22);
+      doc.setFontSize(7.5);
+      doc.setTextColor(120, 130, 140);
+      doc.text("Direct worker payable transfer sum.", 202, startCardY + 30);
+
+      // Professional Signatures Block
+      const sigY = 155;
+      doc.setDrawColor(150, 150, 150);
+      doc.setLineWidth(0.5);
+
+      // Prep Line
+      doc.line(25, sigY, 75, sigY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(0, 47, 108);
+      doc.text("PREPARED BY", 37, sigY + 5);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Site Supervisor Abstract Cell", 30, sigY + 9);
+
+      // Checked Line
+      doc.line(115, sigY, 175, sigY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(0, 47, 108);
+      doc.text("CHECKED BY", 132, sigY + 5);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Structural Project Manager", 126, sigY + 9);
+
+      // Approved Line
+      doc.line(215, sigY, 265, sigY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(0, 47, 108);
+      doc.text("APPROVED & PRINTED", 225, sigY + 5);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Director, SN enterprises", 228, sigY + 9);
+    }
+
+    doc.save(`Floor_Abstract_${projectName}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
   const resetForm = () => {
     setIsEditing(null);
+    setTowerName('');
     setSrNo('');
     setFlatNo('');
     setAmount(0);
@@ -243,6 +697,7 @@ export function FloorAbstracts() {
   const handleEdit = (record: FloorAbstract) => {
     setIsEditing(record.id);
     setProjectId(record.projectId);
+    setTowerName(record.towerName || '');
     setCategory(record.category);
     setLevel(record.level);
     setSrNo(record.srNo || '');
@@ -335,6 +790,7 @@ export function FloorAbstracts() {
 
     const payload: Omit<FloorAbstract, 'id'> = {
       projectId,
+      towerName: towerName || undefined,
       category,
       level,
       srNo,
@@ -427,12 +883,27 @@ export function FloorAbstracts() {
             </button>
           </div>
           
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div>
               <label className="sap-label">Project *</label>
-              <select className="sap-input" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              <select className="sap-input" value={projectId} onChange={(e) => {
+                setProjectId(e.target.value);
+                setTowerName('');
+              }}>
                 <option value="">Select Project</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="sap-label">Tower / Block</label>
+              <select 
+                className="sap-input" 
+                value={towerName} 
+                onChange={(e) => setTowerName(e.target.value)}
+                disabled={!projectId || availableTowers.length === 0}
+              >
+                <option value="">{!projectId ? 'Choose Project First' : availableTowers.length === 0 ? 'No Towers Listed' : 'All Towers / Select'}</option>
+                {availableTowers.map(tow => <option key={tow} value={tow}>{tow}</option>)}
               </select>
             </div>
             <div>
@@ -654,19 +1125,63 @@ export function FloorAbstracts() {
         <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden mt-4">
           <div className="bg-[#002f6c] text-white px-3 py-2 flex justify-between items-center sap-header">
             <h3 className="font-bold text-sm">Saved Floor Abstracts</h3>
-            <div className="flex items-center space-x-2 w-64">
-              <Search size={14} className="text-gray-300" />
-              <input 
-                type="text" 
-                placeholder="Search Flat No or SR..." 
-                className="w-full bg-blue-900 border border-blue-700 text-white text-xs p-1 rounded-sm placeholder-blue-300 focus:outline-none"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+          </div>
+
+          {/* Search & Filter Controls */}
+          <div className="bg-[#f8fafc] border-b border-[#8c9ba8] p-3 gap-3 grid grid-cols-1 md:grid-cols-5 items-end select-none">
+            <div className="col-span-1 md:col-span-2">
+              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Search</label>
+              <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search Flat No, SR No, Level, or Worker name..." 
+                  className="sap-input pl-8 w-full"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">Floor Level</label>
+              <select 
+                className="sap-input w-full bg-white font-normal" 
+                value={filterLevel} 
+                onChange={(e) => setFilterLevel(e.target.value)}
+              >
+                <option value="">All Levels</option>
+                {LEVEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">Category Basis</label>
+              <select 
+                className="sap-input w-full bg-white font-normal" 
+                value={filterCategory} 
+                onChange={(e) => setFilterCategory(e.target.value)}
+              >
+                <option value="">All Categories</option>
+                <option value="Amount">Amount Basis</option>
+                <option value="Hajira">Hajira Basis</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">Tower / Block</label>
+              <select 
+                className="sap-input w-full bg-white font-normal" 
+                value={filterTower} 
+                onChange={(e) => setFilterTower(e.target.value)}
+              >
+                <option value="">All Towers</option>
+                {filterTowersList.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           </div>
           
-          <div className="space-y-3 mt-4">
+          <div className="p-3 space-y-3">
             {filteredRecords.length === 0 ? (
               <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm p-4 text-center text-gray-500 italic">
                 No abstracts found.
@@ -687,6 +1202,11 @@ export function FloorAbstracts() {
                     >
                       <div className="flex items-center space-x-4">
                         <div className="font-bold">{record.flatNo} <span className="font-normal text-blue-200 text-xs ml-1">(SR: {record.srNo})</span></div>
+                        {record.towerName && (
+                          <span className="bg-indigo-950 border border-indigo-400 px-2 py-0.5 rounded-sm text-indigo-100 text-[10px] font-bold tracking-wide uppercase">
+                            {record.towerName}
+                          </span>
+                        )}
                         <span className={`px-1.5 py-0.5 rounded-sm text-[10px] font-mono ${record.category === 'Amount' ? 'bg-blue-100 text-blue-900 border border-blue-500' : 'bg-green-100 text-green-900 border border-green-500'}`}>
                           {record.category}
                         </span>
@@ -844,23 +1364,42 @@ export function FloorAbstracts() {
         {activeTab === 'floor-summary' && (
            <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden mt-4">
               <div className="bg-[#eef2f6] text-[#002f6c] px-3 py-2 border-b border-[#8c9ba8] flex flex-wrap gap-2 justify-between items-center">
-                 <h3 className="font-bold text-sm flex items-center space-x-4">
+                 <h3 className="font-bold text-sm flex flex-wrap items-center gap-3">
                    <span>Floor Wise Summary</span>
-                   <select 
-                     className="sap-input text-xs w-64 font-normal !h-7 bg-white" 
-                     value={summaryLevelFilter} 
-                     onChange={e => setSummaryLevelFilter(e.target.value)}
-                   >
-                     <option value="">-- Select Level --</option>
-                     {LEVEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                   </select>
+                   <div className="flex items-center space-x-1">
+                     <span className="text-xs text-gray-500 font-normal font-mono">Project:</span>
+                     <select 
+                       className="sap-input text-xs w-56 font-normal !h-7 bg-white" 
+                       value={projectId} 
+                       onChange={e => {
+                         setProjectId(e.target.value);
+                         setSummaryLevelFilter('');
+                       }}
+                     >
+                       <option value="">-- Select Project --</option>
+                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                     </select>
+                   </div>
+                   {projectId && (
+                     <div className="flex items-center space-x-1">
+                       <span className="text-xs text-gray-500 font-normal font-mono">Level:</span>
+                       <select 
+                         className="sap-input text-xs w-48 font-normal !h-7 bg-white" 
+                         value={summaryLevelFilter} 
+                         onChange={e => setSummaryLevelFilter(e.target.value)}
+                       >
+                         <option value="">-- Select Level --</option>
+                         {LEVEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                       </select>
+                     </div>
+                   )}
                  </h3>
                  <div className="flex space-x-2">
-                   <button onClick={exportToExcel} disabled={!summaryLevelFilter} className="sap-btn sap-btn-blue text-xs flex items-center p-1 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                   <button onClick={exportToExcel} disabled={!projectId || !summaryLevelFilter} className="sap-btn sap-btn-blue text-xs flex items-center p-1 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
                      <Download size={12} className="mr-1" /> Excel
                    </button>
-                   <button onClick={exportToPDF} disabled={!summaryLevelFilter} className="sap-btn sap-btn-blue text-xs flex items-center p-1 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
-                     <Download size={12} className="mr-1" /> PDF
+                   <button onClick={exportToPDF} disabled={!projectId} className="sap-btn sap-btn-blue text-xs flex items-center p-1 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                     <Download size={12} className="mr-1" /> PDF {summaryLevelFilter ? '' : '(All Floors)'}
                    </button>
                  </div>
               </div>
@@ -869,6 +1408,7 @@ export function FloorAbstracts() {
                   <thead className="sap-header select-none">
                     <tr className="divide-x divide-[#8c9ba8]">
                       <th className="border border-[#8c9ba8] px-2 py-1.5 font-bold">Floor SR</th>
+                      <th className="border border-[#8c9ba8] px-2 py-1.5 font-bold">Tower / Block</th>
                       <th className="border border-[#8c9ba8] px-2 py-1.5 font-bold">Flat No</th>
                       <th className="border border-[#8c9ba8] px-2 py-1.5 font-bold text-right">Total Flat Amount</th>
                       <th className="border border-[#8c9ba8] px-2 py-1.5 font-bold text-right">Average Rate</th>
@@ -882,15 +1422,18 @@ export function FloorAbstracts() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {!summaryLevelFilter ? (
-                      <tr><td colSpan={11} className="text-center p-8 text-gray-500 font-medium">Please select a level to view the floor wise summary.</td></tr>
+                    {!projectId ? (
+                      <tr><td colSpan={12} className="text-center p-8 text-gray-500 font-medium font-sans">Please select a project first.</td></tr>
+                    ) : !summaryLevelFilter ? (
+                      <tr><td colSpan={12} className="text-center p-8 text-gray-500 font-medium">Please select a level to view the floor wise summary.</td></tr>
                     ) : floorSummaryRows.length === 0 ? (
-                      <tr><td colSpan={11} className="text-center p-4 text-gray-500 italic">No floor data available for this level.</td></tr>
+                      <tr><td colSpan={12} className="text-center p-4 text-gray-500 italic">No floor data available for this level.</td></tr>
                     ) : floorSummaryRows.map((row, index) => (
                       <tr key={index} className="hover:bg-gray-50 divide-x divide-gray-200">
                         {row.isFirstInFloor ? (
                           <>
                             <td className="px-2 py-1 border-t border-[#8c9ba8] bg-gray-100 text-center font-bold align-top" rowSpan={row.rowSpan}>{row.floorSr}</td>
+                            <td className="px-2 py-1 border-t border-[#8c9ba8] bg-gray-100 font-bold align-top" rowSpan={row.rowSpan}>{row.towerName || '-'}</td>
                             <td className="px-2 py-1 border-t border-[#8c9ba8] bg-gray-100 font-bold align-top" rowSpan={row.rowSpan}>{row.flatNo}</td>
                             <td className="px-2 py-1 border-t border-[#8c9ba8] bg-gray-100 text-right font-mono align-top" rowSpan={row.rowSpan}>{row.totalAmount !== undefined ? row.totalAmount.toFixed(2) : ''}</td>
                             <td className="px-2 py-1 border-t border-[#8c9ba8] bg-gray-100 text-right font-mono align-top" rowSpan={row.rowSpan}>{row.averageRate !== undefined ? row.averageRate.toFixed(2) : ''}</td>

@@ -22,7 +22,9 @@ export const Projects: React.FC = () => {
     workOrderNo: '', scopeOfWork: '', rateType: 'Item Rate' as 'Supply' | 'Item Rate' | 'BUA Basis' | 'Lump-sum' | '',
     workOrderAttachment: '', workOrderFileName: '', workOrderFileType: '',
     projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: '',
-    status: 'Ongoing' as 'Ongoing' | 'Completed' | 'On Hold' | 'Cancelled' | 'Archived'
+    status: 'Ongoing' as 'Ongoing' | 'Completed' | 'On Hold' | 'Cancelled' | 'Archived',
+    towersCount: '',
+    towerNamesText: ''
   });
   const [filterStatus, setFilterStatus] = useState<'All' | 'Ongoing' | 'Completed' | 'On Hold' | 'Cancelled' | 'Archived'>('Ongoing');
   const [searchQuery, setSearchQuery] = useState(() => {
@@ -104,7 +106,9 @@ export const Projects: React.FC = () => {
       siContact: project.siContact || '',
       ourRepresentatives: project.ourRepresentatives || '',
       repContact: project.repContact || '',
-      status: project.status || 'Ongoing'
+      status: project.status || 'Ongoing',
+      towersCount: project.towersCount ? project.towersCount.toString() : '',
+      towerNamesText: project.towerNames ? project.towerNames.join(', ') : ''
     });
     setEditingId(project.id);
     setIsAdding(true);
@@ -118,7 +122,9 @@ export const Projects: React.FC = () => {
       projectType: 'Residential', workOrderNo: '', scopeOfWork: '', rateType: 'Item Rate',
       workOrderAttachment: '', workOrderFileName: '', workOrderFileType: '',
       projectManager: '', pmContact: '', billingEngineer: '', beContact: '', siteIncharge: '', siContact: '', ourRepresentatives: '', repContact: '',
-      status: 'Ongoing'
+      status: 'Ongoing',
+      towersCount: '',
+      towerNamesText: ''
     });
   };
 
@@ -256,7 +262,9 @@ export const Projects: React.FC = () => {
       siContact: formData.siContact,
       ourRepresentatives: formData.ourRepresentatives,
       repContact: formData.repContact,
-      status: formData.status
+      status: formData.status,
+      towersCount: formData.towersCount ? Number(formData.towersCount) : undefined,
+      towerNames: formData.towerNamesText ? formData.towerNamesText.split(',').map(s => s.trim()).filter(Boolean) : undefined
     };
 
     if (editingId) {
@@ -424,6 +432,14 @@ export const Projects: React.FC = () => {
                       <option value="Archived">Archived (Planned)</option>
                     </select>
                   </div>
+                  <div className="flex flex-col">
+                    <label className="font-semibold text-gray-700">9. Number of Towers</label>
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="number" min="0" className="sap-input" value={formData.towersCount} onChange={e => setFormData({...formData, towersCount: e.target.value})} placeholder="e.g., 3" />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="font-semibold text-gray-700">10. Tower Names (Comma Separated)</label>
+                    <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.towerNamesText} onChange={e => setFormData({...formData, towerNamesText: e.target.value})} placeholder="e.g., Tower A, Tower B, Tower C" />
+                  </div>
                 </div>
               </div>
 
@@ -547,7 +563,14 @@ export const Projects: React.FC = () => {
               className="hover:bg-[#e6f2ff] cursor-default"
             >
               <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] w-8">{idx + 1}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1 font-semibold">{project.name}</td>
+              <td className="border border-[#8c9ba8] px-2 py-1 font-semibold">
+                {project.name}
+                {project.towersCount ? (
+                  <div className="text-[9px] text-indigo-700 font-bold font-mono mt-0.5">
+                    Towers ({project.towersCount}): {project.towerNames && project.towerNames.length > 0 ? project.towerNames.join(', ') : 'None named'}
+                  </div>
+                ) : null}
+              </td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.clientName || '-'}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.startDate}</td>
               <td className="border border-[#8c9ba8] px-2 py-1">{project.completionDate || '-'}</td>
@@ -647,6 +670,10 @@ export const Projects: React.FC = () => {
                           project.status === 'On Hold' ? 'text-amber-700' :
                           project.status === 'Cancelled' ? 'text-red-700' : 'text-gray-700'
                         }`}>{project.status || 'Ongoing'}</span>
+                        <span className="font-semibold text-gray-500">Towers count:</span>
+                        <span>{project.towersCount || '-'}</span>
+                        <span className="font-semibold text-gray-500">Tower Names:</span>
+                        <span className="font-medium text-slate-800">{project.towerNames && project.towerNames.length > 0 ? project.towerNames.join(', ') : '-'}</span>
                       </div>
                     </div>
 
