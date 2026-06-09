@@ -6,10 +6,10 @@ import { motion, AnimatePresence } from 'motion/react';
 export const LabourRequirementPlanning: React.FC = () => {
   const { 
     user,
-    projects, 
-    workers, 
-    labourPlannings, 
-    workerTransfers, 
+    projects = [], 
+    workers = [], 
+    labourPlannings = [], 
+    workerTransfers = [], 
     addLabourPlanning, 
     updateLabourPlanning, 
     deleteLabourPlanning, 
@@ -41,7 +41,8 @@ export const LabourRequirementPlanning: React.FC = () => {
     concreteWorkerReq: 0,
     supervisorReq: 0,
     foremanReq: 0,
-    otherReq: 0
+    otherReq: 0,
+    shift: 'Day' as 'Day' | 'Night'
   };
   
   const [formData, setFormData] = useState(initialForm);
@@ -198,7 +199,8 @@ export const LabourRequirementPlanning: React.FC = () => {
       concreteWorkerReq: plan.concreteWorkerReq || 0,
       supervisorReq: plan.supervisorReq || 0,
       foremanReq: plan.foremanReq || 0,
-      otherReq: plan.otherReq || 0
+      otherReq: plan.otherReq || 0,
+      shift: plan.shift || 'Day'
     });
     setEditingId(plan.id);
     setIsFormOpen(true);
@@ -227,7 +229,8 @@ export const LabourRequirementPlanning: React.FC = () => {
       concreteWorkerReq: Number(formData.concreteWorkerReq) || 0,
       supervisorReq: Number(formData.supervisorReq) || 0,
       foremanReq: Number(formData.foremanReq) || 0,
-      otherReq: Number(formData.otherReq) || 0
+      otherReq: Number(formData.otherReq) || 0,
+      shift: formData.shift || 'Day'
     };
 
     if (editingId) {
@@ -447,7 +450,19 @@ export const LabourRequirementPlanning: React.FC = () => {
                     required
                   />
                 </div>
-                <div className="flex flex-col md:col-span-2">
+                <div className="flex flex-col">
+                  <label className="font-semibold mb-0.5">Shift Assignment *</label>
+                  <select
+                    className="sap-input text-[11px]"
+                    value={formData.shift}
+                    onChange={e => setFormData({ ...formData, shift: e.target.value as 'Day' | 'Night' })}
+                    required
+                  >
+                    <option value="Day">☀️ Day Shift</option>
+                    <option value="Night">🌙 Night Shift</option>
+                  </select>
+                </div>
+                <div className="flex flex-col">
                   <label className="font-semibold mb-0.5">Core Assignment Remarks</label>
                   <input
                     type="text"
@@ -611,6 +626,15 @@ export const LabourRequirementPlanning: React.FC = () => {
                       <td className="p-2 py-1.5 align-top">
                         <div className="flex items-center space-x-1.5 font-bold text-slate-800">
                           <span>{p.activityName}</span>
+                          {p.shift === 'Night' ? (
+                            <span className="text-[8px] bg-indigo-950 text-indigo-200 border border-indigo-700 rounded px-1 flex items-center font-mono">
+                              🌙 NIGHT
+                            </span>
+                          ) : (
+                            <span className="text-[8px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1 flex items-center font-mono">
+                              ☀️ DAY
+                            </span>
+                          )}
                           {isTaskOverdue && (
                             <span className="text-[8px] bg-red-100 text-red-700 border border-red-300 rounded px-1 flex items-center uppercase font-mono">
                               <AlertTriangle size={8} className="mr-0.5" /> OVERDUE Target
@@ -865,6 +889,7 @@ export const LabourRequirementPlanning: React.FC = () => {
                   <thead className="bg-slate-100 text-slate-800 font-mono font-bold">
                     <tr className="divide-x divide-slate-400">
                       <th className="border border-slate-900 p-1 text-left">Activity Details</th>
+                      <th className="border border-slate-900 p-1 text-center w-20">Shift</th>
                       <th className="border border-slate-900 p-1 text-center w-24">Required Date</th>
                       <th className="border border-slate-900 p-1 text-center w-24">Target Date</th>
                       <th className="border border-slate-900 p-1 text-right w-24">Required Workers</th>
@@ -877,6 +902,9 @@ export const LabourRequirementPlanning: React.FC = () => {
                         <tr key={p.id} className="border border-slate-900 text-[10px] hover:bg-slate-50">
                           <td className="p-1 px-2 border border-slate-900">
                             <strong>{p.activityName}</strong> <span className="text-gray-500">at {getProjectName(p.projectId)}</span>
+                          </td>
+                          <td className="p-1 border border-slate-900 text-center font-bold">
+                            {p.shift === 'Night' ? '🌙 Night' : '☀️ Day'}
                           </td>
                           <td className="p-1 border border-slate-900 text-center font-mono">{p.requiredDate}</td>
                           <td className="p-1 border border-slate-900 text-center font-mono">{p.requiredCompletionDate}</td>

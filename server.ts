@@ -330,6 +330,7 @@ function initDbSchema() {
       supervisorReq INTEGER DEFAULT 0,
       foremanReq INTEGER DEFAULT 0,
       otherReq INTEGER DEFAULT 0,
+      shift TEXT DEFAULT 'Day',
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -541,6 +542,7 @@ function initDbSchema() {
   try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN receiptFileType TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN status TEXT DEFAULT 'Draft'"); } catch (e) {}
   try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN approvalNotes TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE labour_plannings ADD COLUMN shift TEXT DEFAULT 'Day'"); } catch (e) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS advance_sheet_approvals (
@@ -2353,19 +2355,20 @@ async function startServer() {
       const {
         id, projectId, tower, floor, activityName, requiredDate, requiredCompletionDate, remarks,
         carpenterReq, helperReq, barBenderReq, steelFixerReq, masonReq, concreteWorkerReq,
-        supervisorReq, foremanReq, otherReq
+        supervisorReq, foremanReq, otherReq, shift
       } = req.body;
       db.prepare(`
         INSERT INTO labour_plannings (
           id, projectId, tower, floor, activityName, requiredDate, requiredCompletionDate, remarks,
           carpenterReq, helperReq, barBenderReq, steelFixerReq, masonReq, concreteWorkerReq,
-          supervisorReq, foremanReq, otherReq
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          supervisorReq, foremanReq, otherReq, shift
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, projectId, tower || null, floor || null, activityName, requiredDate, requiredCompletionDate, remarks || null,
         parseInt(carpenterReq || 0), parseInt(helperReq || 0), parseInt(barBenderReq || 0),
         parseInt(steelFixerReq || 0), parseInt(masonReq || 0), parseInt(concreteWorkerReq || 0),
-        parseInt(supervisorReq || 0), parseInt(foremanReq || 0), parseInt(otherReq || 0)
+        parseInt(supervisorReq || 0), parseInt(foremanReq || 0), parseInt(otherReq || 0),
+        shift || 'Day'
       );
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -2379,19 +2382,20 @@ async function startServer() {
       const {
         projectId, tower, floor, activityName, requiredDate, requiredCompletionDate, remarks,
         carpenterReq, helperReq, barBenderReq, steelFixerReq, masonReq, concreteWorkerReq,
-        supervisorReq, foremanReq, otherReq
+        supervisorReq, foremanReq, otherReq, shift
       } = req.body;
       db.prepare(`
         UPDATE labour_plannings
         SET projectId = ?, tower = ?, floor = ?, activityName = ?, requiredDate = ?, requiredCompletionDate = ?, remarks = ?,
             carpenterReq = ?, helperReq = ?, barBenderReq = ?, steelFixerReq = ?, masonReq = ?, concreteWorkerReq = ?,
-            supervisorReq = ?, foremanReq = ?, otherReq = ?
+            supervisorReq = ?, foremanReq = ?, otherReq = ?, shift = ?
         WHERE id = ?
       `).run(
         projectId, tower || null, floor || null, activityName, requiredDate, requiredCompletionDate, remarks || null,
         parseInt(carpenterReq || 0), parseInt(helperReq || 0), parseInt(barBenderReq || 0),
         parseInt(steelFixerReq || 0), parseInt(masonReq || 0), parseInt(concreteWorkerReq || 0),
         parseInt(supervisorReq || 0), parseInt(foremanReq || 0), parseInt(otherReq || 0),
+        shift || 'Day',
         id
       );
       res.json(req.body);

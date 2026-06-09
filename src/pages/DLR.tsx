@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../store';
-import { Save, Plus, Trash2, Printer, FileSpreadsheet } from 'lucide-react';
+import { Save, Plus, Trash2, Printer, FileSpreadsheet, Calendar, Clock } from 'lucide-react';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export const DLR: React.FC = () => {
-  const { projects, dlrs, addDLR, updateDLR, deleteDLR } = useAppContext();
+  const { projects, dlrs, labourPlannings = [], addDLR, updateDLR, deleteDLR } = useAppContext();
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterProject, setFilterProject] = useState('all');
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
@@ -155,6 +155,67 @@ export const DLR: React.FC = () => {
         </div>
       </div>
 
+      {/* Manpower Planning Info/Shift Indicator Panel */}
+      {(() => {
+        const plannedForDay = (labourPlannings || []).filter(p => {
+          const dateMatch = p.requiredDate === filterDate;
+          const projMatch = filterProject === 'all' || p.projectId === filterProject;
+          return dateMatch && projMatch;
+        });
+
+        if (plannedForDay.length === 0) return null;
+
+        return (
+          <div className="mx-2 mb-2 p-2 bg-gradient-to-r from-[#eef4fc] to-[#f4f8fd] border border-[#a2c2ec] rounded shadow-xs print:hidden">
+            <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-blue-200">
+              <span className="font-extrabold text-[#002f6c] text-[11px] flex items-center">
+                <span className="mr-1">📋</span> Planned Manpower Requirements for {filterDate}
+              </span>
+              <span className="text-[9.5px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded font-mono">
+                {plannedForDay.length} Scheduled Shift{plannedForDay.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+              {plannedForDay.map(p => {
+                const proj = projects.find(proj => proj.id === p.projectId);
+                const isNight = p.shift === 'Night';
+                const totalReq = (p.carpenterReq || 0) + (p.helperReq || 0) + (p.barBenderReq || 0) + (p.steelFixerReq || 0) + (p.masonReq || 0) + (p.concreteWorkerReq || 0) + (p.supervisorReq || 0) + (p.foremanReq || 0) + (p.otherReq || 0);
+
+                return (
+                  <div key={p.id} className={`p-1.5 border rounded-sm flex flex-col justify-between ${isNight ? 'bg-[#1e2538] text-slate-100 border-[#3b4b72]' : 'bg-white text-slate-800 border-[#bcc5cf]'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="font-bold text-[10.5px] leading-tight flex-1 truncate" title={p.activityName}>
+                        {p.activityName}
+                      </div>
+                      <span className={`ml-1 text-[8px] font-extrabold font-mono px-1 pb-0.5 rounded-sm shrink-0 ${isNight ? 'bg-indigo-900 text-indigo-200 border border-indigo-700' : 'bg-amber-100 text-amber-900 border border-amber-300'}`}>
+                        {isNight ? '🌙 NIGHT' : '☀️ DAY'}
+                      </span>
+                    </div>
+                    
+                    <div className={`text-[9px] mt-0.5 font-semibold truncate ${isNight ? 'text-blue-300' : 'text-[#0056b3]'}`}>
+                      Site: {proj?.name || 'General'} {p.tower ? `[Row: ${p.tower}]` : ''}
+                    </div>
+
+                    <div className="mt-1 pb-1 flex justify-between items-center text-[9px] border-t border-dashed border-slate-200 pt-1">
+                      <span className={isNight ? 'text-slate-400' : 'text-gray-500'}>Target Count:</span>
+                      <span className={`font-extrabold font-mono text-[10px] ${isNight ? 'text-blue-300' : 'text-[#0056b3]'}`}>{totalReq} planned</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {p.carpenterReq > 0 && <span className={`font-mono text-[8.5px] px-0.5 rounded ${isNight ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>Carp:{p.carpenterReq}</span>}
+                      {p.helperReq > 0 && <span className={`font-mono text-[8.5px] px-0.5 rounded ${isNight ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>Help:{p.helperReq}</span>}
+                      {p.masonReq > 0 && <span className={`font-mono text-[8.5px] px-0.5 rounded ${isNight ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>Msn:{p.masonReq}</span>}
+                      {p.steelFixerReq > 0 && <span className={`font-mono text-[8.5px] px-0.5 rounded ${isNight ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>Fix:{p.steelFixerReq}</span>}
+                      {p.barBenderReq > 0 && <span className={`font-mono text-[8.5px] px-0.5 rounded ${isNight ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>Bnd:{p.barBenderReq}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="flex-1 overflow-auto bg-white border border-[#8c9ba8]">
         <table className="sap-table w-full">
           <thead>
@@ -222,12 +283,28 @@ export const DLR: React.FC = () => {
                 );
               }
               const p = projects.find(p => p.id === dlr.projectId);
+              const sitePlanningsForDate = (labourPlannings || []).filter(lp => lp.projectId === dlr.projectId && lp.requiredDate === dlr.date);
+              const hasDayShift = sitePlanningsForDate.some(lp => lp.shift !== 'Night');
+              const hasNightShift = sitePlanningsForDate.some(lp => lp.shift === 'Night');
+
               return (
                 <tr key={dlr.id} className="hover:bg-blue-50 cursor-pointer" onDoubleClick={() => handleEdit(dlr)}>
                   <td className="text-center p-1 print:hidden">
                      <button onClick={() => handleDelete(dlr.id)} className="text-red-500 hover:text-red-700 bg-transparent border-0"><Trash2 size={14} /></button>
                   </td>
-                  <td className="font-semibold">{p?.name || "-"}</td>
+                  <td className="font-semibold">
+                    <div className="flex items-center justify-between">
+                      <span>{p?.name || "-"}</span>
+                      <div className="flex items-center space-x-1 print:hidden">
+                        {hasDayShift && (
+                          <span className="text-[8.5px] bg-amber-50 text-amber-700 border border-amber-200 px-1 py-0.5 rounded-xs font-semibold" title="Day shift plan active">☀️ DAY</span>
+                        )}
+                        {hasNightShift && (
+                          <span className="text-[8.5px] bg-indigo-950 text-indigo-200 border border-indigo-800 px-1 py-0.5 rounded-xs font-semibold" title="Night shift plan active">🌙 NIGHT</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
                   <td className="text-right">{dlr.carpenter || 0}</td>
                   <td className="text-right">{dlr.fitter || 0}</td>
                   <td className="text-right">{dlr.helper || 0}</td>

@@ -1477,6 +1477,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTransfer)
       });
+      // Synchronize worker's projectId update to the backend database as well
+      const existing = state.workers.find(w => w.id === transfer.workerId);
+      if (existing) {
+        const updatedObj = { ...existing, projectId: transfer.toProjectId };
+        await fetch(`/api/workers/${transfer.workerId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedObj)
+        });
+      }
     } catch (e) {
       console.error(e);
     }

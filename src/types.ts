@@ -395,6 +395,7 @@ export interface LabourPlanning {
   supervisorReq: number;
   foremanReq: number;
   otherReq: number;
+  shift?: 'Day' | 'Night';
 }
 
 export interface WorkerTransfer {
