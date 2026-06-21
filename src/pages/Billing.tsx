@@ -8,14 +8,35 @@ import { checkBillingDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
 import { MeasurementItem, Billing as BillingType } from '../types';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend
+} from 'recharts';
 
 export const Billing: React.FC = () => {
-  const { user, billings, projects, addBilling, updateBilling, deleteBilling } = useAppContext();
+  const { user, billings, projects, clientPayments = [], addBilling, updateBilling, deleteBilling, numberingSettings = [], previewNextNumber, consumeNextNumber } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
+  const billingConfig = numberingSettings?.find((s: any) => s.moduleKey === 'billing');
+  const isAutoBillingActive = billingConfig?.status === 'Active';
+
+  const [activeTab, setActiveTab] = useState<'records' | 'retention' | 'tds' | 'debit' | 'hold' | 'gst'>('records');
+  const [summaryProjectId, setSummaryProjectId] = useState<string>('all');
   const [isAdding, setIsAdding] = useState(false);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [printingBill, setPrintingBill] = useState<BillingType | null>(null);
+
+  React.useEffect(() => {
+    if (projects.length > 0 && !summaryProjectId) {
+      setSummaryProjectId('all');
+    }
+  }, [projects, summaryProjectId]);
   
   // Duplicate verification states
   const [dupModalOpen, setDupModalOpen] = useState(false);
@@ -40,12 +61,26 @@ export const Billing: React.FC = () => {
     gstPercent: '',
     debitAmount: '',
     debitReason: '',
+    holdAmount: '',
+    holdReason: '',
+    retentionStatus: 'Pending',
+    holdStatus: 'Pending',
     billType: 'Running Account',
     measurementItems: [] as MeasurementItem[],
     hardCopyFile: '',
     hardCopyFileName: '',
     hardCopyFileType: ''
   });
+
+  React.useEffect(() => {
+    if (isAutoBillingActive && !editingId && previewNextNumber && isAdding) {
+      previewNextNumber('billing', { projectId: formData.projectId }).then(res => {
+        if (res && res.active && res.docNumber) {
+          setFormData(prev => ({ ...prev, billNo: res.docNumber }));
+        }
+      });
+    }
+  }, [formData.projectId, isAutoBillingActive, editingId, isAdding]);
 
   const getPercentStr = (val: number, total: number) => {
     if (total <= 0 || val <= 0) return '';
@@ -59,6 +94,7 @@ export const Billing: React.FC = () => {
     const retVal = bill.retention ?? 0;
     const gstVal = bill.gst ?? 0;
     const debAmt = bill.debitAmount ?? 0;
+    const hldAmt = bill.holdAmount ?? 0;
 
     setFormData({
       srNo: bill.srNo,
@@ -76,6 +112,10 @@ export const Billing: React.FC = () => {
       gstPercent: getPercentStr(gstVal, billAmt),
       debitAmount: debAmt > 0 ? debAmt.toString() : '',
       debitReason: bill.debitReason || '',
+      holdAmount: hldAmt > 0 ? hldAmt.toString() : '',
+      holdReason: bill.holdReason || '',
+      retentionStatus: bill.retentionStatus || 'Pending',
+      holdStatus: bill.holdStatus || 'Pending',
       billType: bill.billType || 'Running Account',
       measurementItems: bill.measurementItems || [],
       hardCopyFile: bill.hardCopyFile || '',
@@ -105,6 +145,10 @@ export const Billing: React.FC = () => {
       gstPercent: '',
       debitAmount: '',
       debitReason: '',
+      holdAmount: '',
+      holdReason: '',
+      retentionStatus: 'Pending',
+      holdStatus: 'Pending',
       billType: 'Running Account',
       measurementItems: [],
       hardCopyFile: '',
@@ -359,6 +403,10 @@ export const Billing: React.FC = () => {
       gst: Number(formData.gst || 0),
       debitAmount: Number(formData.debitAmount || 0),
       debitReason: formData.debitReason || '',
+      holdAmount: Number(formData.holdAmount || 0),
+      holdReason: formData.holdReason || '',
+      retentionStatus: (formData.retentionStatus || 'Pending') as 'Pending' | 'Partially Cleared' | 'Fully Resolved',
+      holdStatus: (formData.holdStatus || 'Pending') as 'Pending' | 'Partially Cleared' | 'Fully Resolved',
       billType: formData.billType || 'Running Account',
       measurementItems: formData.measurementItems || [],
       hardCopyFile: formData.hardCopyFile || undefined,
@@ -366,18 +414,29 @@ export const Billing: React.FC = () => {
       hardCopyFileType: formData.hardCopyFileType || undefined
     };
 
-    const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
+    const onProceedSave = async (bypassCheck: boolean = false, overrideReason: string = '') => {
+      let finalBillNo = billingData.billNo;
+      
+      if (!editingId && isAutoBillingActive) {
+        const consumeResult = await consumeNextNumber('billing', { projectId: billingData.projectId });
+        if (consumeResult && consumeResult.active && consumeResult.docNumber) {
+          finalBillNo = consumeResult.docNumber;
+        }
+      }
+
+      const finalBillingData = { ...billingData, billNo: finalBillNo };
+
       if (editingId) {
-        updateBilling(editingId, billingData);
+        updateBilling(editingId, finalBillingData);
       } else {
-        addBilling(billingData);
+        addBilling(finalBillingData);
       }
       
       if (bypassCheck && overrideReason) {
         addOverrideLog(
           user?.username || 'Unknown',
           'Billing Management',
-          `Bill No: ${formData.billNo}, Site: ${getProjectName(formData.projectId)}, Month/Period: ${formData.month}, Amount: Rs ${Number(formData.amount).toLocaleString()}`,
+          `Bill No: ${finalBillNo}, Site: ${getProjectName(formData.projectId)}, Month/Period: ${formData.month}, Amount: Rs ${Number(formData.amount).toLocaleString()}`,
           overrideReason
         );
       }
@@ -418,6 +477,7 @@ export const Billing: React.FC = () => {
     let retention = 0;
     let gst = 0;
     let debit = 0;
+    let hold = 0;
     let net = 0;
     
     billings.forEach(b => {
@@ -429,21 +489,317 @@ export const Billing: React.FC = () => {
       const bRetention = b.retention ?? 0;
       const bGst = b.gst ?? 0;
       const bDebit = b.debitAmount ?? 0;
+      const bHold = b.holdAmount ?? 0;
       
       gross += bGross;
       tds += bTds;
       retention += bRetention;
       gst += bGst;
       debit += bDebit;
-      net += (bGross - bTds - bRetention + bGst - bDebit);
+      hold += bHold;
+      net += (bGross - bTds - bRetention + bGst - bDebit - bHold);
     });
     
     return { 
       totalMonthly: monthly, 
       totalYearly: yearly,
-      overallTotals: { gross, tds, retention, gst, debit, net }
+      overallTotals: { gross, tds, retention, gst, debit, hold, net }
     };
   }, [billings]);
+
+  const summaryProject = useMemo(() => projects.find(p => p.id === summaryProjectId), [projects, summaryProjectId]);
+
+  const [expandedBillId, setExpandedBillId] = useState<string | null>(null);
+
+  const toggleRowExpand = (recordProjectId: string, recordBillNo: string) => {
+    const compositeId = `${recordProjectId}_${recordBillNo}`;
+    setExpandedBillId(prev => (prev === compositeId ? null : compositeId));
+  };
+
+  const renderDrillDownDetails = (recordProjectId: string, recordBillNo: string) => {
+    const bill = billings.find(b => b.projectId === recordProjectId && b.billNo === recordBillNo);
+    if (!bill) return null;
+    
+    const tdsVal = bill.tds ?? 0;
+    const retVal = bill.retention ?? 0;
+    const gstVal = bill.gst ?? 0;
+    const debitVal = bill.debitAmount ?? 0;
+    const holdVal = bill.holdAmount ?? 0;
+    const netAmount = bill.amount - tdsVal - retVal + gstVal - debitVal - holdVal;
+
+    return (
+      <div className="p-4 bg-[#f8fafc] border-t border-[#8c9ba8] border-b font-sans text-xs select-none">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Column 1: Bill Reference */}
+          <div className="space-y-2 border-r border-slate-200 pr-4">
+            <h4 className="text-[10px] uppercase font-bold text-[#002f6c] tracking-wider font-sans">📁 Entry Details</h4>
+            <div className="grid grid-cols-2 gap-y-1.5 text-[11px] text-slate-700 font-sans">
+              <span className="text-slate-400">Site / Project:</span>
+              <span className="font-bold text-slate-900 truncate" title={getProjectName(bill.projectId)}>{getProjectName(bill.projectId)}</span>
+
+              <span className="text-slate-400">Bill Number:</span>
+              <span className="font-bold font-mono text-[#002f6c]">{bill.billNo}</span>
+
+              <span className="text-slate-400">Nature of Work:</span>
+              <span className="font-semibold text-slate-900 truncate" title={bill.workNature}>{bill.workNature}</span>
+
+              <span className="text-slate-400">Month / Period:</span>
+              <span className="font-semibold text-slate-800">{bill.month}</span>
+
+              <span className="text-slate-400">Certify Date:</span>
+              <span className="font-semibold text-slate-800">{bill.certifyDate}</span>
+
+              {bill.billType && (
+                <>
+                  <span className="text-slate-400">Bill Type:</span>
+                  <span className="font-semibold text-indigo-700 font-sans capitalize">{bill.billType}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Column 2: Financial Contribution Breakdown */}
+          <div className="space-y-2 border-r border-slate-200 pr-5">
+            <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider font-sans">📊 Breakdown of Contribution</h4>
+            <div className="space-y-1.5 text-[11px] font-sans">
+              <div className="flex justify-between py-0.5 border-b border-dashed border-slate-200">
+                <span className="text-slate-500">Gross Bill Amount:</span>
+                <span className="font-bold text-slate-800">
+                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(bill.amount)}
+                </span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-dashed border-slate-200">
+                <span className="text-slate-500">TDS Deduction (-):</span>
+                <span className="font-bold text-red-600">
+                  {tdsVal > 0 ? `- ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(tdsVal)}` : '₹0.00'}
+                </span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-dashed border-slate-200">
+                <span className="text-slate-500">Retention Money (-):</span>
+                <span className="font-bold text-orange-600">
+                  {retVal > 0 ? `- ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(retVal)}` : '₹0.00'}
+                </span>
+              </div>
+              <div className="flex justify-between py-0.5 border-b border-dashed border-slate-200">
+                <span className="text-slate-500">GST Component (+):</span>
+                <span className="font-bold text-emerald-600">
+                  {gstVal > 0 ? `+ ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(gstVal)}` : '₹0.00'}
+                </span>
+              </div>
+              {debitVal > 0 && (
+                <div className="flex justify-between py-0.5 border-b border-dashed border-slate-200 bg-purple-50/30 px-1">
+                  <span className="text-purple-800 font-medium">Debit Adjustments (-):</span>
+                  <span className="font-bold text-purple-700">
+                    - {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(debitVal)}
+                  </span>
+                </div>
+              )}
+              {holdVal > 0 && (
+                <div className="flex justify-between py-0.5 border-b border-dashed border-slate-200 bg-amber-50/50 px-1">
+                  <span className="text-amber-800 font-medium">Hold Penalties (-):</span>
+                  <span className="font-bold text-amber-700">
+                    - {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(holdVal)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between py-1 border-t border-slate-300 font-extrabold text-[#0056b3] bg-blue-50/50 px-1.5 rounded-sm">
+                <span>Net Certified Payment:</span>
+                <span>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(netAmount)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3: Actions & Supporting Documents */}
+          <div className="space-y-3 flex flex-col justify-between h-full">
+            <div className="space-y-2">
+              <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider font-sans">📝 Remarks & Auditing</h4>
+              {bill.debitReason && (
+                <div className="p-1 px-2 text-[10px] bg-purple-50 border border-purple-100 rounded text-purple-900">
+                  <strong className="block text-[9px] uppercase tracking-wide">Debit Remark:</strong>
+                  <span>{bill.debitReason}</span>
+                </div>
+              )}
+              {bill.holdReason && (
+                <div className="p-1 px-2 text-[10px] bg-amber-50 border border-amber-200 rounded text-amber-950">
+                  <strong className="block text-[9px] uppercase tracking-wide">Hold Reason:</strong>
+                  <span>{bill.holdReason}</span>
+                </div>
+              )}
+              {bill.hardCopyFileName && (
+                <div className="p-1 px-2 text-[10px] bg-[#e6f4ea] border border-[#d4edda] rounded text-emerald-900 truncate">
+                  <strong className="block text-[9px] uppercase tracking-wide">Attachment:</strong>
+                  <span title={bill.hardCopyFileName}>📎 {bill.hardCopyFileName}</span>
+                </div>
+              )}
+              {!bill.debitReason && !bill.holdReason && !bill.hardCopyFileName && (
+                <span className="text-[10px] text-gray-400 italic font-sans block">No special remarks or duplicate over-ride records found.</span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1 w-full text-[10px]">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPrintingBill(bill);
+                }}
+                className="w-full flex items-center justify-center space-x-1.5 py-1 px-2.5 bg-[#0056b3] text-white hover:bg-blue-800 rounded shadow-3xs cursor-pointer font-bold uppercase transition-colors text-center font-sans"
+              >
+                <span>🔍 Open Invoice Preview</span>
+              </button>
+              {bill.hardCopyFile && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadFile(bill.hardCopyFile!, bill.hardCopyFileName || 'bill-copy', bill.hardCopyFileType || 'application/octet-stream');
+                  }}
+                  className="w-full flex items-center justify-center space-x-1.5 py-1 px-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded shadow-3xs cursor-pointer font-bold uppercase transition-colors text-center font-sans"
+                >
+                  <span>📁 Download Attachment</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const handleDrillDown = (billNo: string, pId: string) => {
+    const matchedBill = billings.find(b => b.billNo === billNo && b.projectId === pId);
+    if (matchedBill) {
+      setPrintingBill(matchedBill);
+    }
+  };
+
+  const getRetentionStatus = (billId: string, totalHeld: number, savedStatus?: 'Pending' | 'Partially Cleared' | 'Fully Resolved') => {
+    const matchingPayments = clientPayments.filter(
+      cp => cp.billId === billId && cp.isRetentionPayment === 1 && cp.status !== 'Bounced'
+    );
+    const totalReleased = matchingPayments.reduce((sum, cp) => sum + (cp.amountReceived || 0), 0);
+    
+    if (totalReleased >= totalHeld && totalHeld > 0) {
+      return 'Fully Resolved';
+    } else if (totalReleased > 0 && totalReleased < totalHeld) {
+      return 'Partially Cleared';
+    }
+    return savedStatus || 'Pending';
+  };
+
+  const getHoldStatus = (billId: string, totalHeld: number, savedStatus?: 'Pending' | 'Partially Cleared' | 'Fully Resolved') => {
+    const matchingPayments = clientPayments.filter(
+      cp => cp.billId === billId && (cp.category === 'Hold Release' || cp.remarks?.toLowerCase().includes('hold') || cp.remarks?.toLowerCase().includes('penalty')) && cp.status !== 'Bounced'
+    );
+    const totalReleased = matchingPayments.reduce((sum, cp) => sum + (cp.amountReceived || 0), 0);
+    
+    if (totalReleased >= totalHeld && totalHeld > 0) {
+      return 'Fully Resolved';
+    } else if (totalReleased > 0 && totalReleased < totalHeld) {
+      return 'Partially Cleared';
+    }
+    return savedStatus || 'Pending';
+  };
+
+  // 1) Retention Summary Data
+  const retentionBills = useMemo(() => {
+    return billings
+      .filter(b => (summaryProjectId === 'all' || b.projectId === summaryProjectId) && (b.retention ?? 0) > 0)
+      .map((b, idx) => ({
+        id: b.id,
+        srNo: idx + 1,
+        projectId: b.projectId,
+        retentionAmount: b.retention ?? 0,
+        billNo: b.billNo,
+        certifyDate: b.certifyDate,
+        savedStatus: b.retentionStatus,
+      }));
+  }, [billings, summaryProjectId]);
+
+  const cumulativeRetention = useMemo(() => {
+    return retentionBills.reduce((sum, b) => sum + b.retentionAmount, 0);
+  }, [retentionBills]);
+
+  const retentionAmountPaid = useMemo(() => {
+    return clientPayments
+      .filter(cp => (summaryProjectId === 'all' || cp.projectId === summaryProjectId) && cp.isRetentionPayment === 1 && cp.status !== 'Bounced')
+      .reduce((sum, cp) => sum + (cp.amountReceived || 0), 0);
+  }, [clientPayments, summaryProjectId]);
+
+  const retentionBalance = cumulativeRetention - retentionAmountPaid;
+
+  // 2) TDS Summary Data
+  const tdsBills = useMemo(() => {
+    return billings
+      .filter(b => (summaryProjectId === 'all' || b.projectId === summaryProjectId) && (b.tds ?? 0) > 0)
+      .map((b, idx) => ({
+        srNo: idx + 1,
+        projectId: b.projectId,
+        amount: b.tds ?? 0,
+        billNo: b.billNo,
+        certifyDate: b.certifyDate,
+      }));
+  }, [billings, summaryProjectId]);
+
+  const cumulativeTds = useMemo(() => {
+    return tdsBills.reduce((sum, b) => sum + b.amount, 0);
+  }, [tdsBills]);
+
+  // 3) Debit Summary Data
+  const debitBills = useMemo(() => {
+    return billings
+      .filter(b => (summaryProjectId === 'all' || b.projectId === summaryProjectId) && (b.debitAmount ?? 0) > 0)
+      .map((b, idx) => ({
+        srNo: idx + 1,
+        projectId: b.projectId,
+        amount: b.debitAmount ?? 0,
+        billNo: b.billNo,
+        remarks: b.debitReason || 'No Reason Stated',
+        certifyDate: b.certifyDate,
+      }));
+  }, [billings, summaryProjectId]);
+
+  const totalDebit = useMemo(() => {
+    return debitBills.reduce((sum, b) => sum + b.amount, 0);
+  }, [debitBills]);
+
+  // 4) Hold Summary Data
+  const holdBills = useMemo(() => {
+    return billings
+      .filter(b => (summaryProjectId === 'all' || b.projectId === summaryProjectId) && (b.holdAmount ?? 0) > 0)
+      .map((b, idx) => ({
+        id: b.id,
+        srNo: idx + 1,
+        projectId: b.projectId,
+        amount: b.holdAmount ?? 0,
+        billNo: b.billNo,
+        remarks: b.holdReason || 'No Reason Stated',
+        certifyDate: b.certifyDate,
+        savedStatus: b.holdStatus,
+      }));
+  }, [billings, summaryProjectId]);
+
+  const totalHold = useMemo(() => {
+    return holdBills.reduce((sum, b) => sum + b.amount, 0);
+  }, [holdBills]);
+
+  // 5) GST Summary Data
+  const gstBills = useMemo(() => {
+    return billings
+      .filter(b => (summaryProjectId === 'all' || b.projectId === summaryProjectId) && (b.gst ?? 0) > 0)
+      .map((b, idx) => ({
+        srNo: idx + 1,
+        projectId: b.projectId,
+        amount: b.gst ?? 0,
+        billNo: b.billNo,
+        certifyDate: b.certifyDate,
+        gstStatus: b.gstStatus || 'Unpaid'
+      }));
+  }, [billings, summaryProjectId]);
+
+  const totalGst = useMemo(() => {
+    return gstBills.reduce((sum, b) => sum + b.amount, 0);
+  }, [gstBills]);
 
   const filteredBillings = useMemo(() => {
     if (!searchQuery.trim()) return billings;
@@ -456,9 +812,154 @@ export const Billing: React.FC = () => {
     );
   }, [billings, searchQuery, projects]);
 
+  const displayedTotals = useMemo(() => {
+    let gross = 0;
+    let tds = 0;
+    let retention = 0;
+    let gst = 0;
+    let debit = 0;
+    let hold = 0;
+    let net = 0;
+
+    filteredBillings.forEach(b => {
+      const g = b.amount || 0;
+      const t = b.tds ?? 0;
+      const r = b.retention ?? 0;
+      const gs = b.gst ?? 0;
+      const d = b.debitAmount ?? 0;
+      const h = b.holdAmount ?? 0;
+
+      gross += g;
+      tds += t;
+      retention += r;
+      gst += gs;
+      debit += d;
+      hold += h;
+      net += (g - t - r + gs - d - h);
+    });
+
+    return { gross, tds, retention, gst, debit, hold, net };
+  }, [filteredBillings]);
+
+  // Historical trend data aggregator for Retention, TDS, Debit, and Hold amounts
+  const chartData = useMemo(() => {
+    const groups: Record<string, { month: string; Retention: number; TDS: number; Debit: number; Hold: number }> = {};
+    
+    filteredBillings.forEach(b => {
+      const m = b.month || 'Unknown';
+      if (!groups[m]) {
+        groups[m] = { month: m, Retention: 0, TDS: 0, Debit: 0, Hold: 0 };
+      }
+      groups[m].Retention += (b.retention ?? 0);
+      groups[m].TDS += (b.tds ?? 0);
+      groups[m].Debit += (b.debitAmount ?? 0);
+      groups[m].Hold += (b.holdAmount ?? 0);
+    });
+
+    return Object.values(groups).sort((a, b) => a.month.localeCompare(b.month));
+  }, [filteredBillings]);
+
+  const [visibleLines, setVisibleLines] = useState({
+    Retention: true,
+    TDS: true,
+    Debit: true,
+    Hold: true
+  });
+
+  const formatMonthLabel = (monthStr: any) => {
+    const str = String(monthStr || '');
+    if (!str || str === 'Unknown') return str;
+    const parts = str.split('-');
+    if (parts.length === 2) {
+      const year = parts[0];
+      const monthNum = parseInt(parts[1], 10);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      if (monthNum >= 1 && monthNum <= 12) {
+        return `${months[monthNum - 1]} ${year}`;
+      }
+    }
+    return str;
+  };
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+  };
+
   return (
     <div className="text-[11px]">
-      <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1 justify-between">
+      {/* Tab Selectors */}
+      <div className="flex flex-wrap border-b border-[#8c9ba8] gap-1 mb-3 print:hidden bg-[#eef2f6]/50 p-1 rounded-t">
+        <button
+          type="button"
+          onClick={() => setActiveTab('records')}
+          className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
+            activeTab === 'records'
+              ? 'bg-white text-[#0056b3] translate-y-[1px] z-10 font-extrabold'
+              : 'bg-transparent text-gray-505 hover:text-black hover:bg-gray-200/50'
+          }`}
+        >
+          📁 Billing Directory
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('retention')}
+          className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
+            activeTab === 'retention'
+              ? 'bg-white text-orange-600 translate-y-[1px] z-10 font-extrabold'
+              : 'bg-transparent text-gray-505 hover:text-black hover:bg-gray-200/50'
+          }`}
+        >
+          🔒 Retention Register
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('tds')}
+          className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
+            activeTab === 'tds'
+              ? 'bg-white text-red-600 translate-y-[1px] z-10 font-extrabold'
+              : 'bg-transparent text-gray-505 hover:text-black hover:bg-gray-200/50'
+          }`}
+        >
+          📝 TDS Register
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('debit')}
+          className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
+            activeTab === 'debit'
+              ? 'bg-white text-purple-600 translate-y-[1px] z-10 font-extrabold'
+              : 'bg-transparent text-gray-505 hover:text-black hover:bg-gray-200/50'
+          }`}
+        >
+          ⚖️ Debit Register
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('hold')}
+          className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
+            activeTab === 'hold'
+              ? 'bg-white text-amber-600 translate-y-[1px] z-10 font-extrabold'
+              : 'bg-transparent text-gray-505 hover:text-black hover:bg-gray-200/50'
+          }`}
+        >
+          📌 Hold Register
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('gst')}
+          className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
+            activeTab === 'gst'
+              ? 'bg-white text-emerald-600 translate-y-[1px] z-10 font-extrabold'
+              : 'bg-transparent text-gray-505 hover:text-black hover:bg-gray-200/50'
+          }`}
+        >
+          🟢 GST Register
+        </button>
+      </div>
+
+      {activeTab === 'records' ? (
+        <>
+          <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1 justify-between">
         <div className="flex items-center space-x-2">
           {!isReadOnly ? (
             <>
@@ -488,9 +989,9 @@ export const Billing: React.FC = () => {
 
           <PDFExportButton
             title="Billing List Report"
-            headers={['Bill No', 'Project', 'Work Nature', 'Month', 'Certify Date', 'Gross', 'TDS (-)', 'Retention (-)', 'GST (+)', 'Debit (-)', 'Net Amount']}
+            headers={['Bill No', 'Project', 'Work Nature', 'Month', 'Certify Date', 'Gross', 'TDS (-)', 'Retention (-)', 'GST (+)', 'Debit (-)', 'Hold (-)', 'Net Amount']}
             data={filteredBillings.map(b => {
-              const netAmount = b.amount - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0) - (b.debitAmount ?? 0);
+              const netAmount = b.amount - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0) - (b.debitAmount ?? 0) - (b.holdAmount ?? 0);
               return [
                 b.billNo,
                 getProjectName(b.projectId),
@@ -502,6 +1003,7 @@ export const Billing: React.FC = () => {
                 `Rs. ${(b.retention ?? 0).toLocaleString('en-IN')}`,
                 `Rs. ${(b.gst ?? 0).toLocaleString('en-IN')}`,
                 `Rs. ${(b.debitAmount ?? 0).toLocaleString('en-IN')}${b.debitReason ? ` (${b.debitReason})` : ''}`,
+                `Rs. ${(b.holdAmount ?? 0).toLocaleString('en-IN')}${b.holdReason ? ` (${b.holdReason})` : ''}`,
                 `Rs. ${netAmount.toLocaleString('en-IN')}`
               ];
             })}
@@ -512,58 +1014,65 @@ export const Billing: React.FC = () => {
               `Rs. ${overallTotals.retention.toLocaleString('en-IN')}`,
               `Rs. ${overallTotals.gst.toLocaleString('en-IN')}`,
               `Rs. ${overallTotals.debit.toLocaleString('en-IN')}`,
+              `Rs. ${overallTotals.hold.toLocaleString('en-IN')}`,
               `Rs. ${overallTotals.net.toLocaleString('en-IN')}`
             ]}
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-4 bg-gray-50 p-2 border border-[#8c9ba8]">
-        <div className="sap-panel p-2 flex flex-col bg-white">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-1.5 mb-4 bg-gray-50 p-2 border border-[#8c9ba8]">
+        <div className="sap-panel p-1.5 flex flex-col bg-white">
           <span className="font-semibold text-gray-600 leading-tight">Current Month Billing</span>
           <span className="text-xs font-bold text-[#0056b3] mt-0.5">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalMonthly)}
           </span>
         </div>
-        <div className="sap-panel p-2 flex flex-col bg-white">
+        <div className="sap-panel p-1.5 flex flex-col bg-white">
           <span className="font-semibold text-gray-600 leading-tight">Current Year Billing</span>
           <span className="text-xs font-bold text-[#0056b3] mt-0.5">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalYearly)}
           </span>
         </div>
-        <div className="sap-panel p-2 flex flex-col bg-white border-l-4 border-l-blue-500">
-          <span className="font-semibold text-blue-900 leading-tight">Total Work Amount</span>
+        <div className="sap-panel p-1.5 flex flex-col bg-white border-l-4 border-l-blue-500">
+          <span className="font-semibold text-blue-900 leading-tight">Total Work Gross</span>
           <span className="text-xs font-bold text-blue-900 mt-0.5">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.gross)}
           </span>
         </div>
-        <div className="sap-panel p-2 flex flex-col bg-red-50/45 border-l-4 border-l-red-500">
+        <div className="sap-panel p-1.5 flex flex-col bg-red-50/45 border-l-4 border-l-red-500">
           <span className="font-semibold text-red-950 leading-tight">Total TDS Deducted</span>
           <span className="text-xs font-bold text-red-600 mt-0.5">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.tds)}
           </span>
         </div>
-        <div className="sap-panel p-2 flex flex-col bg-orange-50/45 border-l-4 border-l-orange-400">
+        <div className="sap-panel p-1.5 flex flex-col bg-orange-50/45 border-l-4 border-l-orange-400">
           <span className="font-semibold text-orange-950 leading-tight">Total Retention</span>
           <span className="text-xs font-bold text-orange-600 mt-0.5">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.retention)}
           </span>
         </div>
-        <div className="sap-panel p-2 flex flex-col bg-green-50/45 border-l-4 border-l-green-500">
+        <div className="sap-panel p-1.5 flex flex-col bg-green-50/45 border-l-4 border-l-green-500">
           <span className="font-semibold text-green-950 leading-tight">Total GST Amount</span>
           <span className="text-xs font-bold text-green-700 mt-0.5">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.gst)}
           </span>
         </div>
-        <div className="sap-panel p-2 flex flex-col bg-purple-50/45 border-l-4 border-l-purple-500">
+        <div className="sap-panel p-1.5 flex flex-col bg-purple-50/45 border-l-4 border-l-purple-500">
           <span className="font-semibold text-purple-950 leading-tight">Total Debit Adjust.</span>
           <span className="text-xs font-bold text-purple-750 mt-0.5">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.debit)}
           </span>
         </div>
-        <div className="sap-panel p-2 flex flex-col bg-green-50/70 border-l-4 border-l-teal-600">
-          <span className="font-semibold text-[#0056b3] leading-tight">Total Net Amount</span>
-          <span className="text-xs font-bold text-[#0056b3] mt-0.5">
+        <div className="sap-panel p-1.5 flex flex-col bg-amber-50/45 border-l-4 border-l-amber-500">
+          <span className="font-semibold text-amber-955 leading-tight">Total Hold Amount</span>
+          <span className="text-xs font-bold text-amber-750 mt-0.5">
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.hold)}
+          </span>
+        </div>
+        <div className="sap-panel p-1.5 flex flex-col bg-green-50/70 border-l-4 border-l-teal-600">
+          <span className="font-semibold text-[#0056b3] leading-tight font-black">Net Receivable</span>
+          <span className="text-xs font-bold text-[#0056b3] mt-0.5 font-sans">
             {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.net)}
           </span>
         </div>
@@ -607,7 +1116,22 @@ export const Billing: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Bill No:</label>
-              <input required type="text" className="sap-input flex-1" value={formData.billNo} onChange={e => setFormData({...formData, billNo: e.target.value})} />
+              {isAutoBillingActive && !editingId ? (
+                <div className="flex flex-1 items-center gap-1.5">
+                  <input
+                    required
+                    readOnly
+                    type="text"
+                    className="sap-input flex-1 bg-indigo-50 border-indigo-200 text-indigo-800 font-mono text-xs font-semibold cursor-not-allowed"
+                    value={formData.billNo || '(Generating...)'}
+                  />
+                  <span className="bg-indigo-500 text-[9px] text-white font-mono px-1.5 py-0.5 rounded font-bold uppercase" title="Automated sequence based on numbering settings rules.">
+                    Auto
+                  </span>
+                </div>
+              ) : (
+                <input required type="text" className="sap-input flex-1" value={formData.billNo} onChange={e => setFormData({...formData, billNo: e.target.value})} />
+              )}
             </div>
             <div className="flex items-center">
               <label className="w-32">Bill Type:</label>
@@ -734,6 +1258,54 @@ export const Billing: React.FC = () => {
                 placeholder="Reason for debit deduction"
                 onChange={e => setFormData({...formData, debitReason: e.target.value})}
               />
+            </div>
+            <div className="flex items-center">
+              <label className="w-32">Hold Amount:</label>
+              <div className="relative flex-1">
+                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
+                <input
+                  type="number"
+                  step="any"
+                  className="sap-input w-full pl-4.5"
+                  value={formData.holdAmount}
+                  placeholder="Hold Amount"
+                  onChange={e => setFormData({...formData, holdAmount: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="flex items-center">
+              <label className="w-32">Hold Reason:</label>
+              <input
+                type="text"
+                className="sap-input flex-1"
+                value={formData.holdReason}
+                placeholder="Reason for hold/penalty"
+                onChange={e => setFormData({...formData, holdReason: e.target.value})}
+              />
+            </div>
+            <div className="flex items-center">
+              <label className="w-32">Retention Status:</label>
+              <select
+                className="sap-input flex-1"
+                value={formData.retentionStatus}
+                onChange={e => setFormData({...formData, retentionStatus: e.target.value})}
+              >
+                <option value="Pending">Pending</option>
+                <option value="Partially Cleared">Partially Cleared</option>
+                <option value="Fully Resolved">Fully Resolved</option>
+              </select>
+            </div>
+            <div className="flex items-center">
+              <label className="w-32">Hold Status:</label>
+              <select
+                className="sap-input flex-1"
+                value={formData.holdStatus}
+                onChange={e => setFormData({...formData, holdStatus: e.target.value})}
+              >
+                <option value="Pending">Pending</option>
+                <option value="Partially Cleared">Partially Cleared</option>
+                <option value="Fully Resolved">Fully Resolved</option>
+              </select>
             </div>
             <div className="flex items-center">
               <label className="w-32">Billing Month:</label>
@@ -937,6 +1509,169 @@ export const Billing: React.FC = () => {
         </div>
       )}
       </AnimatePresence>
+      
+      {/* Historical Deductions Trend Analysis Chart */}
+      {filteredBillings.length > 0 && (
+        <div className="mb-4 bg-white border border-[#8c9ba8] p-3 text-sans shadow-3xs rounded print:hidden">
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-200 pb-2 mb-3 gap-2">
+            <div>
+              <h3 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                📊 EXECUTIVE MONTHLY DEDUCTIONS TREND ANALYSIS
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-normal">
+                Real-time monthly aggregate timeline tracking of critical project-level withholdings and debit adjustments.
+              </p>
+            </div>
+
+            {/* Line Toggles */}
+            <div className="flex items-center space-x-3 text-[10px] bg-slate-50 border border-slate-200 px-2.5 py-1 rounded shadow-3xs">
+              <span className="font-semibold text-slate-500">Toggle Metrics:</span>
+              <label className="flex items-center space-x-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={visibleLines.TDS}
+                  onChange={() => setVisibleLines(prev => ({ ...prev, TDS: !prev.TDS }))}
+                  className="rounded border-gray-300 text-red-600 focus:ring-red-450 w-3.5 h-3.5 cursor-pointer accent-red-650"
+                />
+                <span className="text-red-750 font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-600 block" /> TDS
+                </span>
+              </label>
+              <label className="flex items-center space-x-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={visibleLines.Retention}
+                  onChange={() => setVisibleLines(prev => ({ ...prev, Retention: !prev.Retention }))}
+                  className="rounded border-gray-300 text-orange-600 focus:ring-orange-450 w-3.5 h-3.5 cursor-pointer accent-orange-650"
+                />
+                <span className="text-orange-750 font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-orange-650 block" /> Retention
+                </span>
+              </label>
+              <label className="flex items-center space-x-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={visibleLines.Debit}
+                  onChange={() => setVisibleLines(prev => ({ ...prev, Debit: !prev.Debit }))}
+                  className="rounded border-gray-300 text-purple-650 focus:ring-purple-400 w-3.5 h-3.5 cursor-pointer accent-purple-650"
+                />
+                <span className="text-purple-750 font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-purple-650 block" /> Debit
+                </span>
+              </label>
+              <label className="flex items-center space-x-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={visibleLines.Hold}
+                  onChange={() => setVisibleLines(prev => ({ ...prev, Hold: !prev.Hold }))}
+                  className="rounded border-gray-300 text-amber-650 focus:ring-amber-400 w-3.5 h-3.5 cursor-pointer accent-amber-655"
+                />
+                <span className="text-amber-700 font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-650 block" /> Hold
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {chartData.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 italic font-sans text-xs bg-slate-50 border border-dashed border-slate-200">
+              No historical data points available to plot.
+            </div>
+          ) : (
+            <div className="w-full h-56 select-none bg-slate-50/25 border border-dashed border-slate-200 p-2 rounded">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 10, right: 15, left: 25, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={formatMonthLabel}
+                    stroke="#475569"
+                    tick={{ fontSize: 9, fontFamily: 'sans-serif' }}
+                  />
+                  <YAxis
+                    stroke="#475569"
+                    tickFormatter={(val) => {
+                      if (val >= 10000000) return `₹${(val / 10000000).toFixed(1)}Cr`;
+                      if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+                      if (val >= 1000) return `₹${(val / 1000).toFixed(0)}K`;
+                      return `₹${val}`;
+                    }}
+                    tick={{ fontSize: 9, fontFamily: 'sans-serif' }}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white/95 backdrop-blur-xs border border-slate-300 shadow-md p-2 rounded text-[10px] font-sans">
+                            <p className="font-extrabold text-slate-800 mb-1 border-b border-slate-200 pb-0.5">
+                              📅 {formatMonthLabel(String(label))}
+                            </p>
+                            <div className="space-y-1 font-mono">
+                              {payload.map((item: any) => (
+                                <p key={item.name} style={{ color: item.color }} className="flex justify-between gap-4 font-semibold">
+                                  <span>{item.name}:</span>
+                                  <span>{formatCurrency(item.value)}</span>
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend content={() => null} />
+                  {visibleLines.TDS && (
+                    <Line
+                      type="monotone"
+                      dataKey="TDS"
+                      stroke="#ef4444"
+                      activeDot={{ r: 6 }}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 1 }}
+                      name="TDS"
+                    />
+                  )}
+                  {visibleLines.Retention && (
+                    <Line
+                      type="monotone"
+                      dataKey="Retention"
+                      stroke="#f97316"
+                      activeDot={{ r: 6 }}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 1 }}
+                      name="Retention"
+                    />
+                  )}
+                  {visibleLines.Debit && (
+                    <Line
+                      type="monotone"
+                      dataKey="Debit"
+                      stroke="#9333ea"
+                      activeDot={{ r: 6 }}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 1 }}
+                      name="Debit"
+                    />
+                  )}
+                  {visibleLines.Hold && (
+                    <Line
+                      type="monotone"
+                      dataKey="Hold"
+                      stroke="#d97706"
+                      activeDot={{ r: 6 }}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 1 }}
+                      name="Hold"
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
 
       <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
         <thead className="sap-header">
@@ -952,6 +1687,7 @@ export const Billing: React.FC = () => {
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Retention (-)</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">GST (+)</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-purple-900 bg-purple-50/45">Debit (-)</th>
+            <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-amber-900 bg-amber-50/45">Hold (-)</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-right font-semibold bg-green-50">Net Amount</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Hard Copy</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-20">Actions</th>
@@ -960,7 +1696,7 @@ export const Billing: React.FC = () => {
         <tbody>
           {filteredBillings.length === 0 ? (
             <tr>
-              <td colSpan={14} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">
+              <td colSpan={15} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">
                 No billing records found.
               </td>
             </tr>
@@ -970,7 +1706,8 @@ export const Billing: React.FC = () => {
               const retVal = bill.retention ?? 0;
               const gstVal = bill.gst ?? 0;
               const debitVal = bill.debitAmount ?? 0;
-              const netAmount = bill.amount - tdsVal - retVal + gstVal - debitVal;
+              const holdVal = bill.holdAmount ?? 0;
+              const netAmount = bill.amount - tdsVal - retVal + gstVal - debitVal - holdVal;
 
               return (
               <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={bill.id} className="hover:bg-[#e6f2ff] cursor-default">
@@ -989,19 +1726,19 @@ export const Billing: React.FC = () => {
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.workNature}</td>
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.month}</td>
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.certifyDate}</td>
-                <td className="border border-[#8c9ba8] px-2 py-1 text-right">
+                <td className="border border-[#8c9ba8] px-2 py-1 text-right font-sans">
                   {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(bill.amount)}
                 </td>
-                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600">
+                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600 font-sans">
                   {tdsVal > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(tdsVal) : '—'}
                 </td>
-                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-orange-600">
+                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-orange-600 font-sans">
                   {retVal > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(retVal) : '—'}
                 </td>
-                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700">
+                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700 font-sans">
                   {gstVal > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(gstVal) : '—'}
                 </td>
-                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-purple-700 bg-purple-50/15">
+                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-purple-700 bg-purple-50/15 font-sans">
                   {debitVal > 0 ? (
                     <div>
                       <span className="font-semibold">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(debitVal)}</span>
@@ -1013,7 +1750,19 @@ export const Billing: React.FC = () => {
                     </div>
                   ) : '—'}
                 </td>
-                <td className="border border-[#8c9ba8] px-2 py-1 text-right font-semibold bg-green-50/50 text-[#0056b3]">
+                <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-700 bg-amber-50/15 font-sans">
+                  {holdVal > 0 ? (
+                    <div>
+                      <span className="font-semibold">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(holdVal)}</span>
+                      {bill.holdReason && (
+                        <span className="block text-[9px] text-amber-900 italic leading-tight truncate max-w-[150px] mx-auto" title={bill.holdReason}>
+                          {bill.holdReason}
+                        </span>
+                      )}
+                    </div>
+                  ) : '—'}
+                </td>
+                <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold bg-green-50/50 text-[#0056b3] font-sans">
                   {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(netAmount)}
                 </td>
                 <td className="border border-[#8c9ba8] px-2 py-1 text-center font-medium">
@@ -1056,7 +1805,832 @@ export const Billing: React.FC = () => {
             })
           )}
         </tbody>
+        <tfoot>
+          <tr className="sticky bottom-0 bg-[#eef2f6] border-t-2 border-[#8c9ba8] font-bold text-gray-900 shadow-[0_-3px_6px_rgba(0,0,0,0.06)] select-none">
+            <td colSpan={6} className="border border-[#8c9ba8] px-2 py-2 text-right font-bold uppercase text-[10px] text-slate-600 bg-[#eef2f6]">
+              Total Displayed Sum:
+            </td>
+            <td className="border border-[#8c9ba8] px-2 py-2 text-right text-slate-800 font-extrabold font-sans bg-[#eef2f6]">
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.gross)}
+            </td>
+            <td className="border border-[#8c9ba8] px-2 py-2 text-right text-red-700 font-extrabold font-sans bg-[#eef2f6]">
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.tds)}
+            </td>
+            <td className="border border-[#8c9ba8] px-2 py-2 text-right text-orange-600 font-extrabold font-sans bg-[#eef2f6]">
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.retention)}
+            </td>
+            <td className="border border-[#8c9ba8] px-2 py-2 text-right text-green-700 font-extrabold font-sans bg-[#eef2f6]">
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.gst)}
+            </td>
+            <td className="border border-[#8c9ba8] px-2 py-2 text-right text-purple-750 font-extrabold font-sans bg-[#eef2f6] bg-purple-50/15">
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.debit)}
+            </td>
+            <td className="border border-[#8c9ba8] px-2 py-2 text-right text-amber-700 font-extrabold font-sans bg-[#eef2f6] bg-amber-50/15">
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.hold)}
+            </td>
+            <td className="border border-[#8c9ba8] px-2 py-2 text-right text-[#0056b3] font-black font-sans bg-green-50/50">
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.net)}
+            </td>
+            <td colSpan={2} className="border border-[#8c9ba8] px-2 py-2 bg-[#eef2f6]"></td>
+          </tr>
+        </tfoot>
       </table>
+        </>
+      ) : activeTab === 'retention' ? (
+        <div className="space-y-4 print:space-y-0">
+          {/* Site-wise Retention Header / Project Selector */}
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
+              <select
+                className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
+                value={summaryProjectId}
+                onChange={e => setSummaryProjectId(e.target.value)}
+              >
+                <option value="all">🌐 All Projects (Consolidated)</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    🏗️ {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <PDFExportButton
+              title="Retention Money Register Report"
+              headers={['Sr No', 'Project', 'Bill No', 'Certify Date', 'Retention Deducted']}
+              data={retentionBills.map(b => [
+                b.srNo.toString(),
+                getProjectName(b.projectId),
+                b.billNo,
+                b.certifyDate,
+                `Rs. ${b.retentionAmount.toLocaleString('en-IN')}`
+              ])}
+              totals={[
+                '', '', 'Totals:', '', `Rs. ${cumulativeRetention.toLocaleString('en-IN')}`
+              ]}
+            />
+          </div>
+
+          {/* Retention Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-blue-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Cumulative Retention Deducted</span>
+              <span className="text-sm font-black text-[#0056b3] mt-1">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(cumulativeRetention)}
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">{retentionBills.length} deductions</span>
+            </div>
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-emerald-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Amount Released & Paid</span>
+              <span className="text-sm font-black text-emerald-600 mt-1">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(retentionAmountPaid)}
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">from release payments</span>
+            </div>
+            <div className="sap-panel p-2.5 flex flex-col bg-amber-50/70 border-l-4 border-l-amber-500 shadow-xs">
+              <span className="font-bold text-amber-950 text-[10px] uppercase tracking-wider leading-tight">Net Outstanding Balance</span>
+              <span className="text-sm font-black text-amber-700 mt-1">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(retentionBalance)}
+              </span>
+              <span className="text-[9px] text-amber-900/60 font-mono mt-0.5">receivable from clients</span>
+            </div>
+          </div>
+
+          {/* Retention Table */}
+          <div className="bg-white border border-[#8c9ba8] rounded overflow-hidden shadow-xs">
+            <div className="bg-[#e6f2ff] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
+              <span className="font-bold text-[#002f6c] text-[11px] uppercase tracking-wider flex items-center">
+                🔒 Retention Money Register List
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-[#8c9ba8] text-[9px] uppercase font-bold text-slate-700">
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-center w-12 font-semibold">Sr No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold">Project / Site Name</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Bill No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Certify Date</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-right font-semibold pr-4 w-44">Retention Deducted Amount</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-center w-36 font-semibold">Status</th>
+                    <th className="p-1.5 px-3 text-center font-semibold w-24">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-mono text-[10px]">
+                  {retentionBills.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400 italic font-sans text-xs">
+                        No retention deductions recorded for the selected search filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    retentionBills.map(b => {
+                      const isExpanded = expandedBillId === `${b.projectId}_${b.billNo}`;
+                      const rectStatus = getRetentionStatus(b.id, b.retentionAmount, b.savedStatus);
+                      return (
+                        <React.Fragment key={`${b.projectId}_${b.billNo}`}>
+                          <tr 
+                            className={`hover:bg-blue-50/70 hover:text-blue-900 cursor-pointer transition-all duration-150 group ${isExpanded ? 'bg-blue-50/80 font-semibold' : ''}`}
+                            title="Click to toggle details for this bill"
+                            onClick={() => toggleRowExpand(b.projectId, b.billNo)}
+                          >
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans">
+                              <span className="inline-flex items-center gap-1">
+                                <span className={`text-[8px] transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                {b.srNo}
+                              </span>
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-800 font-medium">{getProjectName(b.projectId)}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans font-semibold text-[#0056b3] group-hover:underline">{b.billNo}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans text-slate-600">{b.certifyDate}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-right text-orange-600 font-extrabold pr-4">
+                              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(b.retentionAmount)}
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans">
+                              {rectStatus === 'Fully Resolved' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-3xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  Fully Resolved
+                                </span>
+                              ) : rectStatus === 'Partially Cleared' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-3xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  Partially Cleared
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-3xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                  Pending
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-1.5 px-3 text-center">
+                              <span className={`text-[10px] font-sans font-bold inline-flex items-center gap-1 border rounded px-1.5 py-0.5 shadow-3xs transition-colors ${
+                                isExpanded 
+                                  ? 'bg-[#0056b3] text-white border-[#0056b3]' 
+                                  : 'text-[#0056b3] bg-blue-50 border-blue-200 hover:bg-blue-100 hover:text-blue-800'
+                              }`}>
+                                {isExpanded ? 'Collapse' : '🔍 Drill Down'}
+                              </span>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} className="p-0 border-b border-slate-200">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className="overflow-hidden bg-[#f8fafc]"
+                                >
+                                  {renderDrillDownDetails(b.projectId, b.billNo)}
+                                </motion.div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                  {retentionBills.length > 0 && (
+                    <tr className="bg-slate-50/85 border-t border-slate-300 font-bold text-gray-900">
+                      <td colSpan={4} className="p-2 px-3 text-right font-sans uppercase font-extrabold text-[9px] text-slate-500">Cumulative Register Total:</td>
+                      <td className="p-2 px-3 text-right font-mono text-orange-700 font-black pr-4 text-xs border-r border-slate-200">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(cumulativeRetention)}
+                      </td>
+                      <td className="border-r border-slate-200"></td>
+                      <td></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'tds' ? (
+        <div className="space-y-4 print:space-y-0">
+          {/* Site-wise TDS Header / Project Selector */}
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
+              <select
+                className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
+                value={summaryProjectId}
+                onChange={e => setSummaryProjectId(e.target.value)}
+              >
+                <option value="all">🌐 All Projects (Consolidated)</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    🏗️ {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <PDFExportButton
+              title="TDS Deduction Register Report"
+              headers={['Sr No', 'Project', 'Bill No', 'Certify Date', 'TDS Amount']}
+              data={tdsBills.map(b => [
+                b.srNo.toString(),
+                getProjectName(b.projectId),
+                b.billNo,
+                b.certifyDate,
+                `Rs. ${b.amount.toLocaleString('en-IN')}`
+              ])}
+              totals={[
+                '', '', 'Totals:', '', `Rs. ${cumulativeTds.toLocaleString('en-IN')}`
+              ]}
+            />
+          </div>
+
+          {/* TDS Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-red-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Cumulative TDS Amount</span>
+              <span className="text-sm font-black text-red-650 mt-1">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(cumulativeTds)}
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">deducted total amount</span>
+            </div>
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-rose-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Total Bill Deductions</span>
+              <span className="text-sm font-black text-rose-800 mt-1">
+                {tdsBills.length} Bills
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">recorded entries with TDS</span>
+            </div>
+          </div>
+
+          {/* TDS Table */}
+          <div className="bg-white border border-[#8c9ba8] rounded overflow-hidden shadow-xs">
+            <div className="bg-[#fcf3f3] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
+              <span className="font-bold text-[#9c1b1b] text-[11px] uppercase tracking-wider flex items-center">
+                📝 TDS Register List
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-[#8c9ba8] text-[9px] uppercase font-bold text-slate-700">
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-center w-12 font-semibold">SR No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold">Project / Site Name</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Bill No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Certify Date</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-right font-semibold pr-4 w-44">TDS Amount</th>
+                    <th className="p-1.5 px-3 text-center font-semibold w-24">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-mono text-[10px]">
+                  {tdsBills.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 italic font-sans text-xs">
+                        No TDS deductions recorded for the selected search filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    tdsBills.map(b => {
+                      const isExpanded = expandedBillId === `${b.projectId}_${b.billNo}`;
+                      return (
+                        <React.Fragment key={`${b.projectId}_${b.billNo}`}>
+                          <tr 
+                            className={`hover:bg-red-50/20 hover:text-red-955 cursor-pointer transition-all duration-150 group ${isExpanded ? 'bg-red-50/10 font-semibold' : ''}`}
+                            title="Click to toggle details for this bill"
+                            onClick={() => toggleRowExpand(b.projectId, b.billNo)}
+                          >
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans">
+                              <span className="inline-flex items-center gap-1">
+                                <span className={`text-[8px] transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                {b.srNo}
+                              </span>
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-800 font-medium">{getProjectName(b.projectId)}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans font-semibold text-[#0056b3] group-hover:underline">{b.billNo}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans text-slate-600">{b.certifyDate}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-right text-red-650 font-extrabold pr-4">
+                              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(b.amount)}
+                            </td>
+                            <td className="p-1.5 px-3 text-center">
+                              <span className={`text-[10px] font-sans font-bold inline-flex items-center gap-1 border rounded px-1.5 py-0.5 shadow-3xs transition-colors ${
+                                isExpanded 
+                                  ? 'bg-red-700 text-white border-red-700' 
+                                  : 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100 hover:text-red-950'
+                              }`}>
+                                {isExpanded ? 'Collapse' : '🔍 Drill Down'}
+                              </span>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={6} className="p-0 border-b border-slate-200">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className="overflow-hidden bg-[#f8fafc]"
+                                >
+                                  {renderDrillDownDetails(b.projectId, b.billNo)}
+                                </motion.div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                  {tdsBills.length > 0 && (
+                    <tr className="bg-slate-50/85 border-t border-slate-300 font-bold text-gray-900">
+                      <td colSpan={4} className="p-2 px-3 text-right font-sans uppercase font-extrabold text-[9px] text-slate-500">Cumulative TDS Total:</td>
+                      <td className="p-2 px-3 text-right font-mono text-red-705 font-black pr-4 text-xs border-r border-slate-200">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(cumulativeTds)}
+                      </td>
+                      <td></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'debit' ? (
+        <div className="space-y-4 print:space-y-0">
+          {/* Site-wise Debit Header / Project Selector */}
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
+              <select
+                className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
+                value={summaryProjectId}
+                onChange={e => setSummaryProjectId(e.target.value)}
+              >
+                <option value="all">🌐 All Projects (Consolidated)</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    🏗️ {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <PDFExportButton
+              title="Debit Deduction Register Report"
+              headers={['Sr No', 'Project', 'Bill No', 'Certify Date', 'Debit Amount', 'Deduction Reason / Remarks']}
+              data={debitBills.map(b => [
+                b.srNo.toString(),
+                getProjectName(b.projectId),
+                b.billNo,
+                b.certifyDate,
+                `Rs. ${b.amount.toLocaleString('en-IN')}`,
+                b.remarks
+              ])}
+              totals={[
+                '', '', 'Totals:', '', `Rs. ${totalDebit.toLocaleString('en-IN')}`, ''
+              ]}
+            />
+          </div>
+
+          {/* Debit Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-purple-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Total Debit Adjustments</span>
+              <span className="text-sm font-black text-purple-700 mt-1">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalDebit)}
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">recovered debit amounts</span>
+            </div>
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-indigo-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Debit Transaction Count</span>
+              <span className="text-sm font-black text-indigo-800 mt-1">
+                {debitBills.length} Items
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">debit deductions noted</span>
+            </div>
+          </div>
+
+          {/* Debit Table */}
+          <div className="bg-white border border-[#8c9ba8] rounded overflow-hidden shadow-xs">
+            <div className="bg-[#f7edf9] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
+              <span className="font-bold text-[#6c287a] text-[11px] uppercase tracking-wider flex items-center">
+                ⚖️ Debit Deduction Register List
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-[#8c9ba8] text-[9px] uppercase font-bold text-slate-700">
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-center w-12 font-semibold">SR</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold">Project / Site Name</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Bill No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Certify Date</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-right pr-4 w-40">Debit Amt</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-left">Deduction Reason / Special Remarks</th>
+                    <th className="p-1.5 px-3 text-center font-semibold w-24">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-mono text-[10px]">
+                  {debitBills.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400 italic font-sans text-xs">
+                        No debit adjustments recorded for the selected search filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    debitBills.map(b => {
+                      const isExpanded = expandedBillId === `${b.projectId}_${b.billNo}`;
+                      return (
+                        <React.Fragment key={`${b.projectId}_${b.billNo}`}>
+                          <tr 
+                            className={`hover:bg-purple-50/40 hover:text-purple-950 cursor-pointer transition-all duration-150 group ${isExpanded ? 'bg-purple-50/20 font-semibold' : ''}`}
+                            title="Click to toggle details for this bill"
+                            onClick={() => toggleRowExpand(b.projectId, b.billNo)}
+                          >
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans">
+                              <span className="inline-flex items-center gap-1">
+                                <span className={`text-[8px] transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                {b.srNo}
+                              </span>
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-800 font-medium">{getProjectName(b.projectId)}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans font-semibold text-[#0056b3] group-hover:underline">{b.billNo}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans text-slate-650">{b.certifyDate}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-right text-purple-700 font-bold pr-4">
+                              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(b.amount)}
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-700 font-medium text-left break-words">{b.remarks}</td>
+                            <td className="p-1.5 px-3 text-center font-sans">
+                              <span className={`text-[10px] font-bold inline-flex items-center gap-1 border rounded px-1.5 py-0.5 shadow-3xs transition-colors ${
+                                isExpanded 
+                                  ? 'bg-purple-700 text-white border-purple-705' 
+                                  : 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100 hover:text-purple-950'
+                              }`}>
+                                {isExpanded ? 'Collapse' : '🔍 Drill Down'}
+                              </span>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} className="p-0 border-b border-purple-100">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className="overflow-hidden bg-[#f8fafc]"
+                                >
+                                  {renderDrillDownDetails(b.projectId, b.billNo)}
+                                </motion.div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                  {debitBills.length > 0 && (
+                    <tr className="bg-slate-50/85 border-t border-slate-300 font-bold text-gray-900">
+                      <td colSpan={4} className="p-2 px-3 text-right font-sans uppercase font-extrabold text-[9px] text-slate-500">Overall Debit Total:</td>
+                      <td className="p-2 px-3 text-right font-mono text-purple-700 font-black pr-4 text-xs border-r border-slate-200">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalDebit)}
+                      </td>
+                      <td className="border-r border-slate-200"></td>
+                      <td></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'hold' ? (
+        <div className="space-y-4 print:space-y-0">
+          {/* Site-wise Hold Header / Project Selector */}
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
+              <select
+                className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
+                value={summaryProjectId}
+                onChange={e => setSummaryProjectId(e.target.value)}
+              >
+                <option value="all">🌐 All Projects (Consolidated)</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    🏗️ {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <PDFExportButton
+              title="Hold Deduction Register Report"
+              headers={['Sr No', 'Project', 'Bill No', 'Certify Date', 'Hold Amount', 'Hold Reason / Remarks']}
+              data={holdBills.map(b => [
+                b.srNo.toString(),
+                getProjectName(b.projectId),
+                b.billNo,
+                b.certifyDate,
+                `Rs. ${b.amount.toLocaleString('en-IN')}`,
+                b.remarks
+              ])}
+              totals={[
+                '', '', 'Totals:', '', `Rs. ${totalHold.toLocaleString('en-IN')}`, ''
+              ]}
+            />
+          </div>
+
+          {/* Hold Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-amber-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Total Hold Deductions</span>
+              <span className="text-sm font-black text-amber-750 mt-1">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalHold)}
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">held amount total</span>
+            </div>
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-orange-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Held Items Count</span>
+              <span className="text-sm font-black text-orange-800 mt-1">
+                {holdBills.length} Items
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">active hold entries</span>
+            </div>
+          </div>
+
+          {/* Hold Table */}
+          <div className="bg-white border border-[#8c9ba8] rounded overflow-hidden shadow-xs">
+            <div className="bg-[#fef9eb] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
+              <span className="font-bold text-[#855e10] text-[11px] uppercase tracking-wider flex items-center">
+                📌 Hold Deduction Register List
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-[#8c9ba8] text-[9px] uppercase font-bold text-slate-700">
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-center w-12 font-semibold">SR</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold">Project / Site Name</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Bill No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Certify Date</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-right pr-4 w-40">Hold Amt</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-left">Hold Reason / Remarks</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-center w-36 font-semibold">Status</th>
+                    <th className="p-1.5 px-3 text-center font-semibold w-24">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-mono text-[10px]">
+                  {holdBills.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400 italic font-sans text-xs">
+                        No hold deductions recorded for the selected search filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    holdBills.map(b => {
+                      const isExpanded = expandedBillId === `${b.projectId}_${b.billNo}`;
+                      const hldStatus = getHoldStatus(b.id, b.amount, b.savedStatus);
+                      return (
+                        <React.Fragment key={`${b.projectId}_${b.billNo}`}>
+                          <tr 
+                            className={`hover:bg-amber-50/40 hover:text-amber-955 cursor-pointer transition-all duration-150 group ${isExpanded ? 'bg-amber-50/20 font-semibold' : ''}`}
+                            title="Click to toggle details for this bill"
+                            onClick={() => toggleRowExpand(b.projectId, b.billNo)}
+                          >
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans">
+                              <span className="inline-flex items-center gap-1">
+                                <span className={`text-[8px] transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                {b.srNo}
+                              </span>
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-800 font-medium">{getProjectName(b.projectId)}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans font-semibold text-[#0056b3] group-hover:underline">{b.billNo}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans text-slate-650">{b.certifyDate}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-right text-amber-700 font-bold pr-4">
+                              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(b.amount)}
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-700 font-medium text-left break-words">{b.remarks}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans">
+                              {hldStatus === 'Fully Resolved' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-3xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  Fully Resolved
+                                </span>
+                              ) : hldStatus === 'Partially Cleared' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-3xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  Partially Cleared
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-3xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                  Pending
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-1.5 px-3 text-center font-sans">
+                              <span className={`text-[10px] font-bold inline-flex items-center gap-1 border rounded px-1.5 py-0.5 shadow-3xs transition-colors ${
+                                isExpanded 
+                                  ? 'bg-amber-700 text-white border-amber-705' 
+                                  : 'text-amber-800 bg-amber-50 border-amber-250 hover:bg-amber-100 hover:text-amber-950'
+                              }`}>
+                                {isExpanded ? 'Collapse' : '🔍 Drill Down'}
+                              </span>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={8} className="p-0 border-b border-amber-100">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className="overflow-hidden bg-[#f8fafc]"
+                                >
+                                  {renderDrillDownDetails(b.projectId, b.billNo)}
+                                </motion.div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                  {holdBills.length > 0 && (
+                    <tr className="bg-slate-50/85 border-t border-slate-300 font-bold text-gray-900">
+                      <td colSpan={4} className="p-2 px-3 text-right font-sans uppercase font-extrabold text-[9px] text-slate-500">Overall Holds Total:</td>
+                      <td className="p-2 px-3 text-right font-mono text-amber-700 font-black pr-4 text-xs border-r border-[#8c9ba8]">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalHold)}
+                      </td>
+                      <td className="border-r border-slate-200"></td>
+                      <td className="border-r border-slate-200"></td>
+                      <td></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'gst' ? (
+        <div className="space-y-4 print:space-y-0">
+          {/* Site-wise GST Header / Project Selector */}
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
+              <select
+                className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
+                value={summaryProjectId}
+                onChange={e => setSummaryProjectId(e.target.value)}
+              >
+                <option value="all">🌐 All Projects (Consolidated)</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    🏗️ {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <PDFExportButton
+              title="GST Deduction Register Report"
+              headers={['Sr No', 'Project', 'Bill No', 'Certify Date', 'GST Amount', 'GST Status']}
+              data={gstBills.map(b => [
+                b.srNo.toString(),
+                getProjectName(b.projectId),
+                b.billNo,
+                b.certifyDate,
+                `Rs. ${b.amount.toLocaleString('en-IN')}`,
+                b.gstStatus
+              ])}
+              totals={[
+                '', '', 'Totals:', '', `Rs. ${totalGst.toLocaleString('en-IN')}`, ''
+              ]}
+            />
+          </div>
+
+          {/* GST Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-emerald-500 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Total GST Amount</span>
+              <span className="text-sm font-black text-emerald-750 mt-1">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalGst)}
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">cumulative GST collected</span>
+            </div>
+            <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-teal-600 shadow-xs">
+              <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">GST Bills Count</span>
+              <span className="text-sm font-black text-teal-800 mt-1">
+                {gstBills.length} Items
+              </span>
+              <span className="text-[9px] text-gray-400 font-mono mt-0.5">recorded entries with GST</span>
+            </div>
+          </div>
+
+          {/* GST Table */}
+          <div className="bg-white border border-[#8c9ba8] rounded overflow-hidden shadow-xs">
+            <div className="bg-[#eafaf1] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
+              <span className="font-bold text-[#0f5132] text-[11px] uppercase tracking-wider flex items-center">
+                🟢 GST Register List
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-[#8c9ba8] text-[9px] uppercase font-bold text-slate-700">
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] text-center w-12 font-semibold">SR No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold">Project / Site Name</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Bill No</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-center w-28">Certify Date</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-right pr-4 w-40">GST Amt</th>
+                    <th className="p-1.5 px-3 border-r border-[#8c9ba8] font-semibold text-left">GST Status / Remarks</th>
+                    <th className="p-1.5 px-3 text-center font-semibold w-24">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-mono text-[10px]">
+                  {gstBills.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400 italic font-sans text-xs">
+                        No GST recorded for the selected search filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    gstBills.map(b => {
+                      const isExpanded = expandedBillId === `${b.projectId}_${b.billNo}`;
+                      return (
+                        <React.Fragment key={`${b.projectId}_${b.billNo}`}>
+                          <tr 
+                            className={`hover:bg-emerald-50/45 hover:text-emerald-950 cursor-pointer transition-all duration-150 group ${isExpanded ? 'bg-emerald-50/20 font-semibold' : ''}`}
+                            title="Click to toggle details for this bill"
+                            onClick={() => toggleRowExpand(b.projectId, b.billNo)}
+                          >
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans">
+                              <span className="inline-flex items-center gap-1">
+                                <span className={`text-[8px] transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                {b.srNo}
+                              </span>
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-800 font-medium">{getProjectName(b.projectId)}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans font-semibold text-[#0056b3] group-hover:underline">{b.billNo}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-center font-sans text-slate-600">{b.certifyDate}</td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 text-right text-emerald-700 font-bold pr-4">
+                              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(b.amount)}
+                            </td>
+                            <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-700 font-medium text-left">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                b.gstStatus === 'Deposited' || b.gstStatus === 'Paid'
+                                  ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200'
+                                  : 'bg-amber-100/80 text-amber-800 border border-amber-200'
+                              }`}>
+                                {b.gstStatus}
+                              </span>
+                            </td>
+                            <td className="p-1.5 px-3 text-center font-sans">
+                              <span className={`text-[10px] font-bold inline-flex items-center gap-1 border rounded px-1.5 py-0.5 shadow-3xs transition-colors ${
+                                isExpanded 
+                                  ? 'bg-emerald-700 text-white border-emerald-700' 
+                                  : 'text-emerald-700 bg-emerald-50 border-emerald-250 hover:bg-emerald-100 hover:text-emerald-950'
+                              }`}>
+                                {isExpanded ? 'Collapse' : '🔍 Drill Down'}
+                              </span>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} className="p-0 border-b border-emerald-100">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className="overflow-hidden bg-[#f8fafc]"
+                                >
+                                  {renderDrillDownDetails(b.projectId, b.billNo)}
+                                </motion.div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                  {gstBills.length > 0 && (
+                    <tr className="bg-slate-50/85 border-t border-slate-300 font-bold text-gray-900">
+                      <td colSpan={4} className="p-2 px-3 text-right font-sans uppercase font-extrabold text-[9px] text-slate-500">Overall GST Total:</td>
+                      <td className="p-2 px-3 text-right font-mono text-emerald-700 font-black pr-4 text-xs border-r border-slate-200">
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalGst)}
+                      </td>
+                      <td className="border-r border-slate-200"></td>
+                      <td></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmModal
         isOpen={!!deleteId}
@@ -1196,11 +2770,19 @@ export const Billing: React.FC = () => {
                         </span>
                       </div>
                     ) : null}
+                    {printingBill.holdAmount ? (
+                      <div className="col-span-2 flex justify-between py-0.5 border-b border-gray-200/50">
+                        <span className="text-amber-800">Hold Amount Deduction ({printingBill.holdReason || 'No Reason Specified'}) (-):</span>
+                        <span className="font-mono text-amber-700 font-medium">
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(printingBill.holdAmount)}
+                        </span>
+                      </div>
+                    ) : null}
                     <div className="col-span-2 flex justify-between py-1 bg-green-50/70 border-t border-green-300 font-bold px-1.5 mt-1 rounded-sm text-green-950">
                       <span>Total Net Receivable Amount:</span>
                       <span className="font-mono text-green-800">
                         {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
-                          printingBill.amount - (printingBill.tds || 0) - (printingBill.retention || 0) + (printingBill.gst || 0) - (printingBill.debitAmount || 0)
+                          printingBill.amount - (printingBill.tds || 0) - (printingBill.retention || 0) + (printingBill.gst || 0) - (printingBill.debitAmount || 0) - (printingBill.holdAmount || 0)
                         )}
                       </span>
                     </div>

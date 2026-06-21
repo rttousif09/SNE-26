@@ -30,6 +30,20 @@ const DB_FILE = process.env.DATABASE_FILE || "database.sqlite";
 const db = new Database(DB_FILE);
 db.pragma("foreign_keys = ON");
 
+// Log activity helper
+function logActivity(username: string | undefined, actionType: string, module: string, recordId: string, details: string) {
+  try {
+    const id = "act_" + Math.random().toString(36).substring(2, 11);
+    const timestamp = new Date().toISOString();
+    db.prepare(`
+      INSERT INTO activity_logs (id, timestamp, username, actionType, module, recordId, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, timestamp, username || "Admin", actionType, module, recordId, details);
+  } catch (err) {
+    console.error("Failed to log activity:", err);
+  }
+}
+
 // Initialize Schema
 function initDbSchema() {
   db.exec(`
@@ -76,6 +90,8 @@ function initDbSchema() {
       hardCopyFile TEXT,
       hardCopyFileName TEXT,
       hardCopyFileType TEXT,
+      holdAmount REAL DEFAULT 0,
+      holdReason TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -543,6 +559,8 @@ function initDbSchema() {
   try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN status TEXT DEFAULT 'Draft'"); } catch (e) {}
   try { db.exec("ALTER TABLE expenses_ledger ADD COLUMN approvalNotes TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE labour_plannings ADD COLUMN shift TEXT DEFAULT 'Day'"); } catch (e) {}
+  try { db.exec("ALTER TABLE billings ADD COLUMN holdAmount REAL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE billings ADD COLUMN holdReason TEXT"); } catch (e) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS advance_sheet_approvals (
@@ -645,6 +663,16 @@ function initDbSchema() {
       workers TEXT, -- JSON array of worker entries
       remarks TEXT,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS activity_logs (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      username TEXT NOT NULL,
+      actionType TEXT NOT NULL,
+      module TEXT NOT NULL,
+      recordId TEXT NOT NULL,
+      details TEXT NOT NULL
     );
   `);
 
@@ -770,6 +798,193 @@ function initDbSchema() {
   try { db.exec("ALTER TABLE billings ADD COLUMN tdsCertificateReceived INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE billings ADD COLUMN tdsCertificatePending INTEGER DEFAULT 1"); } catch(e) {}
   try { db.exec("ALTER TABLE billings ADD COLUMN gstStatus TEXT"); } catch(e) {}
+
+  // Create numbering tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS numbering_settings (
+      moduleKey TEXT PRIMARY KEY,
+      moduleName TEXT NOT NULL,
+      prefix TEXT NOT NULL,
+      suffix TEXT,
+      fyFormat TEXT NOT NULL,
+      startingNumber INTEGER NOT NULL DEFAULT 1,
+      numLength INTEGER NOT NULL DEFAULT 5,
+      separator TEXT NOT NULL DEFAULT '/',
+      seriesType TEXT NOT NULL DEFAULT 'global',
+      status TEXT NOT NULL DEFAULT 'Active'
+    );
+
+    CREATE TABLE IF NOT EXISTS numbering_sequences (
+      moduleKey TEXT NOT NULL,
+      seriesValue TEXT NOT NULL,
+      currentNumber INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (moduleKey, seriesValue)
+    );
+
+    CREATE TABLE IF NOT EXISTS numbering_audit_logs (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      moduleKey TEXT NOT NULL,
+      moduleName TEXT NOT NULL,
+      prevPrefix TEXT NOT NULL,
+      newPrefix TEXT NOT NULL,
+      prevRunningNo INTEGER NOT NULL,
+      newRunningNo INTEGER NOT NULL,
+      username TEXT NOT NULL,
+      details TEXT NOT NULL
+    );
+  `);
+
+  // Seed numbering settings if empty
+  const countNum = db.prepare("SELECT COUNT(*) as count FROM numbering_settings").get() as { count: number };
+  if (countNum.count === 0) {
+    console.log("Seeding initial numbering_settings...");
+    const stmt = db.prepare(`
+      INSERT INTO numbering_settings (moduleKey, moduleName, prefix, suffix, fyFormat, startingNumber, numLength, separator, seriesType, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const defaultSettings = [
+      { key: "project-master", name: "Project Master", prefix: "PROJ", suffix: "", fyFormat: "FY25-26", startingNumber: 1, length: 3, separator: "/", type: "global", status: "Active" },
+      { key: "worker-master", name: "Worker Master", prefix: "WRK", suffix: "", fyFormat: "None", startingNumber: 1, length: 6, separator: "/", type: "global", status: "Active" },
+      { key: "staff-master", name: "Staff Master", prefix: "STF", suffix: "", fyFormat: "None", startingNumber: 1, length: 4, separator: "/", type: "global", status: "Active" },
+      { key: "attendance", name: "Attendance", prefix: "ATT", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "worker-advance", name: "Worker Advance", prefix: "ADV", suffix: "", fyFormat: "25-26", startingNumber: 1, length: 4, separator: "/", type: "global", status: "Active" },
+      { key: "worker-payment", name: "Worker Payment", prefix: "PAY", suffix: "", fyFormat: "2025-26", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "weekly-kharchi", name: "Weekly Kharchi", prefix: "KHA", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "expense-voucher", name: "Expense Voucher", prefix: "EXP", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "material-issue", name: "Material Issue", prefix: "MIS", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "material-receipt", name: "Material Receipt", prefix: "MRX", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "material-return", name: "Material Return", prefix: "MRT", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "purchase-entry", name: "Purchase Entry", prefix: "PUR", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "supplier-payment", name: "Supplier Payment", prefix: "SPY", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "billing", name: "Billing", prefix: "BILL", suffix: "", fyFormat: "FY25-26", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "client-payment", name: "Client Payment", prefix: "CPM", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "floor-abstract", name: "Floor Abstract", prefix: "FLR", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "retention-release", name: "Retention Release", prefix: "RET", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "debit-note", name: "Debit Note", prefix: "DBN", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+      { key: "credit-note", name: "Credit Note", prefix: "CRN", suffix: "", fyFormat: "None", startingNumber: 1, length: 5, separator: "/", type: "global", status: "Active" },
+    ];
+    
+    for (const d of defaultSettings) {
+      stmt.run(d.key, d.name, d.prefix, d.suffix || null, d.fyFormat, d.startingNumber, d.length, d.separator, d.type, d.status);
+      
+      // Populate initial sequence
+      db.prepare(`
+        INSERT OR IGNORE INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+        VALUES (?, ?, ?)
+      `).run(d.key, "global", d.startingNumber - 1);
+    }
+  }
+
+  // Create Subcontractor Tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS subcontractors (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      firmName TEXT,
+      contactPerson TEXT,
+      contactNumber TEXT,
+      address TEXT,
+      aadhaarNumber TEXT,
+      panNumber TEXT,
+      gstin TEXT,
+      bankName TEXT,
+      accountNumber TEXT,
+      ifscCode TEXT,
+      branch TEXT,
+      workCategory TEXT,
+      agreementDate TEXT,
+      startDate TEXT,
+      status TEXT DEFAULT 'Active',
+      workOrderUpload TEXT,
+      panCopy TEXT,
+      aadhaarCopy TEXT,
+      gstCertificate TEXT,
+      otherDocuments TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS subcontractor_bills (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      billNo TEXT NOT NULL,
+      billDate TEXT NOT NULL,
+      subcontractorId TEXT NOT NULL,
+      workDescription TEXT,
+      grossAmount REAL NOT NULL DEFAULT 0,
+      retentionAmount REAL NOT NULL DEFAULT 0,
+      tdsAmount REAL NOT NULL DEFAULT 0,
+      gstAmount REAL NOT NULL DEFAULT 0,
+      recoveryAmount REAL NOT NULL DEFAULT 0,
+      netPayableAmount REAL NOT NULL DEFAULT 0,
+      attachmentUpload TEXT,
+      status TEXT DEFAULT 'Draft',
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (subcontractorId) REFERENCES subcontractors(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS subcontractor_payments (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      subcontractorId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      paymentMode TEXT NOT NULL,
+      remarks TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (subcontractorId) REFERENCES subcontractors(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS subcontractor_audit_trail (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      username TEXT NOT NULL,
+      actionType TEXT NOT NULL,
+      recordId TEXT NOT NULL,
+      oldValue TEXT,
+      newValue TEXT,
+      details TEXT
+    );
+  `);
+
+  // Ensure Subcontractor Master and Billing are in Numbering Settings
+  try {
+    const checkSubmaster = db.prepare("SELECT COUNT(*) as count FROM numbering_settings WHERE moduleKey = 'subcontractor-master'").get() as { count: number };
+    if (checkSubmaster.count === 0) {
+      db.prepare(`
+        INSERT INTO numbering_settings (moduleKey, moduleName, prefix, suffix, fyFormat, startingNumber, numLength, separator, seriesType, status)
+        VALUES ('subcontractor-master', 'Subcontractor Master', 'SUBC', '', 'None', 1, 4, '/', 'global', 'Active')
+      `).run();
+      db.prepare(`
+        INSERT OR IGNORE INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+        VALUES ('subcontractor-master', 'global', 0)
+      `).run();
+    }
+
+    const checkSubbill = db.prepare("SELECT COUNT(*) as count FROM numbering_settings WHERE moduleKey = 'subcontractor-billing'").get() as { count: number };
+    if (checkSubbill.count === 0) {
+      db.prepare(`
+        INSERT INTO numbering_settings (moduleKey, moduleName, prefix, suffix, fyFormat, startingNumber, numLength, separator, seriesType, status)
+        VALUES ('subcontractor-billing', 'Subcontractor Billing', 'SUBB', '', 'FY25-26', 1, 5, '/', 'global', 'Active')
+      `).run();
+      db.prepare(`
+        INSERT OR IGNORE INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+        VALUES ('subcontractor-billing', 'global', 0)
+      `).run();
+    }
+  } catch (err) {
+    console.error("Failed to seed subcontractor numbering settings:", err);
+  }
 }
 
 initDbSchema();
@@ -996,6 +1211,8 @@ async function startServer() {
         siteIncharge || "", siContact || "", ourRepresentatives || "", repContact || "",
         status || "Ongoing"
       );
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      logActivity(authUser, "CREATE", "projects", id, `Created project: "${name}" with budget: ₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(parseFloat(budget))}`);
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1018,6 +1235,8 @@ async function startServer() {
         status || "Ongoing",
         id
       );
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      logActivity(authUser, "UPDATE", "projects", id, `Updated project: "${name}" (Status: ${status})`);
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1027,7 +1246,11 @@ async function startServer() {
   app.delete("/api/projects/:id", (req, res) => {
     try {
       const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const old = db.prepare("SELECT name FROM projects WHERE id = ?").get(id) as any;
+      const oldName = old ? old.name : id;
       db.prepare("DELETE FROM projects WHERE id = ?").run(id);
+      logActivity(authUser, "DELETE", "projects", id, `Deleted project: "${oldName}"`);
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1143,11 +1366,11 @@ async function startServer() {
 
   app.post("/api/billings", (req, res) => {
     try {
-      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
+      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
       const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
-        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType, tdsCertificateReceived, tdsCertificatePending, gstStatus)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType, tdsCertificateReceived, tdsCertificatePending, gstStatus)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         srNo || null,
@@ -1162,6 +1385,8 @@ async function startServer() {
         parseFloat(gst || 0),
         parseFloat(debitAmount || 0),
         debitReason || null,
+        parseFloat(holdAmount || 0),
+        holdReason || null,
         billType || null,
         mItemsStr,
         hardCopyFile || null,
@@ -1180,11 +1405,11 @@ async function startServer() {
   app.put("/api/billings/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
+      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
       const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
         UPDATE billings
-        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, debitAmount = ?, debitReason = ?, billType = ?, measurementItems = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?, tdsCertificateReceived = ?, tdsCertificatePending = ?, gstStatus = ?
+        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, debitAmount = ?, debitReason = ?, holdAmount = ?, holdReason = ?, billType = ?, measurementItems = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?, tdsCertificateReceived = ?, tdsCertificatePending = ?, gstStatus = ?
         WHERE id = ?
       `).run(
         srNo || null,
@@ -1199,6 +1424,8 @@ async function startServer() {
         parseFloat(gst || 0),
         parseFloat(debitAmount || 0),
         debitReason || null,
+        parseFloat(holdAmount || 0),
+        holdReason || null,
         billType || null,
         mItemsStr,
         hardCopyFile || null,
@@ -1260,6 +1487,12 @@ async function startServer() {
         INSERT INTO client_payments (id, projectId, amountReceived, date, remarks, status, billId, paymentReference, paymentMode, bankName, utrChequeNo, attachment, isRetentionPayment, retentionReleaseDate, category)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(id, projectId, parseFloat(amountReceived), date, remarks || "", status || "Received", billId || null, paymentReference || null, paymentMode || null, bankName || null, utrChequeNo || null, attachment || null, isRetentionPayment ? 1 : 0, retentionReleaseDate || null, category || null);
+      
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const proj = db.prepare("SELECT name FROM projects WHERE id = ?").get(projectId) as any;
+      const projName = proj ? proj.name : projectId;
+      logActivity(authUser, "CREATE", "payments", id, `Received client payment of ₹${new Intl.NumberFormat('en-IN').format(parseFloat(amountReceived))} for "${projName}"`);
+      
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1275,6 +1508,12 @@ async function startServer() {
         SET projectId = ?, amountReceived = ?, date = ?, remarks = ?, status = ?, billId = ?, paymentReference = ?, paymentMode = ?, bankName = ?, utrChequeNo = ?, attachment = ?, isRetentionPayment = ?, retentionReleaseDate = ?, category = ?
         WHERE id = ?
       `).run(projectId, parseFloat(amountReceived), date, remarks || "", status || "Received", billId || null, paymentReference || null, paymentMode || null, bankName || null, utrChequeNo || null, attachment || null, isRetentionPayment ? 1 : 0, retentionReleaseDate || null, category || null, id);
+      
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const proj = db.prepare("SELECT name FROM projects WHERE id = ?").get(projectId) as any;
+      const projName = proj ? proj.name : projectId;
+      logActivity(authUser, "UPDATE", "payments", id, `Updated client payment of ₹${new Intl.NumberFormat('en-IN').format(parseFloat(amountReceived))} for "${projName}"`);
+      
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1284,7 +1523,16 @@ async function startServer() {
   app.delete("/api/client-payments/:id", (req, res) => {
     try {
       const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const old = db.prepare("SELECT amountReceived, projectId FROM client_payments WHERE id = ?").get(id) as any;
+      const amountVal = old ? old.amountReceived : 0;
+      const oldProjId = old ? old.projectId : "";
+      const proj = db.prepare("SELECT name FROM projects WHERE id = ?").get(oldProjId) as any;
+      const projName = proj ? proj.name : oldProjId;
+      
       db.prepare("DELETE FROM client_payments WHERE id = ?").run(id);
+      logActivity(authUser, "DELETE", "payments", id, `Deleted client payment of ₹${new Intl.NumberFormat('en-IN').format(amountVal)} for "${projName}"`);
+      
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1873,6 +2121,13 @@ async function startServer() {
         bank || null, parseFloat(crBalance || 0),
         receiptProof || "", receiptFileName || "", receiptFileType || "", status || "Draft", approvalNotes || ""
       );
+
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const totalDebit = parseFloat(kharchi || 0) + parseFloat(mess || 0) + parseFloat(workerAdvance || 0) +
+                         parseFloat(tiffin || 0) + parseFloat(travel || 0) + parseFloat(machineryMaterial || 0) +
+                         parseFloat(workerPayment || 0) + parseFloat(stationery || 0) + parseFloat(others || 0);
+      logActivity(authUser, "CREATE", "expenses", id, `Created expense entry: "${description}" (Total: ₹${new Intl.NumberFormat('en-IN').format(totalDebit)}, Mode: ${bank || 'Cash'})`);
+
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1901,6 +2156,13 @@ async function startServer() {
         bank || null, parseFloat(crBalance || 0),
         receiptProof || "", receiptFileName || "", receiptFileType || "", status || "Draft", approvalNotes || "", id
       );
+
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const totalDebit = parseFloat(kharchi || 0) + parseFloat(mess || 0) + parseFloat(workerAdvance || 0) +
+                         parseFloat(tiffin || 0) + parseFloat(travel || 0) + parseFloat(machineryMaterial || 0) +
+                         parseFloat(workerPayment || 0) + parseFloat(stationery || 0) + parseFloat(others || 0);
+      logActivity(authUser, "UPDATE", "expenses", id, `Updated expense entry: "${description}" (Total: ₹${new Intl.NumberFormat('en-IN').format(totalDebit)}, Status: ${status})`);
+
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1910,7 +2172,13 @@ async function startServer() {
   app.delete("/api/expenses_ledger/:id", (req, res) => {
     try {
       const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const old = db.prepare("SELECT description FROM expenses_ledger WHERE id = ?").get(id) as any;
+      const oldDesc = old ? old.description : id;
+
       db.prepare("DELETE FROM expenses_ledger WHERE id = ?").run(id);
+      logActivity(authUser, "DELETE", "expenses", id, `Deleted expense entry: "${oldDesc}"`);
+
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -3235,6 +3503,889 @@ async function startServer() {
       res.json(savedDoc);
     } catch (err: any) {
       console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Numbering Settings Helper Functions
+  function resolveFY(fyFormat: string, dateStr?: string): string {
+    if (fyFormat === "None" || !fyFormat) return "";
+    const date = dateStr ? new Date(dateStr) : new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const startYear = month < 3 ? year - 1 : year;
+    const endYear = startYear + 1;
+    const startYearShort = String(startYear).substring(2);
+    const endYearShort = String(endYear).substring(2);
+    
+    switch (fyFormat) {
+      case "25-26":
+        return `${startYearShort}-${endYearShort}`;
+      case "2025-26":
+        return `${startYear}-${endYearShort}`;
+      case "FY25-26":
+        return `FY${startYearShort}-${endYearShort}`;
+      case "FY2025-26":
+        return `FY${startYear}-${endYearShort}`;
+      default:
+        return "";
+    }
+  }
+
+  function getSeriesValue(seriesType: string, fyFormat: string, dateStr?: string, projectId?: string): string {
+    if (seriesType === "fy-wise") {
+      return resolveFY(fyFormat, dateStr) || "global";
+    } else if (seriesType === "site-wise") {
+      return projectId || "global";
+    } else {
+      return "global";
+    }
+  }
+
+  function getCurrentSequenceNumber(moduleKey: string, seriesValue: string, startingNumber: number): number {
+    const row = db.prepare("SELECT currentNumber FROM numbering_sequences WHERE moduleKey = ? AND seriesValue = ?").get(moduleKey, seriesValue) as { currentNumber: number } | undefined;
+    if (!row) {
+      const initialNum = startingNumber - 1;
+      db.prepare("INSERT INTO numbering_sequences (moduleKey, seriesValue, currentNumber) VALUES (?, ?, ?)").run(moduleKey, seriesValue, initialNum);
+      return initialNum;
+    }
+    return row.currentNumber;
+  }
+
+  function generateFormattedNumber(config: any, runningNo: number, fyValue: string): string {
+    const parts = [];
+    if (config.prefix) {
+      parts.push(config.prefix);
+    }
+    if (config.fyFormat !== "None" && fyValue) {
+      parts.push(fyValue);
+    }
+    const numStr = String(runningNo).padStart(config.numLength, "0");
+    parts.push(numStr);
+    
+    let result = parts.join(config.separator || "/");
+    if (config.suffix) {
+      result = `${result}${config.separator || "/"}${config.suffix}`;
+    }
+    return result;
+  }
+
+  // Numbering Settings REST Endpoints
+  app.get("/api/numbering-settings", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM numbering_settings").all() as any[];
+      for (const row of rows) {
+        const seriesType = row.seriesType;
+        const fyFormat = row.fyFormat;
+        const seriesValue = getSeriesValue(seriesType, fyFormat);
+        row.currentNumber = getCurrentSequenceNumber(row.moduleKey, seriesValue, row.startingNumber);
+      }
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/numbering-settings/audit-logs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM numbering_audit_logs ORDER BY timestamp DESC LIMIT 500").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/numbering-settings/:moduleKey", (req, res) => {
+    try {
+      const { moduleKey } = req.params;
+      const { prefix, suffix, fyFormat, startingNumber, numLength, separator, seriesType, status, currentNumber } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+
+      if (!prefix || prefix.trim() === "") {
+        return res.status(400).json({ error: "Prefix cannot be blank." });
+      }
+      if (!numLength || parseInt(numLength) < 3) {
+        return res.status(400).json({ error: "Number length must be at least 3." });
+      }
+
+      const oldSetting = db.prepare("SELECT * FROM numbering_settings WHERE moduleKey = ?").get(moduleKey) as any;
+      if (!oldSetting) {
+        return res.status(404).json({ error: "Module numbering configuration not found." });
+      }
+
+      const oldSeriesValue = getSeriesValue(oldSetting.seriesType, oldSetting.fyFormat);
+      const oldSequenceVal = getCurrentSequenceNumber(moduleKey, oldSeriesValue, oldSetting.startingNumber);
+
+      // Perform update on settings
+      db.prepare(`
+        UPDATE numbering_settings
+        SET prefix = ?, suffix = ?, fyFormat = ?, startingNumber = ?, numLength = ?, separator = ?, seriesType = ?, status = ?
+        WHERE moduleKey = ?
+      `).run(prefix, suffix || null, fyFormat, parseInt(startingNumber), parseInt(numLength), separator, seriesType, status, moduleKey);
+
+      const newSeriesValue = getSeriesValue(seriesType, fyFormat);
+
+      // Update current sequence value if specified
+      if (currentNumber !== undefined) {
+        const newRunning = parseInt(currentNumber);
+        db.prepare(`
+          INSERT INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+          VALUES (?, ?, ?)
+          ON CONFLICT(moduleKey, seriesValue) DO UPDATE SET currentNumber = ?
+        `).run(moduleKey, newSeriesValue, newRunning, newRunning);
+      }
+
+      const updatedSequenceVal = currentNumber !== undefined ? parseInt(currentNumber) : oldSequenceVal;
+
+      // Log audit trail if prefix or the running number changed
+      if (oldSetting.prefix !== prefix || oldSequenceVal !== updatedSequenceVal || oldSetting.seriesType !== seriesType || oldSetting.status !== status) {
+        const logId = "num_" + Math.random().toString(36).substring(2, 11);
+        const timestamp = new Date().toISOString();
+        const details = `Updated config for '${oldSetting.moduleName}': Prefix: '${oldSetting.prefix}' -> '${prefix}', Running No: ${oldSequenceVal} -> ${updatedSequenceVal}. Series: ${oldSetting.seriesType} -> ${seriesType}. Status: ${oldSetting.status} -> ${status}.`;
+        
+        db.prepare(`
+          INSERT INTO numbering_audit_logs (id, timestamp, moduleKey, moduleName, prevPrefix, newPrefix, prevRunningNo, newRunningNo, username, details)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(logId, timestamp, moduleKey, oldSetting.moduleName, oldSetting.prefix, prefix, oldSequenceVal, updatedSequenceVal, authUser, details);
+
+        try {
+          db.prepare(`
+            INSERT INTO activity_logs (id, timestamp, username, actionType, module, recordId, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run("act_" + Math.random().toString(36).substring(2, 11), timestamp, authUser, "UPDATE", "settings", moduleKey, details);
+        } catch (e) {
+          console.error("Activity logging failed", e);
+        }
+      }
+
+      res.json({ success: true, message: "Numbering settings updated successfully." });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/numbering-settings/reset/:moduleKey", (req, res) => {
+    try {
+      const { moduleKey } = req.params;
+      const { reason } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+
+      const setting = db.prepare("SELECT * FROM numbering_settings WHERE moduleKey = ?").get(moduleKey) as any;
+      if (!setting) {
+        return res.status(404).json({ error: "Module numbering configuration not found." });
+      }
+
+      const seriesValue = getSeriesValue(setting.seriesType, setting.fyFormat);
+      const prevSequence = getCurrentSequenceNumber(moduleKey, seriesValue, setting.startingNumber);
+      const resetToNum = setting.startingNumber - 1;
+
+      // Update sequence table
+      db.prepare(`
+        INSERT INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+        VALUES (?, ?, ?)
+        ON CONFLICT(moduleKey, seriesValue) DO UPDATE SET currentNumber = ?
+      `).run(moduleKey, seriesValue, resetToNum, resetToNum);
+
+      // Audit log entry
+      const logId = "num_" + Math.random().toString(36).substring(2, 11);
+      const timestamp = new Date().toISOString();
+      const details = `Sequence completely reset to starting number (${setting.startingNumber}) for '${setting.moduleName}'. Reason: ${reason || "None specified"}`;
+      
+      db.prepare(`
+        INSERT INTO numbering_audit_logs (id, timestamp, moduleKey, moduleName, prevPrefix, newPrefix, prevRunningNo, newRunningNo, username, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(logId, timestamp, moduleKey, setting.moduleName, setting.prefix, setting.prefix, prevSequence, resetToNum, authUser, details);
+
+      try {
+        db.prepare(`
+          INSERT INTO activity_logs (id, timestamp, username, actionType, module, recordId, details)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run("act_" + Math.random().toString(36).substring(2, 11), timestamp, authUser, "RESET", "settings", moduleKey, details);
+      } catch (e) {
+        console.error("Activity logging failed", e);
+      }
+
+      res.json({ success: true, message: `Sequence successfully reset to ${setting.startingNumber}.` });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/numbering-settings/preview/:moduleKey", (req, res) => {
+    try {
+      const { moduleKey } = req.params;
+      const { projectId, dateStr } = req.body;
+
+      const config = db.prepare("SELECT * FROM numbering_settings WHERE moduleKey = ?").get(moduleKey) as any;
+      if (!config) {
+        return res.status(404).json({ error: "Numbering settings not found." });
+      }
+
+      if (config.status !== "Active") {
+        return res.json({ active: false });
+      }
+
+      const fyValue = resolveFY(config.fyFormat, dateStr);
+      const seriesValue = getSeriesValue(config.seriesType, config.fyFormat, dateStr, projectId);
+      const prevVal = getCurrentSequenceNumber(moduleKey, seriesValue, config.startingNumber);
+      const nextVal = prevVal + 1;
+
+      const docNumber = generateFormattedNumber(config, nextVal, fyValue);
+      res.json({ active: true, docNumber, sequenceValue: nextVal });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/numbering-settings/consume/:moduleKey", (req, res) => {
+    try {
+      const { moduleKey } = req.params;
+      const { projectId, dateStr } = req.body;
+      
+      const config = db.prepare("SELECT * FROM numbering_settings WHERE moduleKey = ?").get(moduleKey) as any;
+      if (!config) {
+        return res.status(404).json({ error: "Numbering settings not found." });
+      }
+
+      if (config.status !== "Active") {
+        return res.json({ active: false });
+      }
+
+      const fyValue = resolveFY(config.fyFormat, dateStr);
+      const seriesValue = getSeriesValue(config.seriesType, config.fyFormat, dateStr, projectId);
+      const prevVal = getCurrentSequenceNumber(moduleKey, seriesValue, config.startingNumber);
+      const nextVal = prevVal + 1;
+
+      // Update database atomically
+      db.prepare(`
+        INSERT INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+        VALUES (?, ?, ?)
+        ON CONFLICT(moduleKey, seriesValue) DO UPDATE SET currentNumber = ?
+      `).run(moduleKey, seriesValue, nextVal, nextVal);
+
+      const docNumber = generateFormattedNumber(config, nextVal, fyValue);
+      res.json({ active: true, docNumber, sequenceValue: nextVal });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- SUBCONTRACTORS CRUD & MANAGEMENT API ---
+  app.get("/api/subcontractors", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM subcontractors ORDER BY name ASC").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/subcontractors", (req, res) => {
+    try {
+      const {
+        id, name, firmName, contactPerson, contactNumber, address,
+        aadhaarNumber, panNumber, gstin, bankName, accountNumber, ifscCode, branch,
+        workCategory, agreementDate, startDate, status,
+        workOrderUpload, panCopy, aadhaarCopy, gstCertificate, otherDocuments,
+        username
+      } = req.body;
+
+      let subId = id;
+      if (!subId) {
+        const config = db.prepare("SELECT * FROM numbering_settings WHERE moduleKey = 'subcontractor-master'").get() as any;
+        if (config && config.status === "Active") {
+          const fyValue = resolveFY(config.fyFormat);
+          const seriesValue = getSeriesValue(config.seriesType, config.fyFormat);
+          const prevVal = getCurrentSequenceNumber("subcontractor-master", seriesValue, config.startingNumber);
+          const nextVal = prevVal + 1;
+          
+          db.prepare(`
+            INSERT INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+            VALUES (?, ?, ?)
+            ON CONFLICT(moduleKey, seriesValue) DO UPDATE SET currentNumber = ?
+          `).run("subcontractor-master", seriesValue, nextVal, nextVal);
+
+          subId = generateFormattedNumber(config, nextVal, fyValue);
+        } else {
+          subId = "SUBC-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+        }
+      }
+
+      const createdDate = new Date().toISOString();
+      const creator = username || "Admin";
+
+      db.prepare(`
+        INSERT INTO subcontractors (
+          id, name, firmName, contactPerson, contactNumber, address,
+          aadhaarNumber, panNumber, gstin, bankName, accountNumber, ifscCode, branch,
+          workCategory, agreementDate, startDate, status,
+          workOrderUpload, panCopy, aadhaarCopy, gstCertificate, otherDocuments,
+          createdBy, createdDate, modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        subId, name, firmName || null, contactPerson || null, contactNumber || null, address || null,
+        aadhaarNumber || null, panNumber || null, gstin || null, bankName || null, accountNumber || null, ifscCode || null, branch || null,
+        workCategory || null, agreementDate || null, startDate || null, status || "Active",
+        workOrderUpload || null, panCopy || null, aadhaarCopy || null, gstCertificate || null, otherDocuments || null,
+        creator, createdDate, creator, createdDate
+      );
+
+      const auditId = "sub_aud_" + Math.random().toString(36).substring(2, 11);
+      db.prepare(`
+        INSERT INTO subcontractor_audit_trail (id, timestamp, username, actionType, recordId, oldValue, newValue, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(auditId, createdDate, creator, "CREATE", subId, null, JSON.stringify({ name, firmName }), `Subcontractor master created for ${name}`);
+
+      logActivity(creator, "CREATE", "subcontractors", subId, `Created subcontractor ${name} (${firmName || ''})`);
+
+      res.status(201).json({ id: subId, name, status: status || "Active" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/subcontractors/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        name, firmName, contactPerson, contactNumber, address,
+        aadhaarNumber, panNumber, gstin, bankName, accountNumber, ifscCode, branch,
+        workCategory, agreementDate, startDate, status,
+        workOrderUpload, panCopy, aadhaarCopy, gstCertificate, otherDocuments,
+        username
+      } = req.body;
+
+      const oldRow = db.prepare("SELECT * FROM subcontractors WHERE id = ?").get(id) as any;
+      if (!oldRow) {
+        return res.status(404).json({ error: "Subcontractor not found" });
+      }
+
+      const modifiedDate = new Date().toISOString();
+      const modifier = username || "Admin";
+
+      db.prepare(`
+        UPDATE subcontractors SET
+          name = ?, firmName = ?, contactPerson = ?, contactNumber = ?, address = ?,
+          aadhaarNumber = ?, panNumber = ?, gstin = ?, bankName = ?, accountNumber = ?, ifscCode = ?, branch = ?,
+          workCategory = ?, agreementDate = ?, startDate = ?, status = ?,
+          workOrderUpload = ?, panCopy = ?, aadhaarCopy = ?, gstCertificate = ?, otherDocuments = ?,
+          modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        name, firmName || null, contactPerson || null, contactNumber || null, address || null,
+        aadhaarNumber || null, panNumber || null, gstin || null, bankName || null, accountNumber || null, ifscCode || null, branch || null,
+        workCategory || null, agreementDate || null, startDate || null, status || "Active",
+        workOrderUpload || null, panCopy || null, aadhaarCopy || null, gstCertificate || null, otherDocuments || null,
+        modifier, modifiedDate, id
+      );
+
+      const auditId = "sub_aud_" + Math.random().toString(36).substring(2, 11);
+      db.prepare(`
+        INSERT INTO subcontractor_audit_trail (id, timestamp, username, actionType, recordId, oldValue, newValue, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(auditId, modifiedDate, modifier, "UPDATE", id, JSON.stringify(oldRow), JSON.stringify({ name, firmName }), `Updated Subcontractor ${name}`);
+
+      logActivity(modifier, "UPDATE", "subcontractors", id, `Updated subcontractor ${name}`);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/subcontractors/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { username } = req.query;
+
+      const oldRow = db.prepare("SELECT * FROM subcontractors WHERE id = ?").get(id) as any;
+      if (!oldRow) {
+        return res.status(404).json({ error: "Subcontractor not found" });
+      }
+
+      const countBills = db.prepare("SELECT COUNT(*) as count FROM subcontractor_bills WHERE subcontractorId = ?").get(id) as { count: number };
+      const countPmts = db.prepare("SELECT COUNT(*) as count FROM subcontractor_payments WHERE subcontractorId = ?").get(id) as { count: number };
+      
+      if (countBills.count > 0 || countPmts.count > 0) {
+        return res.status(400).json({ error: "Cannot delete subcontractor. Existing bills or payments are logged to this subcontractor." });
+      }
+
+      db.prepare("DELETE FROM subcontractors WHERE id = ?").run(id);
+
+      const modifiedDate = new Date().toISOString();
+      const modifier = (username as string) || "Admin";
+
+      const auditId = "sub_aud_" + Math.random().toString(36).substring(2, 11);
+      db.prepare(`
+        INSERT INTO subcontractor_audit_trail (id, timestamp, username, actionType, recordId, oldValue, newValue, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(auditId, modifiedDate, modifier, "DELETE", id, JSON.stringify(oldRow), null, `Deleted Subcontractor ${oldRow.name}`);
+
+      logActivity(modifier, "DELETE", "subcontractors", id, `Deleted subcontractor ${oldRow.name}`);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- SUBCONTRACTOR BILLS CRUD ---
+  app.get("/api/subcontractor-bills", (req, res) => {
+    try {
+      const rows = db.prepare(`
+        SELECT sb.*, p.name as projectName, s.name as subcontractorName, s.firmName as subcontractorFirm
+        FROM subcontractor_bills sb
+        JOIN projects p ON sb.projectId = p.id
+        JOIN subcontractors s ON sb.subcontractorId = s.id
+        ORDER BY sb.billDate DESC
+      `).all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/subcontractor-bills", (req, res) => {
+    try {
+      const {
+        projectId, billNo, billDate, subcontractorId, workDescription,
+        grossAmount, retentionAmount, tdsAmount, gstAmount, recoveryAmount,
+        netPayableAmount, attachmentUpload, status, username
+      } = req.body;
+
+      let finalBillNo = billNo;
+      if (!finalBillNo) {
+        const config = db.prepare("SELECT * FROM numbering_settings WHERE moduleKey = 'subcontractor-billing'").get() as any;
+        if (config && config.status === "Active") {
+          const fyValue = resolveFY(config.fyFormat, billDate);
+          const seriesValue = getSeriesValue(config.seriesType, config.fyFormat, billDate, projectId);
+          const prevVal = getCurrentSequenceNumber("subcontractor-billing", seriesValue, config.startingNumber);
+          const nextVal = prevVal + 1;
+
+          db.prepare(`
+            INSERT INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+            VALUES (?, ?, ?)
+            ON CONFLICT(moduleKey, seriesValue) DO UPDATE SET currentNumber = ?
+          `).run("subcontractor-billing", seriesValue, nextVal, nextVal);
+
+          finalBillNo = generateFormattedNumber(config, nextVal, fyValue);
+        } else {
+          finalBillNo = "SUBB-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+        }
+      }
+
+      const id = "bill_" + Math.random().toString(36).substring(2, 11);
+      const createdDate = new Date().toISOString();
+      const creator = username || "Admin";
+
+      db.prepare(`
+        INSERT INTO subcontractor_bills (
+          id, projectId, billNo, billDate, subcontractorId, workDescription,
+          grossAmount, retentionAmount, tdsAmount, gstAmount, recoveryAmount,
+          netPayableAmount, attachmentUpload, status, createdBy, createdDate, modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, projectId, finalBillNo, billDate, subcontractorId, workDescription || null,
+        grossAmount || 0, retentionAmount || 0, tdsAmount || 0, gstAmount || 0, recoveryAmount || 0,
+        netPayableAmount || 0, attachmentUpload || null, status || "Draft",
+        creator, createdDate, creator, createdDate
+      );
+
+      logActivity(creator, "CREATE", "subcontractor-bills", id, `Created subcontractor bill ${finalBillNo} - Amount: ${netPayableAmount} (Status: ${status || "Draft"})`);
+
+      res.status(201).json({ id, billNo: finalBillNo, status: status || "Draft" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/subcontractor-bills/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        projectId, billNo, billDate, subcontractorId, workDescription,
+        grossAmount, retentionAmount, tdsAmount, gstAmount, recoveryAmount,
+        netPayableAmount, attachmentUpload, status, username
+      } = req.body;
+
+      const oldBill = db.prepare("SELECT * FROM subcontractor_bills WHERE id = ?").get(id) as any;
+      if (!oldBill) {
+        return res.status(404).json({ error: "Subcontractor bill not found" });
+      }
+
+      if (oldBill.status === "Posted & Locked") {
+        return res.status(400).json({ error: "Cannot modify a Posted & Locked bill. Please trigger a Reversal entry instead." });
+      }
+
+      const modifiedDate = new Date().toISOString();
+      const modifier = username || "Admin";
+
+      db.prepare(`
+        UPDATE subcontractor_bills SET
+          projectId = ?, billNo = ?, billDate = ?, subcontractorId = ?, workDescription = ?,
+          grossAmount = ?, retentionAmount = ?, tdsAmount = ?, gstAmount = ?, recoveryAmount = ?,
+          netPayableAmount = ?, attachmentUpload = ?, status = ?,
+          modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        projectId, billNo, billDate, subcontractorId, workDescription || null,
+        grossAmount || 0, retentionAmount || 0, tdsAmount || 0, gstAmount || 0, recoveryAmount || 0,
+        netPayableAmount || 0, attachmentUpload || null, status || "Draft",
+        modifier, modifiedDate, id
+      );
+
+      if (oldBill.status !== status) {
+        const auditId = "sub_aud_" + Math.random().toString(36).substring(2, 11);
+        db.prepare(`
+          INSERT INTO subcontractor_audit_trail (id, timestamp, username, actionType, recordId, oldValue, newValue, details)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(auditId, modifiedDate, modifier, "STATUS_CHANGE", id, oldBill.status, status, `Subcontractor bill ${billNo} transitioned from ${oldBill.status} to ${status}`);
+      }
+
+      logActivity(modifier, "UPDATE", "subcontractor-bills", id, `Updated subcontractor bill ${billNo} (Status: ${status})`);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/subcontractor-bills/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { username } = req.query;
+
+      const oldBill = db.prepare("SELECT * FROM subcontractor_bills WHERE id = ?").get(id) as any;
+      if (!oldBill) {
+        return res.status(404).json({ error: "Subcontractor bill not found" });
+      }
+
+      if (oldBill.status === "Posted & Locked") {
+        return res.status(400).json({ error: "Cannot delete a Posted & Locked bill. Please trigger a Reversal entry instead." });
+      }
+
+      db.prepare("DELETE FROM subcontractor_bills WHERE id = ?").run(id);
+
+      const modifiedDate = new Date().toISOString();
+      const modifier = (username as string) || "Admin";
+
+      logActivity(modifier, "DELETE", "subcontractor-bills", id, `Deleted subcontractor bill ${oldBill.billNo}`);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/subcontractor-bills/reversal/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { username } = req.body;
+
+      const origBill = db.prepare("SELECT * FROM subcontractor_bills WHERE id = ?").get(id) as any;
+      if (!origBill) {
+        return res.status(404).json({ error: "Subcontractor bill not found" });
+      }
+
+      if (origBill.status !== "Posted & Locked") {
+        return res.status(400).json({ error: "Only 'Posted & Locked' bills can be reversed." });
+      }
+
+      if (origBill.workDescription && origBill.workDescription.includes("[REVERSED]")) {
+        return res.status(400).json({ error: "This bill has already been reversed." });
+      }
+
+      const creator = username || "Admin";
+      const createdDate = new Date().toISOString();
+      const revBillNo = "REV-" + origBill.billNo;
+      const revId = "bill_" + Math.random().toString(36).substring(2, 11);
+
+      db.prepare(`
+        INSERT INTO subcontractor_bills (
+          id, projectId, billNo, billDate, subcontractorId, workDescription,
+          grossAmount, retentionAmount, tdsAmount, gstAmount, recoveryAmount,
+          netPayableAmount, attachmentUpload, status, createdBy, createdDate, modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        revId, origBill.projectId, revBillNo, origBill.billDate, origBill.subcontractorId,
+        `[REVERSAL OF BILL ${origBill.billNo}] - ${origBill.workDescription || ""}`,
+        -origBill.grossAmount, -origBill.retentionAmount, -origBill.tdsAmount, -origBill.gstAmount, -origBill.recoveryAmount,
+        -origBill.netPayableAmount, null, "Posted & Locked",
+        creator, createdDate, creator, createdDate
+      );
+
+      const updatedDesc = `[REVERSED BY ${revBillNo}] - ${origBill.workDescription || ""}`;
+      db.prepare("UPDATE subcontractor_bills SET workDescription = ?, modifiedBy = ?, modifiedDate = ? WHERE id = ?")
+        .run(updatedDesc, creator, createdDate, id);
+
+      logActivity(creator, "REVERSAL", "subcontractor-bills", revId, `Executed reversal copy ${revBillNo} for subcontractor bill ${origBill.billNo}`);
+
+      res.status(201).json({ success: true, reversalId: revId, reversalBillNo: revBillNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- SUBCONTRACTOR PAYMENTS ---
+  app.get("/api/subcontractor-payments", (req, res) => {
+    try {
+      const rows = db.prepare(`
+        SELECT sp.*, p.name as projectName, s.name as subcontractorName, s.firmName as subcontractorFirm
+        FROM subcontractor_payments sp
+        JOIN projects p ON sp.projectId = p.id
+        JOIN subcontractors s ON sp.subcontractorId = s.id
+        ORDER BY sp.date DESC
+      `).all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/subcontractor-payments/sync", (req, res) => {
+    try {
+      const { subcontractorId, projectId, payments, username } = req.body;
+      if (!subcontractorId || !projectId) {
+        return res.status(400).json({ error: "subcontractorId and projectId are required." });
+      }
+
+      const creator = username || "Admin";
+      const createdDate = new Date().toISOString();
+
+      const syncTransaction = db.transaction(() => {
+        for (const p of payments) {
+          if (p.delete) {
+            if (p.id) {
+              db.prepare("DELETE FROM subcontractor_payments WHERE id = ?").run(p.id);
+            }
+          } else if (p.id) {
+            db.prepare(`
+              UPDATE subcontractor_payments
+              SET date = ?, amount = ?, paymentMode = ?, remarks = ?
+              WHERE id = ?
+            `).run(p.date, parseFloat(p.amount), p.paymentMode, p.remarks || null, p.id);
+          } else {
+            const newId = "pmt_" + Math.random().toString(36).substring(2, 11);
+            db.prepare(`
+              INSERT INTO subcontractor_payments (id, projectId, subcontractorId, date, amount, paymentMode, remarks, createdBy, createdDate)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(newId, projectId, subcontractorId, p.date, parseFloat(p.amount), p.paymentMode, p.remarks || null, creator, createdDate);
+          }
+        }
+      });
+
+      syncTransaction();
+
+      logActivity(creator, "SYNC_PAYMENTS", "subcontractor-payments", subcontractorId, `Synced payments grid for subcontractor ${subcontractorId}`);
+
+      res.json({ success: true, message: "Payments list synced successfully." });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- SUBCONTRACTOR LEDGER ---
+  app.get("/api/subcontractors/:id/ledger", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { projectId, startDate, endDate } = req.query;
+
+      const subcontractor = db.prepare("SELECT * FROM subcontractors WHERE id = ?").get(id) as any;
+      if (!subcontractor) {
+        return res.status(404).json({ error: "Subcontractor not found" });
+      }
+
+      let billQuery = `
+        SELECT sb.*, p.name as projectName
+        FROM subcontractor_bills sb
+        JOIN projects p ON sb.projectId = p.id
+        WHERE sb.subcontractorId = ? AND sb.status IN ('Approved', 'Posted & Locked')
+      `;
+      const billParams: any[] = [id];
+
+      if (projectId && projectId !== "all") {
+        billQuery += " AND sb.projectId = ?";
+        billParams.push(projectId);
+      }
+      if (startDate) {
+        billQuery += " AND sb.billDate >= ?";
+        billParams.push(startDate);
+      }
+      if (endDate) {
+        billQuery += " AND sb.billDate <= ?";
+        billParams.push(endDate);
+      }
+
+      const bills = db.prepare(billQuery).all(...billParams) as any[];
+
+      let pmtQuery = `
+        SELECT sp.*, p.name as projectName
+        FROM subcontractor_payments sp
+        JOIN projects p ON sp.projectId = p.id
+        WHERE sp.subcontractorId = ?
+      `;
+      const pmtParams: any[] = [id];
+
+      if (projectId && projectId !== "all") {
+        pmtQuery += " AND sp.projectId = ?";
+        pmtParams.push(projectId);
+      }
+      if (startDate) {
+        pmtQuery += " AND sp.date >= ?";
+        pmtParams.push(startDate);
+      }
+      if (endDate) {
+        pmtQuery += " AND sp.date <= ?";
+        pmtParams.push(endDate);
+      }
+
+      const payments = db.prepare(pmtQuery).all(...pmtParams) as any[];
+
+      const ledgerLines: any[] = [];
+
+      for (const b of bills) {
+        const creditAmt = b.grossAmount + b.gstAmount;
+        ledgerLines.push({
+          date: b.billDate,
+          particulars: `${b.billNo} - Gross Work Certified + GST`,
+          referenceNo: b.billNo,
+          projectId: b.projectId,
+          projectName: b.projectName,
+          debit: 0,
+          credit: creditAmt,
+          sortKey: b.billDate + "_0_" + b.id
+        });
+
+        if (b.retentionAmount > 0) {
+          ledgerLines.push({
+            date: b.billDate,
+            particulars: `${b.billNo} - Retention Deduction`,
+            referenceNo: b.billNo,
+            projectId: b.projectId,
+            projectName: b.projectName,
+            debit: b.retentionAmount,
+            credit: 0,
+            sortKey: b.billDate + "_1_" + b.id
+          });
+        }
+
+        if (b.tdsAmount > 0) {
+          ledgerLines.push({
+            date: b.billDate,
+            particulars: `${b.billNo} - TDS Deduction`,
+            referenceNo: b.billNo,
+            projectId: b.projectId,
+            projectName: b.projectName,
+            debit: b.tdsAmount,
+            credit: 0,
+            sortKey: b.billDate + "_2_" + b.id
+          });
+        }
+
+        if (b.recoveryAmount > 0) {
+          ledgerLines.push({
+            date: b.billDate,
+            particulars: `${b.billNo} - Backcharge / Material Recovery`,
+            referenceNo: b.billNo,
+            projectId: b.projectId,
+            projectName: b.projectName,
+            debit: b.recoveryAmount,
+            credit: 0,
+            sortKey: b.billDate + "_3_" + b.id
+          });
+        }
+      }
+
+      for (const p of payments) {
+        ledgerLines.push({
+          date: p.date,
+          particulars: `Payment Received (${p.paymentMode}) ${p.remarks ? '- ' + p.remarks : ''}`,
+          referenceNo: p.id,
+          projectId: p.projectId,
+          projectName: p.projectName,
+          debit: p.amount,
+          credit: 0,
+          sortKey: p.date + "_4_" + p.id
+        });
+      }
+
+      ledgerLines.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+      let runningBal = 0;
+      const finalLedger = ledgerLines.map(line => {
+        runningBal += (line.credit - line.debit);
+        return {
+          ...line,
+          balance: runningBal
+        };
+      });
+
+      let totalBillsVal = 0;
+      let totalGstVal = 0;
+      let totalTdsVal = 0;
+      let totalRetentionVal = 0;
+      let totalRecoveryVal = 0;
+
+      for (const b of bills) {
+        totalBillsVal += b.grossAmount;
+        totalGstVal += b.gstAmount;
+        totalTdsVal += b.tdsAmount;
+        totalRetentionVal += b.retentionAmount;
+        totalRecoveryVal += b.recoveryAmount;
+      }
+
+      const totalPaymentsVal = payments.reduce((acc, p) => acc + p.amount, 0);
+      const outstandingBalance = (totalBillsVal + totalGstVal) - (totalTdsVal + totalRetentionVal + totalRecoveryVal + totalPaymentsVal);
+
+      res.json({
+        subcontractor,
+        ledger: finalLedger,
+        summary: {
+          totalBills: totalBillsVal,
+          totalGst: totalGstVal,
+          totalTds: totalTdsVal,
+          totalRetention: totalRetentionVal,
+          totalRecovery: totalRecoveryVal,
+          totalPayments: totalPaymentsVal,
+          outstandingBalance
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- SUBCONTRACTOR AUDIT TRAIL ENDPOINTS ---
+  app.get("/api/subcontractors-audit-trail", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM subcontractor_audit_trail ORDER BY timestamp DESC LIMIT 500").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Activity Logs Endpoints
+  app.get("/api/activity-logs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 550").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/activity-logs", (req, res) => {
+    try {
+      const { username, actionType, module, recordId, details } = req.body;
+      const id = "act_" + Math.random().toString(36).substring(2, 11);
+      const timestamp = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO activity_logs (id, timestamp, username, actionType, module, recordId, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, timestamp, username || "Admin", actionType, module, recordId, details);
+      res.status(201).json({ id, timestamp, username: username || "Admin", actionType, module, recordId, details });
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });

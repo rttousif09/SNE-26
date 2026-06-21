@@ -65,6 +65,8 @@ export interface Billing {
   gst?: number;
   debitAmount?: number;
   debitReason?: string;
+  holdAmount?: number;
+  holdReason?: string;
   billType?: string; // 'Running Account', 'Final Bill', 'Extra Item Bill', 'Additional Work Bill', 'Manpower Supply Bill'
   measurementItems?: MeasurementItem[];
   hardCopyFile?: string;
@@ -73,6 +75,8 @@ export interface Billing {
   tdsCertificateReceived?: number;
   tdsCertificatePending?: number;
   gstStatus?: string;
+  retentionStatus?: 'Pending' | 'Partially Cleared' | 'Fully Resolved';
+  holdStatus?: 'Pending' | 'Partially Cleared' | 'Fully Resolved';
 }
 
 export interface ClientPayment {
@@ -576,6 +580,150 @@ export interface FloorAbstract {
   workers: FloorAbstractWorker[];
   remarks?: string;
 }
+
+export interface ActivityLog {
+  id: string;
+  timestamp: string;
+  username: string;
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | string;
+  module: 'projects' | 'payments' | 'expenses' | string;
+  recordId: string;
+  details: string;
+}
+
+export interface NumberingSettings {
+  moduleKey: string;
+  moduleName: string;
+  prefix: string;
+  suffix?: string | null;
+  fyFormat: '25-26' | '2025-26' | 'FY25-26' | 'FY2025-26' | 'None';
+  startingNumber: number;
+  numLength: number;
+  separator: string;
+  seriesType: 'global' | 'fy-wise' | 'site-wise';
+  status: 'Active' | 'Inactive';
+  currentNumber?: number;
+}
+
+export interface NumberingAuditLog {
+  id: string;
+  timestamp: string;
+  moduleKey: string;
+  moduleName: string;
+  prevPrefix: string;
+  newPrefix: string;
+  prevRunningNo: number;
+  newRunningNo: number;
+  username: string;
+  details: string;
+}
+
+export interface Subcontractor {
+  id: string;
+  name: string;
+  firmName?: string;
+  contactPerson?: string;
+  contactNumber?: string;
+  address?: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  gstin?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  branch?: string;
+  workCategory?: string;
+  agreementDate?: string;
+  startDate?: string;
+  status: 'Active' | 'Inactive';
+  workOrderUpload?: string;
+  panCopy?: string;
+  aadhaarCopy?: string;
+  gstCertificate?: string;
+  otherDocuments?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+}
+
+export interface SubcontractorBill {
+  id: string;
+  projectId: string;
+  projectName?: string;
+  billNo: string;
+  billDate: string;
+  subcontractorId: string;
+  subcontractorName?: string;
+  subcontractorFirm?: string;
+  workDescription?: string;
+  grossAmount: number;
+  retentionAmount: number;
+  tdsAmount: number;
+  gstAmount: number;
+  recoveryAmount: number;
+  netPayableAmount: number;
+  attachmentUpload?: string;
+  status: 'Draft' | 'Approved' | 'Posted & Locked';
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+}
+
+export interface SubcontractorPayment {
+  id: string;
+  projectId: string;
+  projectName?: string;
+  subcontractorId: string;
+  subcontractorName?: string;
+  subcontractorFirm?: string;
+  date: string;
+  amount: number;
+  paymentMode: 'Bank Transfer' | 'Cash' | 'Cheque' | 'Other';
+  remarks?: string;
+  createdBy?: string;
+  createdDate?: string;
+}
+
+export interface SubcontractorAuditTrail {
+  id: string;
+  timestamp: string;
+  username: string;
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE' | 'REVERSAL' | 'SYNC_PAYMENTS';
+  recordId: string;
+  oldValue?: string;
+  newValue?: string;
+  details: string;
+}
+
+export interface SubcontractorLedgerLine {
+  date: string;
+  particulars: string;
+  referenceNo: string;
+  projectId: string;
+  projectName: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface SubcontractorLedgerSummary {
+  totalBills: number;
+  totalGst: number;
+  totalTds: number;
+  totalRetention: number;
+  totalRecovery: number;
+  totalPayments: number;
+  outstandingBalance: number;
+}
+
+export interface SubcontractorLedger {
+  subcontractor: Subcontractor;
+  ledger: SubcontractorLedgerLine[];
+  summary: SubcontractorLedgerSummary;
+}
+
 
 
 

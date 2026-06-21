@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -35,6 +35,9 @@ interface AppState {
   financialYears: FinancialYear[];
   staff: Staff[];
   floorAbstracts: FloorAbstract[];
+  activityLogs: ActivityLog[];
+  numberingSettings: NumberingSettings[];
+  numberingAuditLogs: NumberingAuditLog[];
 }
 
 
@@ -43,6 +46,13 @@ interface AppContextType extends AppState {
   user: { username: string; name: string; role?: string; allowedModules?: string[]; allowedProjects?: string[] } | null;
   setUser: (user: { username: string; name: string; role?: string; allowedModules?: string[]; allowedProjects?: string[] } | null) => void;
   importBackup: (backupState: AppState) => Promise<boolean>;
+  refreshActivityLogs: () => Promise<void>;
+  fetchNumberingSettings: () => Promise<void>;
+  fetchNumberingAuditLogs: () => Promise<void>;
+  updateNumberingSetting: (moduleKey: string, payload: any) => Promise<boolean>;
+  resetNumbering: (moduleKey: string, reason: string) => Promise<boolean>;
+  previewNextNumber: (moduleKey: string, payload: { projectId?: string; dateStr?: string }) => Promise<{ docNumber: string; active: boolean }>;
+  consumeNextNumber: (moduleKey: string, payload: { projectId?: string; dateStr?: string }) => Promise<{ docNumber: string; active: boolean }>;
   addProject: (project: Omit<Project, 'id'>) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
@@ -198,6 +208,9 @@ const initialState: AppState = {
   financialYears: [],
   staff: [],
   floorAbstracts: [],
+  activityLogs: [],
+  numberingSettings: [],
+  numberingAuditLogs: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -254,6 +267,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     financialYears: [],
     staff: [],
     floorAbstracts: [],
+    activityLogs: [],
+    numberingSettings: [],
+    numberingAuditLogs: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
@@ -262,7 +278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const [
           pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes, assetsRes, assetTransfersRes, assetMaintenancesRes,
-          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes, staffRes, faRes
+          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes, staffRes, faRes, actRes, numSetRes, numAuditRes
         ] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
@@ -295,7 +311,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/bill-timelines').then(r => r.json()).catch(() => []),
           fetch('/api/financial-years').then(r => r.json()).catch(() => []),
           fetch('/api/staff').then(r => r.json()).catch(() => []),
-          fetch('/api/floor-abstracts').then(r => r.json()).catch(() => [])
+          fetch('/api/floor-abstracts').then(r => r.json()).catch(() => []),
+          fetch('/api/activity-logs').then(r => r.json()).catch(() => []),
+          fetch('/api/numbering-settings').then(r => r.json()).catch(() => []),
+          fetch('/api/numbering-settings/audit-logs').then(r => r.json()).catch(() => [])
         ]);
 
         const stateObj: AppState = {
@@ -330,7 +349,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           billTimelines: tlRes || [],
           financialYears: fyRes || [],
           staff: staffRes || [],
-          floorAbstracts: faRes || []
+          floorAbstracts: faRes || [],
+          activityLogs: actRes || [],
+          numberingSettings: numSetRes || [],
+          numberingAuditLogs: numAuditRes || []
         };
         setState(stateObj);
 
@@ -362,6 +384,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('billTimelines', tlRes || []).catch(() => {});
         await saveAllToStore('financialYears', fyRes || []).catch(() => {});
         await saveAllToStore('floorAbstracts', faRes || []).catch(() => {});
+        await saveAllToStore('activityLogs', actRes || []).catch(() => {});
+        await saveAllToStore('numberingSettings', numSetRes || []).catch(() => {});
+        await saveAllToStore('numberingAuditLogs', numAuditRes || []).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -397,6 +422,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const financialYears = await getAllFromStore('financialYears').catch(() => []);
           const staff = await getAllFromStore('staff').catch(() => []);
           const floorAbstracts = await getAllFromStore('floorAbstracts').catch(() => []);
+          const activityLogs = await getAllFromStore('activityLogs').catch(() => []);
+          const numberingSettings = await getAllFromStore('numberingSettings').catch(() => []);
+          const numberingAuditLogs = await getAllFromStore('numberingAuditLogs').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
@@ -407,7 +435,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                             labourPlannings.length === 0 && workerTransfers.length === 0 && assets.length === 0 &&
                             assetTransfers.length === 0 && assetMaintenances.length === 0 &&
                             workerLedger.length === 0 && workerHolds.length === 0 && workerRecoveryAuditTrail.length === 0 && attendance.length === 0 &&
-                            trackedBills.length === 0 && billTimelines.length === 0 && financialYears.length === 0 && staff.length === 0 && floorAbstracts.length === 0;
+                            trackedBills.length === 0 && billTimelines.length === 0 && financialYears.length === 0 && staff.length === 0 && floorAbstracts.length === 0 && activityLogs.length === 0;
 
           if (isDbEmpty) {
             setState(initialState);
@@ -444,7 +472,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               billTimelines,
               financialYears,
               staff,
-              floorAbstracts
+              floorAbstracts,
+              activityLogs,
+              numberingSettings,
+              numberingAuditLogs
             });
           }
         } catch (e) {
@@ -502,6 +533,135 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const refreshActivityLogs = async () => {
+    try {
+      const res = await fetch('/api/activity-logs');
+      if (res.ok) {
+        const data = await res.json();
+        setState(s => ({ ...s, activityLogs: data }));
+        await saveAllToStore('activityLogs', data).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Failed to load activity logs:', e);
+    }
+  };
+
+  const fetchNumberingSettings = async () => {
+    try {
+      const res = await fetch('/api/numbering-settings');
+      if (res.ok) {
+        const data = await res.json();
+        setState(s => ({ ...s, numberingSettings: data }));
+      }
+    } catch (e) {
+      console.log('Failed to fetch numbering settings', e);
+    }
+  };
+
+  const fetchNumberingAuditLogs = async () => {
+    try {
+      const res = await fetch('/api/numbering-settings/audit-logs');
+      if (res.ok) {
+        const data = await res.json();
+        setState(s => ({ ...s, numberingAuditLogs: data }));
+      }
+    } catch (e) {
+      console.log('Failed to fetch numbering audit logs', e);
+    }
+  };
+
+  const updateNumberingSetting = async (moduleKey: string, payload: any) => {
+    try {
+      const res = await fetch(`/api/numbering-settings/${moduleKey}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        await Promise.all([
+          fetchNumberingSettings(),
+          fetchNumberingAuditLogs(),
+          refreshActivityLogs()
+        ]);
+        triggerSuccess('Numbering sequence settings updated successfully.');
+        return true;
+      } else {
+        const err = await res.json();
+        console.error('Update failed:', err.error);
+        return false;
+      }
+    } catch (e) {
+      console.error('Failed to update numbering setting', e);
+      return false;
+    }
+  };
+
+  const resetNumbering = async (moduleKey: string, reason: string) => {
+    try {
+      const res = await fetch(`/api/numbering-settings/reset/${moduleKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
+        body: JSON.stringify({ reason })
+      });
+      if (res.ok) {
+        await Promise.all([
+          fetchNumberingSettings(),
+          fetchNumberingAuditLogs(),
+          refreshActivityLogs()
+        ]);
+        triggerSuccess('Numbering sequence reset successfully.');
+        return true;
+      } else {
+        const err = await res.json();
+        console.error('Reset failed:', err.error);
+        return false;
+      }
+    } catch (e) {
+      console.error('Failed to reset numbering setting', e);
+      return false;
+    }
+  };
+
+  const previewNextNumber = async (moduleKey: string, payload: { projectId?: string; dateStr?: string }) => {
+    try {
+      const res = await fetch(`/api/numbering-settings/preview/${moduleKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.error('Failed to preview next number', e);
+    }
+    return { docNumber: '', active: false };
+  };
+
+  const consumeNextNumber = async (moduleKey: string, payload: { projectId?: string; dateStr?: string }) => {
+    try {
+      const res = await fetch(`/api/numbering-settings/consume/${moduleKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        fetchNumberingSettings();
+        return data;
+      }
+    } catch (e) {
+      console.error('Failed to consume next number', e);
+    }
+    return { docNumber: '', active: false };
+  };
+
   const generateId = () => crypto.randomUUID();
 
   const addProject = async (project: Omit<Project, 'id'>) => {
@@ -511,10 +671,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await fetch('/api/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
         body: JSON.stringify(newProject)
       });
       await saveAllToStore('projects', [...state.projects, newProject]);
+      refreshActivityLogs();
     } catch (e) {
       console.error(e);
     }
@@ -529,10 +693,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const merged = { ...existing, ...project };
         await fetch(`/api/projects/${id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-Username': user?.username || 'Admin'
+          },
           body: JSON.stringify(merged)
         });
         await saveAllToStore('projects', state.projects.map(p => p.id === id ? merged : p));
+        refreshActivityLogs();
       }
     } catch (e) {
       console.error(e);
@@ -543,8 +711,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(s => ({ ...s, projects: s.projects.filter(p => p.id !== id) }));
     triggerSuccess('Project record has been deleted.');
     try {
-      await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      await fetch(`/api/projects/${id}`, { 
+        method: 'DELETE',
+        headers: {
+          'X-User-Username': user?.username || 'Admin'
+        }
+      });
       await saveAllToStore('projects', state.projects.filter(p => p.id !== id));
+      refreshActivityLogs();
     } catch (e) {
       console.error(e);
     }
@@ -648,10 +822,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await fetch('/api/client-payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
         body: JSON.stringify(newPayment)
       });
       await saveAllToStore('clientPayments', [...state.clientPayments, newPayment]);
+      refreshActivityLogs();
     } catch (e) {
       console.error(e);
     }
@@ -665,10 +843,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const merged = { ...existing, ...payment };
         await fetch(`/api/client-payments/${id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-Username': user?.username || 'Admin'
+          },
           body: JSON.stringify(merged)
         });
         await saveAllToStore('clientPayments', state.clientPayments.map(cp => cp.id === id ? merged : cp));
+        refreshActivityLogs();
       }
     } catch (e) {
       console.error(e);
@@ -678,8 +860,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteClientPayment = async (id: string) => {
     setState(s => ({ ...s, clientPayments: s.clientPayments.filter(cp => cp.id !== id) }));
     try {
-      await fetch(`/api/client-payments/${id}`, { method: 'DELETE' });
+      await fetch(`/api/client-payments/${id}`, { 
+        method: 'DELETE',
+        headers: {
+          'X-User-Username': user?.username || 'Admin'
+        }
+      });
       await saveAllToStore('clientPayments', state.clientPayments.filter(cp => cp.id !== id));
+      refreshActivityLogs();
     } catch (e) {
       console.error(e);
     }
@@ -994,10 +1182,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await fetch('/api/expenses_ledger', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
         body: JSON.stringify(newExpense)
       });
       await saveAllToStore('expensesLedger', [...state.expensesLedger, newExpense]);
+      refreshActivityLogs();
     } catch (e) {
       console.error(e);
     }
@@ -1014,10 +1206,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const merged = { ...existing, ...expense };
         await fetch(`/api/expenses_ledger/${id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-Username': user?.username || 'Admin'
+          },
           body: JSON.stringify(merged)
         });
         await saveAllToStore('expensesLedger', state.expensesLedger.map(el => el.id === id ? merged : el));
+        refreshActivityLogs();
       }
     } catch (e) {
       console.error(e);
@@ -1027,8 +1223,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteExpenseEntry = async (id: string) => {
     setState(s => ({ ...s, expensesLedger: s.expensesLedger.filter(el => el.id !== id) }));
     try {
-      await fetch(`/api/expenses_ledger/${id}`, { method: 'DELETE' });
+      await fetch(`/api/expenses_ledger/${id}`, { 
+        method: 'DELETE',
+        headers: {
+          'X-User-Username': user?.username || 'Admin'
+        }
+      });
       await saveAllToStore('expensesLedger', state.expensesLedger.filter(el => el.id !== id));
+      refreshActivityLogs();
     } catch (e) {
       console.error(e);
     }
@@ -1970,6 +2172,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       user,
       setUser,
       importBackup,
+      refreshActivityLogs,
+      fetchNumberingSettings,
+      fetchNumberingAuditLogs,
+      updateNumberingSetting,
+      resetNumbering,
+      previewNextNumber,
+      consumeNextNumber,
       addProject,
       updateProject,
       deleteProject,

@@ -30,6 +30,9 @@ import { FinancialYearArchive } from './pages/FinancialYearArchive';
 import { DailySiteSummary } from './pages/DailySiteSummary';
 import { FloorAbstracts } from './pages/FloorAbstracts';
 import StaffManagement from './pages/StaffManagement';
+import ActivityLog from './pages/ActivityLog';
+import { NumberingSettingsPage } from './pages/NumberingSettings';
+import { Subcontractors } from './pages/subcontractors';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
@@ -316,6 +319,9 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'bill-tracking': return <BillTracking />;
       case 'floor-abstracts': return <FloorAbstracts />;
       case 'financial-year-archive': return <FinancialYearArchive />;
+      case 'activity-log': return <ActivityLog />;
+      case 'subcontractors': return <Subcontractors />;
+      case 'numbering-settings': return <NumberingSettingsPage />;
       case 'staff-management':
         if (user?.username === 'saddamsne' || user?.username === 'rejatousifsne') {
           return <StaffManagement />;
@@ -348,6 +354,9 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'bill-tracking': return 'Bill Tracking Workflow';
       case 'floor-abstracts': return 'Floor Abstract';
       case 'financial-year-archive': return 'Financial Year Archive & Closing';
+      case 'activity-log': return 'System Activity Log';
+      case 'subcontractors': return 'Subcontractor Management ERP';
+      case 'numbering-settings': return 'Document Numbering Settings';
       case 'staff-management': return 'Staff & Access Management';
       default: return 'Overview';
     }

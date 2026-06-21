@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Database, Folder, FileText, Server, ClipboardCheck, Users } from 'lucide-react';
+import { ChevronRight, ChevronDown, Database, Folder, FileText, Server, ClipboardCheck, Users, Activity, Settings } from 'lucide-react';
 import { useAppContext } from '../store';
 import { motion, AnimatePresence } from 'motion/react';
 import { ExpandableSection } from './AnimatedERP';
@@ -74,7 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
         { id: 'expenses', label: '3) Expenses Ledger' },
         { id: 'expenses-summary', label: '4) Expenses Summary Dashboard' },
         { id: 'bill-tracking', label: '5) Bill Tracking Workflow' },
-        { id: 'financial-year-archive', label: '6) FY Archive & Closing' }
+        { id: 'financial-year-archive', label: '6) FY Archive & Closing' },
+        { id: 'subcontractors', label: '7) Subcontractor Management' }
       ]
     },
     {
@@ -91,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
     if (user?.username === 'saddamsne' || user?.username === 'rejatousifsne') {
       return true;
     }
-    if (moduleId === 'dashboard') {
+    if (moduleId === 'dashboard' || moduleId === 'activity-log') {
       return true;
     }
     if (user?.allowedModules) {
@@ -158,6 +159,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                                 {pendingCount}
                               </span>
                             )}
+                          </div>
+                        )}
+
+                        {/* 3. System Activity Log at Root of Catalog */}
+                        {isModuleAllowed('activity-log') && (
+                          <div
+                            onClick={() => setCurrentTab('activity-log')}
+                            className={`flex items-center space-x-1 py-0.5 pr-2 cursor-pointer ${currentTab === 'activity-log' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                          >
+                            <div className="w-3"></div>
+                            <Activity size={12} className="text-[#0056b3]" />
+                            <span className="font-semibold text-[#002f6c] flex-1">System Activity Log</span>
                           </div>
                         )}
 
@@ -228,6 +241,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                                     >
                                       <Users size={11} className="text-blue-700" />
                                       <span className="font-semibold text-blue-950">Add & Manage Staff</span>
+                                    </div>
+                                    <div
+                                      onClick={() => setCurrentTab('numbering-settings')}
+                                      className={`flex items-center space-x-1 py-0.5 cursor-pointer ${currentTab === 'numbering-settings' ? 'bg-[#cce8ff] border border-[#99d1ff]' : 'hover:bg-[#e6f2ff] border border-transparent'}`}
+                                    >
+                                      <Settings size={11} className="text-blue-700" />
+                                      <span className="font-semibold text-blue-950">Numbering Settings</span>
                                     </div>
                                   </div>
                                 </ExpandableSection>
