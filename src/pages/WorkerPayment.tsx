@@ -1,14 +1,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
-import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet, FolderOpen } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkWorkerPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
 import * as XLSX from 'xlsx';
 
-export const WorkerPayment: React.FC = () => {
+export interface WorkerPaymentProps {
+  initialWorkerId?: string;
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
+}
+
+export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, onUnsavedChange }) => {
   const { 
     user, 
     workerPayments, 
@@ -77,6 +82,22 @@ export const WorkerPayment: React.FC = () => {
     paymentStatus: 'Pending',
     selectedFloorAbstracts: [] as Array<{ floorAbstractId: string; level: string; flatNo: string; hajira: number; amount: number }>
   });
+
+  useEffect(() => {
+    if (initialWorkerId && workers) {
+      const targetWorker = workers.find(w => w.id === initialWorkerId);
+      if (targetWorker) {
+        setSearchQuery(targetWorker.name);
+      }
+    }
+  }, [initialWorkerId, workers]);
+
+  useEffect(() => {
+    if (onUnsavedChange) {
+      const hasUnsaved = editingId !== null || formData.workerId !== '';
+      onUnsavedChange(hasUnsaved);
+    }
+  }, [editingId, formData, onUnsavedChange]);
 
   // Keep month field updated with month selector unless editing a different month
   useEffect(() => {
@@ -1135,6 +1156,21 @@ export const WorkerPayment: React.FC = () => {
                     {!isLocked && (
                       <td className="border border-[#8c9ba8] px-2 py-1 text-center font-sans">
                         <div className="flex items-center justify-center space-x-2">
+                          <button 
+                            onClick={() => {
+                              if ((window as any).openWorkspaceTab) {
+                                (window as any).openWorkspaceTab(
+                                  'worker-payment', 
+                                  `Payment: ${worker.name}`, 
+                                  { initialWorkerId: payment.workerId, tabId: `payment:${payment.id}` }
+                                );
+                              }
+                            }} 
+                            className="text-emerald-650 hover:text-emerald-800" 
+                            title="Open in Separate Tab"
+                          >
+                            <FolderOpen size={12} />
+                          </button>
                           <button onClick={() => handleEdit(payment)} className="text-blue-600 hover:text-blue-800" title="Edit">
                             <Edit size={12} />
                           </button>

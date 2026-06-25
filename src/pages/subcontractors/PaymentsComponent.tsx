@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, Trash2, CreditCard } from 'lucide-react';
+import { Plus, Save, Trash2, CreditCard, Users, Building2, Calendar, Banknote } from 'lucide-react';
 import { Project, Subcontractor, SubcontractorPayment } from '../../types';
 
 interface PaymentsComponentProps {
@@ -149,30 +149,36 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
     <div className="space-y-4">
       {/* Controls */}
       <div className="bg-white p-3 border rounded shadow-sm flex flex-wrap gap-3 items-center text-[10px]">
-        <div>
-          <span className="text-gray-400 font-bold mr-1.5 uppercase">1. Subcontractor Target *</span>
+        <div className="flex items-center space-x-2">
+          <span className="text-gray-500 font-bold uppercase flex items-center gap-1">
+            <Users size={12} className="text-amber-500" />
+            <span>1. Subcontractor Target *</span>
+          </span>
           <select 
             value={selectedSubcontractorId}
             onChange={(e) => {
               setSelectedSubcontractorId(e.target.value);
               setErrorMessage(null);
             }}
-            className="border border-gray-300 rounded font-semibold p-1 text-[10px]"
+            className="border border-gray-300 rounded font-semibold p-1 text-[10px] bg-white outline-none focus:border-amber-500"
           >
             <option value="">-- Choose Contractor partner --</option>
             {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
           </select>
         </div>
 
-        <div>
-          <span className="text-gray-400 font-bold mr-1.5 uppercase">2. Assign Project *</span>
+        <div className="flex items-center space-x-2">
+          <span className="text-gray-500 font-bold uppercase flex items-center gap-1">
+            <Building2 size={12} className="text-amber-500" />
+            <span>2. Assign Project *</span>
+          </span>
           <select 
             value={selectedProjectId}
             onChange={(e) => {
               setSelectedProjectId(e.target.value);
               setErrorMessage(null);
             }}
-            className="border border-gray-300 rounded font-semibold p-1 text-[10px]"
+            className="border border-gray-300 rounded font-semibold p-1 text-[10px] bg-white outline-none focus:border-amber-500"
           >
             <option value="">-- Choose Site Location --</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -185,7 +191,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
           type="button"
           onClick={handleAddPaymentRow}
           disabled={!selectedSubcontractorId || !selectedProjectId}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded flex items-center space-x-1 transition disabled:opacity-50 text-xs"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded flex items-center space-x-1 transition disabled:opacity-50 text-xs shadow-sm hover:scale-105"
         >
           <Plus size={11} />
           <span>Insert Payment Row</span>
@@ -195,7 +201,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
           type="button"
           onClick={handleSyncPayments}
           disabled={!selectedSubcontractorId || !selectedProjectId || paymentsGrid.length === 0}
-          className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold px-4 py-1.5 rounded flex items-center space-x-1 transition disabled:opacity-50 text-xs"
+          className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold px-4 py-1.5 rounded flex items-center space-x-1 transition disabled:opacity-50 text-xs shadow-sm hover:scale-105"
         >
           <Save size={11} />
           <span>Sync Direct Payments</span>

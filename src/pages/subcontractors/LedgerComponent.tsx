@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Printer, Building } from 'lucide-react';
+import { Printer, Building, Users, Building2, Calendar } from 'lucide-react';
 import { Project, Subcontractor, SubcontractorLedger } from '../../types';
 
 interface LedgerComponentProps {
@@ -120,48 +120,57 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
     <div className="space-y-4">
       {/* Selection & Filters row */}
       <div className="bg-white p-3 border rounded shadow-sm flex flex-wrap gap-3 items-center text-[10px]">
-        <div>
-          <span className="text-gray-400 font-bold mr-1 uppercase">Subcontractor Master *</span>
+        <div className="flex items-center space-x-1.5">
+          <span className="text-gray-500 font-bold uppercase flex items-center gap-1">
+            <Users size={12} className="text-amber-500" />
+            <span>Subcontractor Master *</span>
+          </span>
           <select 
             value={selectedSubcontractorId}
             onChange={(e) => {
               setSelectedSubcontractorId(e.target.value);
               setErrorMessage(null);
             }}
-            className="border border-gray-300 rounded font-semibold p-1 text-[10px]"
+            className="border border-gray-300 rounded font-semibold p-1 text-[10px] bg-white outline-none focus:border-amber-500"
           >
             <option value="">-- Choose master cred partner --</option>
             {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
           </select>
         </div>
 
-        <div>
-          <span className="text-gray-400 font-bold mr-1 uppercase">Site Filter</span>
+        <div className="flex items-center space-x-1.5">
+          <span className="text-gray-500 font-bold uppercase flex items-center gap-1">
+            <Building2 size={12} className="text-amber-500" />
+            <span>Site Filter</span>
+          </span>
           <select 
             value={ledgerFilters.projectId}
             onChange={(e) => setLedgerFilters(prev => ({ ...prev, projectId: e.target.value }))}
-            className="border border-gray-300 rounded p-1 text-[10px]"
+            className="border border-gray-300 rounded p-1 text-[10px] bg-white outline-none focus:border-amber-500"
           >
             <option value="all">All Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
 
-        <div>
-          <span className="text-gray-400 font-bold mr-1 uppercase">Date Boundaries</span>
-          <div className="inline-flex space-x-1">
+        <div className="flex items-center space-x-1.5">
+          <span className="text-gray-500 font-bold uppercase flex items-center gap-1">
+            <Calendar size={12} className="text-amber-500" />
+            <span>Date Boundaries</span>
+          </span>
+          <div className="inline-flex space-x-1 items-center">
             <input 
               type="date" 
               value={ledgerFilters.startDate}
               onChange={(e) => setLedgerFilters(prev => ({ ...prev, startDate: e.target.value }))}
-              className="border border-gray-300 rounded font-mono p-0.5 text-[10px]"
+              className="border border-gray-300 rounded font-mono p-0.5 text-[10px] outline-none focus:border-amber-500"
             />
             <span className="text-gray-400 font-bold">-</span>
             <input 
               type="date" 
               value={ledgerFilters.endDate}
               onChange={(e) => setLedgerFilters(prev => ({ ...prev, endDate: e.target.value }))}
-              className="border border-gray-300 rounded font-mono p-0.5 text-[10px]"
+              className="border border-gray-300 rounded font-mono p-0.5 text-[10px] outline-none focus:border-amber-500"
             />
           </div>
         </div>
@@ -171,7 +180,7 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
         <button 
           onClick={handlePrintLedger}
           disabled={!selectedSubcontractorId || !ledgerData}
-          className="bg-gray-100 hover:bg-gray-200 border border-gray-350 text-gray-850 font-bold px-3 py-1.5 rounded flex items-center space-x-1 text-xs transition disabled:opacity-50"
+          className="bg-gray-100 hover:bg-gray-200 border border-gray-350 text-gray-850 font-bold px-3 py-1.5 rounded flex items-center space-x-1 text-xs transition disabled:opacity-50 hover:scale-105 shadow-sm"
         >
           <Printer size={12} />
           <span>Print Ledger Book</span>

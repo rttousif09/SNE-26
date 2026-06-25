@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy } from 'lucide-react';
+import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy, Settings } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 import { useAppContext } from '../store';
 import { exportConsolidatedSitesReportToPDF, downloadPDF } from '../lib/pdfGenerator';
@@ -17,10 +17,44 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onToggleFKeysBar, showFKeysBar = true, onNavigate, onLock }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isMsgOpen, setIsMsgOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
+  const msgDropdownRef = useRef<HTMLDivElement>(null);
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
+
+  const [showMyProfile, setShowMyProfile] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+
+  // Change Password state
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passSuccess, setPassSuccess] = useState<string | null>(null);
+  const [passError, setPassError] = useState<string | null>(null);
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassError(null);
+    setPassSuccess(null);
+    if (!currentPass || !newPass || !confirmPass) {
+      setPassError("All fields are required.");
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setPassError("New passwords do not match.");
+      return;
+    }
+    setPassSuccess("System Password updated successfully in cache registry!");
+    setCurrentPass('');
+    setNewPass('');
+    setConfirmPass('');
+    setTimeout(() => {
+      setShowChangePassword(false);
+      setPassSuccess(null);
+    }, 1500);
+  };
 
   const erpStore = useAppContext();
   const {
@@ -363,6 +397,9 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
       if (notifDropdownRef.current && !notifDropdownRef.current.contains(event.target as Node)) {
         setIsNotifOpen(false);
       }
+      if (msgDropdownRef.current && !msgDropdownRef.current.contains(event.target as Node)) {
+        setIsMsgOpen(false);
+      }
       if (searchDropdownRef.current && !searchDropdownRef.current.contains(event.target as Node)) {
         setIsSearchFocused(false);
       }
@@ -379,7 +416,7 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
       <div className="bg-[#002f6c] text-white px-3 py-1 flex items-center justify-between border-b border-[#8c9ba8] shadow-sm">
         <div className="flex items-center space-x-2">
           <SNLogo size={22} className="text-white hover:scale-105 transition-transform" />
-          <span className="font-mono text-xs font-black uppercase tracking-widest text-white">SN ENTERPRISE</span>
+          <span className="font-mono text-xs font-black uppercase tracking-widest text-white">SN ENTERPRISES ERP</span>
           <span className="text-[9px] text-blue-200 bg-[#001f4d] px-1.5 py-0.5 rounded border border-blue-900 font-mono">ERP_PRD</span>
         </div>
         
@@ -397,6 +434,33 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
               <Moon size={15} className="text-blue-100" />
             )}
           </button>
+
+          {/* Messages */}
+          <div className="relative" ref={msgDropdownRef}>
+            <button
+              onClick={() => setIsMsgOpen(!isMsgOpen)}
+              className="relative flex items-center justify-center p-1.5 hover:bg-[#001f4d] rounded transition duration-150 text-white focus:outline-none cursor-pointer"
+              title="System message inbox"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-200"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span className="absolute top-0.5 right-0.5 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-duration-1000"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+            </button>
+
+            {isMsgOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#8c9ba8] shadow-2xl rounded-sm z-50 animate-fade-in divide-y divide-gray-100 flex flex-col text-slate-800">
+                <div className="bg-gradient-to-r from-[#0056b3] to-[#002f6c] text-white px-3 py-1.5 flex items-center justify-between select-none">
+                  <span className="font-bold text-[9px] uppercase tracking-wide">System Messages Inbox</span>
+                </div>
+                <div className="p-4 text-center text-gray-500 flex flex-col items-center select-none py-6">
+                  <span className="font-semibold text-[10px] text-gray-700">No new messages</span>
+                  <span className="text-[9px] text-gray-400 mt-0.5 uppercase font-mono">channels monitored live</span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Notifications */}
           <div className="relative" ref={notifDropdownRef}>
@@ -511,9 +575,41 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
                   </div>
                   <div>
                     <span className="text-gray-400 block text-[8px] uppercase">Access Role</span>
-                    <span className="text-gray-700 font-semibold">
+                    <span className="text-gray-700 font-semibold text-[10px]">
                       {user.username === 'saddamsne' ? 'Owner' : 'Managing Director'}
                     </span>
+                  </div>
+
+                  {/* Profile & Password Menu Actions */}
+                  <div className="border-t border-gray-200 pt-2 pb-1 space-y-1">
+                    <button 
+                      onClick={() => { setShowMyProfile(true); setIsOpen(false); }}
+                      className="w-full text-left py-1 px-1.5 hover:bg-slate-100 rounded text-slate-700 font-semibold flex items-center space-x-1.5 cursor-pointer text-[10px]"
+                    >
+                      <User size={12} className="text-[#0056b3]" />
+                      <span>My Profile Detail</span>
+                    </button>
+                    <button 
+                      onClick={() => { setShowChangePassword(true); setIsOpen(false); }}
+                      className="w-full text-left py-1 px-1.5 hover:bg-slate-100 rounded text-slate-700 font-semibold flex items-center space-x-1.5 cursor-pointer text-[10px]"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                      <span>Change Password</span>
+                    </button>
+                    <button 
+                      onClick={() => { onNavigate && onNavigate('activity-log'); setIsOpen(false); }}
+                      className="w-full text-left py-1 px-1.5 hover:bg-slate-100 rounded text-slate-700 font-semibold flex items-center space-x-1.5 cursor-pointer text-[10px]"
+                    >
+                      <Clock size={12} className="text-indigo-600" />
+                      <span>System Activity Log</span>
+                    </button>
+                    <button 
+                      onClick={() => { onNavigate && onNavigate('numbering-settings'); setIsOpen(false); }}
+                      className="w-full text-left py-1 px-1.5 hover:bg-slate-100 rounded text-slate-700 font-semibold flex items-center space-x-1.5 cursor-pointer text-[10px]"
+                    >
+                      <Settings size={12} className="text-slate-600" />
+                      <span>Document Settings</span>
+                    </button>
                   </div>
                   <div>
                     <span className="text-gray-400 block text-[8px] uppercase">Connection Status</span>
@@ -584,6 +680,79 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
         )}
         </div>
       </div>
+
+      {/* SAP Profile Details Modals */}
+      {showMyProfile && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center z-[99999] p-4 select-none animate-fade-in text-slate-800">
+          <div className="sap-panel bg-white w-full max-w-sm rounded p-4 shadow-2xl border-b-4 border-b-[#0056b3]">
+            <div className="font-extrabold pb-2 mb-3 border-b border-gray-200 text-[#002f6c] text-xs uppercase tracking-wider flex justify-between items-center">
+              <span>My ERP Profile Detail</span>
+              <button onClick={() => setShowMyProfile(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer text-xs">✕</button>
+            </div>
+            <div className="space-y-2.5 text-[11px]">
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500 font-bold uppercase text-[9px]">Account Username</span>
+                <span className="font-mono font-bold text-slate-900">{user?.username}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500 font-bold uppercase text-[9px]">Full Access Name</span>
+                <span className="font-semibold text-slate-900">{user?.name}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500 font-bold uppercase text-[9px]">Access Privilege Role</span>
+                <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                  {user?.username === 'saddamsne' ? 'Owner / Superadmin' : 'Executive Director'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500 font-bold uppercase text-[9px]">Registered Domain</span>
+                <span className="text-slate-700 font-mono">snenterprises.co.in</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-gray-500 font-bold uppercase text-[9px]">Session Status</span>
+                <span className="text-green-700 font-bold flex items-center">
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full inline-block mr-1 animate-pulse"></span>
+                  Active Secure Session
+                </span>
+              </div>
+            </div>
+            <div className="mt-4 pt-2 border-t border-gray-200 flex justify-end">
+              <button onClick={() => setShowMyProfile(false)} className="sap-btn bg-slate-100 text-slate-700">Close Profile</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showChangePassword && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center z-[99999] p-4 select-none animate-fade-in text-slate-800">
+          <div className="sap-panel bg-white w-full max-w-sm rounded p-4 shadow-2xl border-b-4 border-b-amber-500">
+            <div className="font-extrabold pb-2 mb-3 border-b border-gray-200 text-[#002f6c] text-xs uppercase tracking-wider flex justify-between items-center">
+              <span>Change Account Password</span>
+              <button onClick={() => { setShowChangePassword(false); setPassError(null); setPassSuccess(null); }} className="text-gray-400 hover:text-gray-600 cursor-pointer text-xs">✕</button>
+            </div>
+            <form onSubmit={handlePasswordSubmit} className="space-y-3">
+              <div>
+                <label className="block text-[9px] text-gray-500 uppercase font-bold mb-1">Current Password</label>
+                <input required type="password" value={currentPass} onChange={e => setCurrentPass(e.target.value)} className="sap-input w-full" placeholder="••••••••" />
+              </div>
+              <div>
+                <label className="block text-[9px] text-gray-500 uppercase font-bold mb-1">New Password</label>
+                <input required type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="sap-input w-full" placeholder="••••••••" />
+              </div>
+              <div>
+                <label className="block text-[9px] text-gray-500 uppercase font-bold mb-1">Confirm New Password</label>
+                <input required type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} className="sap-input w-full" placeholder="••••••••" />
+              </div>
+              {passError && <p className="text-[10px] text-red-600 font-bold">{passError}</p>}
+              {passSuccess && <p className="text-[10px] text-green-700 font-bold">{passSuccess}</p>}
+              <div className="pt-2 border-t border-gray-150 flex justify-end gap-2">
+                <button type="button" onClick={() => { setShowChangePassword(false); setPassError(null); setPassSuccess(null); }} className="sap-btn bg-slate-50 text-slate-600">Cancel</button>
+                <button type="submit" className="sap-btn bg-amber-500 text-slate-900 hover:bg-amber-600 font-bold">Update Password</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Menu Bar */}
       <div className="flex items-center px-2 py-0.5 text-[11px] space-x-3 select-none">

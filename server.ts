@@ -955,6 +955,76 @@ function initDbSchema() {
       newValue TEXT,
       details TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS boqs (
+      id TEXT PRIMARY KEY,
+      boqNo TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      clientName TEXT NOT NULL,
+      date TEXT NOT NULL,
+      revisionNo INTEGER NOT NULL DEFAULT 0,
+      remarks TEXT,
+      boqPdfName TEXT,
+      boqPdfData TEXT,
+      boqExcelName TEXT,
+      boqExcelData TEXT,
+      items TEXT,
+      revisions TEXT,
+      extraItems TEXT,
+      status TEXT NOT NULL DEFAULT 'Draft',
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS boq_audit_logs (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      username TEXT NOT NULL,
+      boqNo TEXT NOT NULL,
+      action TEXT NOT NULL,
+      oldValue TEXT,
+      newValue TEXT,
+      details TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS dms_documents (
+      id TEXT PRIMARY KEY,
+      projectId TEXT,
+      category TEXT NOT NULL,
+      docType TEXT NOT NULL,
+      fileName TEXT NOT NULL,
+      description TEXT,
+      tags TEXT,
+      uploadDate TEXT NOT NULL,
+      expiryDate TEXT,
+      attachmentData TEXT,
+      attachmentName TEXT,
+      attachmentType TEXT,
+      fileSize INTEGER NOT NULL DEFAULT 0,
+      version INTEGER NOT NULL DEFAULT 0,
+      revisions TEXT,
+      status TEXT NOT NULL DEFAULT 'Approved',
+      approver TEXT,
+      approvalDate TEXT,
+      approvalRemarks TEXT,
+      linkedEntity TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS dms_audit_logs (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      username TEXT NOT NULL,
+      actionType TEXT NOT NULL,
+      recordId TEXT NOT NULL,
+      details TEXT NOT NULL
+    );
   `);
 
   // Ensure Subcontractor Master and Billing are in Numbering Settings
@@ -980,6 +1050,18 @@ function initDbSchema() {
       db.prepare(`
         INSERT OR IGNORE INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
         VALUES ('subcontractor-billing', 'global', 0)
+      `).run();
+    }
+
+    const checkBoqMaster = db.prepare("SELECT COUNT(*) as count FROM numbering_settings WHERE moduleKey = 'boq-master'").get() as { count: number };
+    if (checkBoqMaster.count === 0) {
+      db.prepare(`
+        INSERT INTO numbering_settings (moduleKey, moduleName, prefix, suffix, fyFormat, startingNumber, numLength, separator, seriesType, status)
+        VALUES ('boq-master', 'BOQ Master', 'BOQ', '', 'None', 1, 4, '/', 'global', 'Active')
+      `).run();
+      db.prepare(`
+        INSERT OR IGNORE INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+        VALUES ('boq-master', 'global', 0)
       `).run();
     }
   } catch (err) {
@@ -4385,6 +4467,357 @@ async function startServer() {
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(id, timestamp, username || "Admin", actionType, module, recordId, details);
       res.status(201).json({ id, timestamp, username: username || "Admin", actionType, module, recordId, details });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- BOQ MASTER & MANAGEMENT API ---
+  app.get("/api/boqs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM boqs").all() as any[];
+      const mapped = rows.map(r => ({
+        ...r,
+        items: r.items ? JSON.parse(r.items) : [],
+        revisions: r.revisions ? JSON.parse(r.revisions) : [],
+        extraItems: r.extraItems ? JSON.parse(r.extraItems) : []
+      }));
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/boqs", (req, res) => {
+    try {
+      const {
+        id, boqNo, projectId, clientName, date, revisionNo, remarks,
+        boqPdfName, boqPdfData, boqExcelName, boqExcelData,
+        items, revisions, extraItems, status, createdBy, createdDate
+      } = req.body;
+
+      db.prepare(`
+        INSERT INTO boqs (
+          id, boqNo, projectId, clientName, date, revisionNo, remarks,
+          boqPdfName, boqPdfData, boqExcelName, boqExcelData,
+          items, revisions, extraItems, status, createdBy, createdDate,
+          modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, boqNo, projectId, clientName, date, parseInt(revisionNo) || 0, remarks || "",
+        boqPdfName || null, boqPdfData || null, boqExcelName || null, boqExcelData || null,
+        items ? JSON.stringify(items) : "[]",
+        revisions ? JSON.stringify(revisions) : "[]",
+        extraItems ? JSON.stringify(extraItems) : "[]",
+        status || "Draft",
+        createdBy || "Admin",
+        createdDate || new Date().toISOString(),
+        createdBy || "Admin",
+        createdDate || new Date().toISOString()
+      );
+
+      const authUser = (req.headers["x-user-username"] as string) || createdBy || "Admin";
+      logActivity(authUser, "CREATE", "boqs", id, `Created BOQ entry ${boqNo} for Project ID ${projectId}`);
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/boqs/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        boqNo, projectId, clientName, date, revisionNo, remarks,
+        boqPdfName, boqPdfData, boqExcelName, boqExcelData,
+        items, revisions, extraItems, status, modifiedBy, modifiedDate
+      } = req.body;
+
+      const oldVal = db.prepare("SELECT * FROM boqs WHERE id = ?").get(id) as any;
+
+      db.prepare(`
+        UPDATE boqs
+        SET boqNo = ?, projectId = ?, clientName = ?, date = ?, revisionNo = ?, remarks = ?,
+            boqPdfName = ?, boqPdfData = ?, boqExcelName = ?, boqExcelData = ?,
+            items = ?, revisions = ?, extraItems = ?, status = ?,
+            modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        boqNo, projectId, clientName, date, parseInt(revisionNo) || 0, remarks || "",
+        boqPdfName || null, boqPdfData || null, boqExcelName || null, boqExcelData || null,
+        items ? JSON.stringify(items) : "[]",
+        revisions ? JSON.stringify(revisions) : "[]",
+        extraItems ? JSON.stringify(extraItems) : "[]",
+        status,
+        modifiedBy || "Admin",
+        modifiedDate || new Date().toISOString(),
+        id
+      );
+
+      const authUser = (req.headers["x-user-username"] as string) || modifiedBy || "Admin";
+      let detailsMsg = `Updated BOQ entry ${boqNo}`;
+      if (oldVal && oldVal.status !== status) {
+        detailsMsg += ` (Status changed from ${oldVal.status} to ${status})`;
+      }
+      logActivity(authUser, "UPDATE", "boqs", id, detailsMsg);
+      res.json({ id, ...req.body });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/boqs/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const oldVal = db.prepare("SELECT * FROM boqs WHERE id = ?").get(id) as any;
+      const boqNo = oldVal ? oldVal.boqNo : id;
+      
+      db.prepare("DELETE FROM boqs WHERE id = ?").run(id);
+
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      logActivity(authUser, "DELETE", "boqs", id, `Deleted BOQ ${boqNo}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- BOQ AUDIT LOGS ENDPOINTS ---
+  app.get("/api/boqs-audit-logs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM boq_audit_logs ORDER BY timestamp DESC LIMIT 500").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/boqs-audit-logs", (req, res) => {
+    try {
+      const { id, timestamp, username, boqNo, action, oldValue, newValue, details } = req.body;
+      db.prepare(`
+        INSERT INTO boq_audit_logs (id, timestamp, username, boqNo, action, oldValue, newValue, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id || "bal_" + Math.random().toString(36).substring(2, 11),
+        timestamp || new Date().toISOString(),
+        username || "Admin",
+        boqNo,
+        action,
+        oldValue || null,
+        newValue || null,
+        details || ""
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- DOCUMENT MANAGEMENT SYSTEM (DMS) API ---
+  app.get("/api/dms/documents", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM dms_documents ORDER BY uploadDate DESC").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/dms/documents", (req, res) => {
+    try {
+      const {
+        id, projectId, category, docType, fileName, description, tags, uploadDate, expiryDate,
+        attachmentData, attachmentName, attachmentType, fileSize, version, revisions, status,
+        approver, approvalDate, approvalRemarks, linkedEntity, createdBy, createdDate
+      } = req.body;
+
+      const authUser = (req.headers["x-user-username"] as string) || createdBy || "Admin";
+
+      db.prepare(`
+        INSERT INTO dms_documents (
+          id, projectId, category, docType, fileName, description, tags, uploadDate, expiryDate,
+          attachmentData, attachmentName, attachmentType, fileSize, version, revisions, status,
+          approver, approvalDate, approvalRemarks, linkedEntity, createdBy, createdDate, modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        projectId || null,
+        category,
+        docType,
+        fileName,
+        description || "",
+        tags || "[]",
+        uploadDate || new Date().toISOString().split("T")[0],
+        expiryDate || null,
+        attachmentData || null,
+        attachmentName || null,
+        attachmentType || null,
+        parseInt(fileSize) || 0,
+        parseInt(version) || 0,
+        revisions || "[]",
+        status || "Approved",
+        approver || null,
+        approvalDate || null,
+        approvalRemarks || null,
+        linkedEntity || "[]",
+        authUser,
+        createdDate || new Date().toISOString(),
+        authUser,
+        createdDate || new Date().toISOString()
+      );
+
+      // Create Audit Log
+      const auditId = "dms_aud_" + Math.random().toString(36).substring(2, 11);
+      db.prepare(`
+        INSERT INTO dms_audit_logs (id, timestamp, username, actionType, recordId, details)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        auditId,
+        new Date().toISOString(),
+        authUser,
+        "UPLOAD",
+        id,
+        `Uploaded document "${fileName}" in category "${category}" / "${docType}"`
+      );
+
+      logActivity(authUser, "UPLOAD", "dms_documents", id, `Uploaded document ${fileName}`);
+
+      res.status(201).json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/dms/documents/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        projectId, category, docType, fileName, description, tags, expiryDate,
+        attachmentData, attachmentName, attachmentType, fileSize, version, revisions, status,
+        approver, approvalDate, approvalRemarks, linkedEntity
+      } = req.body;
+
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const oldDoc = db.prepare("SELECT * FROM dms_documents WHERE id = ?").get(id) as any;
+
+      if (!oldDoc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      db.prepare(`
+        UPDATE dms_documents
+        SET projectId = ?, category = ?, docType = ?, fileName = ?, description = ?, tags = ?, expiryDate = ?,
+            attachmentData = ?, attachmentName = ?, attachmentType = ?, fileSize = ?, version = ?, revisions = ?, status = ?,
+            approver = ?, approvalDate = ?, approvalRemarks = ?, linkedEntity = ?, modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        projectId || null,
+        category || oldDoc.category,
+        docType || oldDoc.docType,
+        fileName || oldDoc.fileName,
+        description !== undefined ? description : oldDoc.description,
+        tags || oldDoc.tags,
+        expiryDate || oldDoc.expiryDate,
+        attachmentData !== undefined ? attachmentData : oldDoc.attachmentData,
+        attachmentName !== undefined ? attachmentName : oldDoc.attachmentName,
+        attachmentType !== undefined ? attachmentType : oldDoc.attachmentType,
+        fileSize !== undefined ? parseInt(fileSize) : oldDoc.fileSize,
+        version !== undefined ? parseInt(version) : oldDoc.version,
+        revisions || oldDoc.revisions,
+        status || oldDoc.status,
+        approver !== undefined ? approver : oldDoc.approver,
+        approvalDate !== undefined ? approvalDate : oldDoc.approvalDate,
+        approvalRemarks !== undefined ? approvalRemarks : oldDoc.approvalRemarks,
+        linkedEntity || oldDoc.linkedEntity,
+        authUser,
+        new Date().toISOString(),
+        id
+      );
+
+      // Create Audit Log
+      const auditId = "dms_aud_" + Math.random().toString(36).substring(2, 11);
+      db.prepare(`
+        INSERT INTO dms_audit_logs (id, timestamp, username, actionType, recordId, details)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        auditId,
+        new Date().toISOString(),
+        authUser,
+        "EDIT",
+        id,
+        `Modified document details or uploaded a new revision for "${fileName || oldDoc.fileName}"`
+      );
+
+      logActivity(authUser, "UPDATE", "dms_documents", id, `Modified document ${fileName || oldDoc.fileName}`);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/dms/documents/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const oldDoc = db.prepare("SELECT fileName, category FROM dms_documents WHERE id = ?").get(id) as any;
+
+      if (!oldDoc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      db.prepare("DELETE FROM dms_documents WHERE id = ?").run(id);
+
+      // Create Audit Log
+      const auditId = "dms_aud_" + Math.random().toString(36).substring(2, 11);
+      db.prepare(`
+        INSERT INTO dms_audit_logs (id, timestamp, username, actionType, recordId, details)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        auditId,
+        new Date().toISOString(),
+        authUser,
+        "DELETE",
+        id,
+        `Deleted document "${oldDoc.fileName}" from category "${oldDoc.category}"`
+      );
+
+      logActivity(authUser, "DELETE", "dms_documents", id, `Deleted document ${oldDoc.fileName}`);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/dms/audit-logs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM dms_audit_logs ORDER BY timestamp DESC LIMIT 500").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/dms/audit-logs", (req, res) => {
+    try {
+      const { id, timestamp, username, actionType, recordId, details } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || username || "Admin";
+
+      db.prepare(`
+        INSERT INTO dms_audit_logs (id, timestamp, username, actionType, recordId, details)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        id || "dms_aud_" + Math.random().toString(36).substring(2, 11),
+        timestamp || new Date().toISOString(),
+        authUser,
+        actionType,
+        recordId,
+        details
+      );
+
+      res.status(201).json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

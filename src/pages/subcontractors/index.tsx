@@ -13,11 +13,21 @@ import { PaymentsComponent } from './PaymentsComponent';
 import { LedgerComponent } from './LedgerComponent';
 import { AuditTrailComponent } from './AuditTrailComponent';
 
-export const Subcontractors: React.FC = () => {
+export interface SubcontractorsProps {
+  initialTab?: 'dashboard' | 'master' | 'billing' | 'payments' | 'ledger' | 'audit';
+}
+
+export const Subcontractors: React.FC<SubcontractorsProps> = ({ initialTab }) => {
   const { user, projects = [], numberingSettings = [], previewNextNumber } = useAppContext();
   
   // Tabs: dashboard, master, billing, payments, ledger, audit
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'billing' | 'payments' | 'ledger' | 'audit'>('dashboard');
+  
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   
   // Shared Data State
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);

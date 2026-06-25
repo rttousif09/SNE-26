@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Users, Plus, Search, Edit, Trash2, Save, X, Upload 
+  Users, Plus, Search, Edit, Trash2, Save, X, Upload, 
+  Building2, FileKey, User, Phone, MapPin, CreditCard, ShieldCheck, Briefcase, Calendar, Code
 } from 'lucide-react';
 import { Subcontractor } from '../../types';
+import { ERPTable, ERPColumn, ERPRowAction } from '../../components/ERPTable';
 
 interface MasterComponentProps {
   user: any;
@@ -25,6 +27,53 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
   setLoading
 }) => {
   const [masterSearch, setMasterSearch] = useState<string>('');
+
+  // ERP Columns for Subcontractor Master
+  const erpColumns: ERPColumn<Subcontractor>[] = [
+    { key: 'id', header: 'ID', sortable: true, filterable: true, frozen: true, render: (val) => <span className="font-bold text-gray-900 font-mono">{val}</span> },
+    { key: 'name', header: 'Contractor Name', sortable: true, filterable: true, render: (val) => <span className="font-bold text-[#002f6c]">{val}</span> },
+    { key: 'firmName', header: 'Firm Title', sortable: true, filterable: true },
+    { key: 'contactPerson', header: 'Contact Person / No', sortable: true, filterable: true, render: (_, row) => (
+      <div>
+        <span className="font-medium text-gray-800">{row.contactPerson || '-'}</span>
+        <div className="text-[9px] text-gray-500 font-mono">{row.contactNumber || '-'}</div>
+      </div>
+    )},
+    { key: 'workCategory', header: 'Category', sortable: true, filterable: true, render: (val) => (
+      <span className="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold text-[9px]">{val || 'General'}</span>
+    )},
+    { key: 'bankDetails', header: 'Bank Details', sortable: true, filterable: true, render: (_, row) => {
+      const bDetailsStr = row.bankName ? `${row.bankName} - A/C ${row.accountNumber?.substring(0, 4)}... IFSC: ${row.ifscCode}` : 'N/A';
+      return <span className="text-gray-500 font-mono" title={bDetailsStr}>{bDetailsStr}</span>;
+    }},
+    { key: 'govDetails', header: 'Gov Identifiers', sortable: true, filterable: true, render: (_, row) => {
+      const govStr = `PAN: ${row.panNumber || '-'} Aadhaar: ${row.aadhaarNumber || '-'}`;
+      return <span className="text-gray-500 font-mono text-[9px]" title={govStr}>{govStr}</span>;
+    }},
+    { key: 'status', header: 'Status', sortable: true, filterable: true, render: (val) => (
+      <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${val === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+        {val}
+      </span>
+    )}
+  ];
+
+  // ERP Row Actions for Subcontractor Master
+  const erpRowActions: ERPRowAction<Subcontractor>[] = [
+    {
+      label: 'Modify',
+      icon: <Edit size={11} />,
+      onClick: (row) => handleEditMasterClick(row),
+      tooltip: 'Modify profile details'
+    },
+    ...(user?.role !== 'staff' ? [{
+      label: 'Erase',
+      icon: <Trash2 size={11} />,
+      onClick: (row) => handleDeleteSubcontractor(row.id),
+      tooltip: 'Erase profile',
+      className: 'text-red-600 hover:bg-red-50'
+    }] : [])
+  ];
+
   const [isEditingMaster, setIsEditingMaster] = useState<boolean>(false);
   const [editingMasterId, setEditingMasterId] = useState<string | null>(null);
 
@@ -188,17 +237,7 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
   return (
     <div className="space-y-4">
       {/* Search Panel */}
-      <div className="flex justify-between items-center bg-white p-3 border rounded shadow-sm">
-        <div className="flex items-center space-x-2 w-full max-w-sm">
-          <Search size={14} className="text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search partner, segment or ID..." 
-            value={masterSearch}
-            onChange={(e) => setMasterSearch(e.target.value)}
-            className="bg-transparent border-b border-gray-300 focus:border-amber-500 outline-none p-0.5 w-full text-xs font-semibold"
-          />
-        </div>
+      <div className="flex justify-end items-center bg-white p-3 border rounded shadow-sm">
         <button 
           onClick={() => {
             setEditingMasterId(null);
@@ -246,10 +285,16 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
             <form onSubmit={handleSaveMaster} className="p-4 space-y-4 overflow-y-auto flex-1">
               {/* Section 1: Contractor Details */}
               <div className="border border-amber-300 bg-amber-50/20 p-3 rounded">
-                <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2.5 border-b border-amber-200 pb-1">1. Firm & Contractor Particulars</h4>
+                <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2.5 border-b border-amber-200 pb-1 flex items-center gap-1.5">
+                  <Briefcase size={12} className="text-amber-500" />
+                  <span>1. Firm & Contractor Particulars</span>
+                </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Auto/Manual Subcontractor ID</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <FileKey size={10} className="text-amber-500" />
+                      <span>Auto/Manual Subcontractor ID</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="e.g. SUBC/001" 
@@ -260,7 +305,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Contractor Name *</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <User size={10} className="text-amber-500" />
+                      <span>Contractor Name *</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="Provide full human name" 
@@ -270,7 +318,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Firm Name</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <Building2 size={10} className="text-amber-500" />
+                      <span>Firm Name</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="Provide firm title eg Pvt Ltd" 
@@ -281,7 +332,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Contact Person</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <User size={10} className="text-amber-500" />
+                      <span>Contact Person</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="Principal point of contact" 
@@ -291,7 +345,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Contact Number</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <Phone size={10} className="text-amber-500" />
+                      <span>Contact Number</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="eg +91-XXXXXXXXXX" 
@@ -301,7 +358,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Status</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <ShieldCheck size={10} className="text-amber-500" />
+                      <span>Status</span>
+                    </label>
                     <select 
                       value={masterForm.status}
                       onChange={(e) => setMasterForm({ ...masterForm, status: e.target.value as any })}
@@ -313,7 +373,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                   </div>
                 </div>
                 <div className="mt-2.5">
-                  <label className="block text-gray-500 font-bold text-[9px] uppercase">Address</label>
+                  <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                    <MapPin size={10} className="text-amber-500" />
+                    <span>Address</span>
+                  </label>
                   <textarea 
                     placeholder="Registered office address" 
                     rows={1}
@@ -326,10 +389,16 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
 
               {/* Section 2: Identity & Compliance Details */}
               <div className="border border-blue-300 bg-blue-50/20 p-3 rounded">
-                <h4 className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-2.5 border-b border-blue-200 pb-1">2. Compliance & Government Identifiers</h4>
+                <h4 className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-2.5 border-b border-blue-200 pb-1 flex items-center gap-1.5">
+                  <ShieldCheck size={12} className="text-blue-500" />
+                  <span>2. Compliance & Government Identifiers</span>
+                </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Aadhaar Number</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <CreditCard size={10} className="text-blue-500" />
+                      <span>Aadhaar Number</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="12 digit identifier" 
@@ -339,7 +408,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">PAN Number</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <CreditCard size={10} className="text-blue-500" />
+                      <span>PAN Number</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="10 digit alphanumeric card" 
@@ -349,7 +421,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">GSTIN (Optional)</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <CreditCard size={10} className="text-blue-500" />
+                      <span>GSTIN (Optional)</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="GSTIN Code eg 27AAAAA..." 
@@ -363,10 +438,16 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
 
               {/* Section 3: Bank Details */}
               <div className="border border-green-300 bg-green-50/20 p-3 rounded">
-                <h4 className="text-[10px] font-bold text-green-800 uppercase tracking-wider mb-2.5 border-b border-green-200 pb-1">3. Bank Account Information</h4>
+                <h4 className="text-[10px] font-bold text-green-800 uppercase tracking-wider mb-2.5 border-b border-green-200 pb-1 flex items-center gap-1.5">
+                  <Building2 size={12} className="text-green-500" />
+                  <span>3. Bank Account Information</span>
+                </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Bank Name</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <Building2 size={10} className="text-green-500" />
+                      <span>Bank Name</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="eg State Bank" 
@@ -376,7 +457,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Account Number</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <CreditCard size={10} className="text-green-500" />
+                      <span>Account Number</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="Account identifier" 
@@ -386,7 +470,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">IFSC Code</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <Code size={10} className="text-green-500" />
+                      <span>IFSC Code</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="eg SBIN0000XXX" 
@@ -396,7 +483,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Branch Name</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <MapPin size={10} className="text-green-500" />
+                      <span>Branch Name</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="Branch location" 
@@ -410,10 +500,16 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
 
               {/* Section 4: Contract info and uploads */}
               <div className="border border-purple-300 bg-purple-50/20 p-3 rounded">
-                <h4 className="text-[10px] font-bold text-purple-800 uppercase tracking-wider mb-2.5 border-b border-purple-200 pb-1">4. Contract Scope & Document Digital Archive</h4>
+                <h4 className="text-[10px] font-bold text-purple-800 uppercase tracking-wider mb-2.5 border-b border-purple-200 pb-1 flex items-center gap-1.5">
+                  <Briefcase size={12} className="text-purple-500" />
+                  <span>4. Contract Scope & Document Digital Archive</span>
+                </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Work Category</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <Briefcase size={10} className="text-purple-500" />
+                      <span>Work Category</span>
+                    </label>
                     <input 
                       type="text" 
                       placeholder="eg RCC Work, Brickwork" 
@@ -423,7 +519,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Agreement Sign Date</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <Calendar size={10} className="text-purple-500" />
+                      <span>Agreement Sign Date</span>
+                    </label>
                     <input 
                       type="date" 
                       value={masterForm.agreementDate}
@@ -432,7 +531,10 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-500 font-bold text-[9px] uppercase">Site Commencement Date</label>
+                    <label className="block text-gray-500 font-bold text-[9px] uppercase flex items-center gap-1">
+                      <Calendar size={10} className="text-purple-500" />
+                      <span>Site Commencement Date</span>
+                    </label>
                     <input 
                       type="date" 
                       value={masterForm.startDate}
@@ -498,72 +600,16 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
       )}
 
       {/* Subcontractor Directory Table Layout */}
-      <div className="bg-white border rounded shadow-sm overflow-x-auto text-[10px]">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-[#f3f4f6] text-gray-600 uppercase font-bold border-b border-gray-300">
-              <th className="p-2">ID</th>
-              <th className="p-2">Contractor Name</th>
-              <th className="p-2">Firm Title</th>
-              <th className="p-2">Contact Person / No</th>
-              <th className="p-2">Category</th>
-              <th className="p-2">Bank Details</th>
-              <th className="p-2">Gov Identifiers</th>
-              <th className="p-2">Status</th>
-              <th className="p-2 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredSubcontractors.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="p-4 text-center text-gray-400">No subcontractor profiles found on core directory tables.</td>
-              </tr>
-            ) : (
-              filteredSubcontractors.map(sub => {
-                const bDetailsStr = sub.bankName ? `${sub.bankName} - A/C ${sub.accountNumber?.substring(0, 4)}... IFSC: ${sub.ifscCode}` : 'N/A';
-                const govStr = `PAN: ${sub.panNumber || '-'} Aadhaar: ${sub.aadhaarNumber || '-'}`;
-                return (
-                  <tr key={sub.id} className="hover:bg-gray-50/55 transition">
-                    <td className="p-2 font-bold text-gray-900 font-mono">{sub.id}</td>
-                    <td className="p-2 font-bold text-[#002f6c]">{sub.name}</td>
-                    <td className="p-2 font-semibold text-gray-700">{sub.firmName || '-'}</td>
-                    <td className="p-2">
-                      <span className="font-medium text-gray-800">{sub.contactPerson || '-'}</span>
-                      <div className="text-[9px] text-gray-500 font-mono">{sub.contactNumber || '-'}</div>
-                    </td>
-                    <td className="p-2"><span className="bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded font-bold">{sub.workCategory || 'General'}</span></td>
-                    <td className="p-2 text-gray-500 font-mono truncate max-w-[150px]" title={bDetailsStr}>{bDetailsStr}</td>
-                    <td className="p-2 text-gray-500 font-mono text-[9px] truncate max-w-[150px]" title={govStr}>{govStr}</td>
-                    <td className="p-2">
-                      <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded ${sub.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                        {sub.status}
-                      </span>
-                    </td>
-                    <td className="p-2 text-center">
-                      <div className="flex justify-center items-center space-x-1">
-                        <button 
-                          onClick={() => handleEditMasterClick(sub)}
-                          className="p-1 hover:bg-gray-200 text-blue-600 rounded"
-                          title="Modify profile details"
-                        >
-                          <Edit size={11} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteSubcontractor(sub.id)}
-                          className="p-1 hover:bg-gray-200 text-red-600 rounded disabled:opacity-30"
-                          title="Erase profile"
-                          disabled={user?.role === 'staff'}
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+      <div className="bg-white border rounded shadow-sm overflow-hidden p-2 text-[10px]">
+        <ERPTable
+          id="subcontractor-master-table"
+          data={filteredSubcontractors}
+          columns={erpColumns}
+          idKey="id"
+          searchPlaceholder="Filter subcontractor partners..."
+          rowActions={erpRowActions}
+          exportFilename="subcontractor_partners"
+        />
       </div>
     </div>
   );

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Plus, Search, Edit, Trash2, Save, X, Upload, ShieldAlert 
+  Plus, Search, Edit, Trash2, Save, X, Upload, ShieldAlert,
+  Building2, FileText, User, Calendar, FileKey, Receipt, DollarSign, Percent, ShieldCheck, Sparkles
 } from 'lucide-react';
 import { Project, Subcontractor, SubcontractorBill } from '../../types';
+import { ERPTable, ERPColumn, ERPRowAction } from '../../components/ERPTable';
 
 interface BillingComponentProps {
   user: any;
@@ -29,6 +31,74 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
   setLoading
 }) => {
   const [billingSearch, setBillingSearch] = useState<string>('');
+
+  // ERP Columns for Subcontractor Work Billing Register
+  const erpColumns: ERPColumn<SubcontractorBill>[] = [
+    { key: 'billNo', header: 'Bill No', sortable: true, filterable: true, frozen: true, render: (val) => <span className="font-bold font-mono text-gray-900">{val}</span> },
+    { key: 'billDate', header: 'Date', sortable: true, filterable: true, render: (val) => <span className="font-mono">{val}</span> },
+    { key: 'projectName', header: 'Project', sortable: true, filterable: true, render: (val) => <span className="font-semibold text-gray-700">{val}</span> },
+    { key: 'subcontractorName', header: 'Subcontractor Target', sortable: true, filterable: true, render: (_, row) => (
+      <div>
+        <span className="font-bold text-[#002f6c]">{row.subcontractorName}</span>
+        <div className="text-[9px] text-gray-500">{row.subcontractorFirm || 'Personal'}</div>
+      </div>
+    )},
+    { key: 'workDescription', header: 'Civil Works Particulars', sortable: true, filterable: true, render: (val) => (
+      <span className="font-medium text-gray-800" title={val || ''}>{val || '-'}</span>
+    )},
+    { key: 'grossAmount', header: 'Gross Certified', sortable: true, filterable: true, render: (val) => (
+      <span className="font-mono font-semibold">₹{val.toLocaleString()}</span>
+    )},
+    { key: 'deductions', header: 'Deductions (GST, Ret, TDS, Rec)', sortable: true, filterable: true, render: (_, row) => {
+      const totalDeductions = row.retentionAmount + row.tdsAmount + row.recoveryAmount;
+      const formattedDeductions = `Ret: ${row.retentionAmount.toLocaleString()} | TDS: ${row.tdsAmount.toLocaleString()} | Recovery: ${row.recoveryAmount.toLocaleString()}`;
+      return (
+        <div title={formattedDeductions}>
+          <span className="font-mono font-medium">₹{totalDeductions.toLocaleString()}</span>
+          <div className="text-[8px] text-gray-500 font-bold">{formattedDeductions}</div>
+        </div>
+      );
+    }},
+    { key: 'netPayableAmount', header: 'Net Accrued', sortable: true, filterable: true, render: (val) => (
+      <span className="font-mono font-bold text-gray-950">₹{val.toLocaleString()}</span>
+    )},
+    { key: 'status', header: 'Status', sortable: true, filterable: true, render: (val) => (
+      <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${
+        val === 'Draft' ? 'bg-gray-100 text-gray-800' :
+        val === 'Approved' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+      }`}>
+        {val}
+      </span>
+    )}
+  ];
+
+  // ERP Row Actions for Subcontractor Work Billing Register
+  const erpRowActions: ERPRowAction<SubcontractorBill>[] = [
+    {
+      label: 'Edit',
+      icon: <Edit size={11} />,
+      onClick: (row) => handleEditBillClick(row),
+      tooltip: 'Edit Bill Details',
+      disabled: (row) => row.status === 'Posted & Locked'
+    },
+    {
+      label: 'Delete',
+      icon: <Trash2 size={11} />,
+      onClick: (row) => handleDeleteBill(row.id, row.billNo),
+      tooltip: 'Delete Bill',
+      disabled: (row) => row.status === 'Posted & Locked',
+      className: 'text-red-650 hover:bg-red-50'
+    },
+    {
+      label: 'Reverse',
+      icon: <X size={11} />,
+      onClick: (row) => handleReversalBill(row.id, row.billNo),
+      tooltip: 'Trigger a full reversal audit correction',
+      disabled: (row) => row.status !== 'Posted & Locked' || row.workDescription?.includes("[REVERSED]"),
+      className: 'text-rose-500 hover:bg-rose-50'
+    }
+  ];
+
   const [billingProjectFilter, setBillingProjectFilter] = useState<string>('all');
   const [billingStatusFilter, setBillingStatusFilter] = useState<string>('all');
 
@@ -255,36 +325,18 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
   // Filter bills list
   const filteredBills = useMemo(() => {
     return bills.filter(b => {
-      const query = billingSearch.toLowerCase();
-      const matchesSearch = (
-        b.billNo.toLowerCase().includes(query) ||
-        (b.workDescription || '').toLowerCase().includes(query) ||
-        (b.subcontractorName || '').toLowerCase().includes(query) ||
-        (b.subcontractorFirm || '').toLowerCase().includes(query)
-      );
-
       const matchesProject = billingProjectFilter === 'all' || b.projectId === billingProjectFilter;
       const matchesStatus = billingStatusFilter === 'all' || b.status === billingStatusFilter;
 
-      return matchesSearch && matchesProject && matchesStatus;
+      return matchesProject && matchesStatus;
     });
-  }, [bills, billingSearch, billingProjectFilter, billingStatusFilter]);
+  }, [bills, billingProjectFilter, billingStatusFilter]);
 
   return (
     <div className="space-y-4">
       {/* Controls Bar */}
       <div className="bg-white p-3 border rounded shadow-sm flex flex-wrap gap-3 justify-between items-center text-[10px]">
         <div className="flex flex-wrap gap-2.5 items-center">
-          <div className="flex items-center space-x-1.5 border-b border-gray-300">
-            <Search size={12} className="text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search Bill No, Contractor..." 
-              value={billingSearch}
-              onChange={(e) => setBillingSearch(e.target.value)}
-              className="bg-transparent outline-none p-0.5 text-xs font-semibold"
-            />
-          </div>
           <div>
             <span className="text-gray-400 font-bold mr-1 uppercase">Filter Project</span>
             <select 
@@ -351,7 +403,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
               {/* Project and partner specs */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5">Project *</label>
+                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
+                    <Building2 size={10} className="text-amber-500" />
+                    <span>Project *</span>
+                  </label>
                   <select 
                     value={billForm.projectId}
                     onChange={(e) => setBillForm({ ...billForm, projectId: e.target.value })}
@@ -362,7 +417,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5">Subcontractor *</label>
+                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
+                    <User size={10} className="text-amber-500" />
+                    <span>Subcontractor *</span>
+                  </label>
                   <select 
                     value={billForm.subcontractorId}
                     onChange={(e) => setBillForm({ ...billForm, subcontractorId: e.target.value })}
@@ -373,7 +431,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5">Bill Date *</label>
+                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
+                    <Calendar size={10} className="text-amber-500" />
+                    <span>Bill Date *</span>
+                  </label>
                   <input 
                     type="date" 
                     value={billForm.billDate}
@@ -386,7 +447,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
               {/* Work details & automatic numbering code override */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5">Bill Reference Number</label>
+                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
+                    <FileKey size={10} className="text-amber-500" />
+                    <span>Bill Reference Number</span>
+                  </label>
                   <input 
                     type="text" 
                     placeholder="Auto-assigned unless overridden" 
@@ -396,9 +460,12 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5">Hard Copy Bill Doc Scan</label>
+                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
+                    <Upload size={10} className="text-amber-500" />
+                    <span>Hard Copy Bill Doc Scan</span>
+                  </label>
                   <label className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-center text-gray-600 font-semibold p-1 rounded block cursor-pointer transition text-[10px] py-[4px]">
-                    <Upload size={10} className="inline mr-1" />
+                    <Upload size={10} className="inline mr-1 text-gray-500" />
                     {billForm.attachmentUpload ? "✓ Change Archived File" : "Select & Convert Attachment File"}
                     <input 
                       type="file" 
@@ -410,7 +477,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
               </div>
 
               <div>
-                <label className="block text-gray-500 font-bold uppercase mb-0.5">Description of Certified Civil / Works</label>
+                <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
+                  <FileText size={10} className="text-amber-500" />
+                  <span>Description of Certified Civil / Works</span>
+                </label>
                 <textarea 
                   rows={2}
                   placeholder="Detail block location, floor levels, specifications, item measurements..." 
@@ -422,11 +492,17 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
 
               {/* Interactive financial computation grid */}
               <div className="border border-amber-300 bg-amber-50/10 p-3 rounded space-y-2">
-                <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2 border-b border-amber-200 pb-1">Ledger Accrual Computations</h4>
+                <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2 border-b border-amber-200 pb-1 flex items-center gap-1.5">
+                  <Sparkles size={12} className="text-amber-500" />
+                  <span>Ledger Accrual Computations</span>
+                </h4>
                 
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px]">1. Gross Certified *</label>
+                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
+                      <DollarSign size={9} className="text-amber-500" />
+                      <span>1. Gross Certified *</span>
+                    </label>
                     <div className="relative">
                       <span className="absolute left-1.5 top-1 font-bold text-gray-400">₹</span>
                       <input 
@@ -440,7 +516,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px]">2. Retention Deduct (5%)</label>
+                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
+                      <Percent size={9} className="text-amber-500" />
+                      <span>2. Retention Deduct</span>
+                    </label>
                     <div className="flex space-x-1">
                       <select 
                         value={taxConfig.retentionRate}
@@ -462,7 +541,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px]">3. TDS Reserve (1%)</label>
+                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
+                      <Percent size={9} className="text-amber-500" />
+                      <span>3. TDS Reserve</span>
+                    </label>
                     <div className="flex space-x-1">
                       <select 
                         value={taxConfig.tdsRate}
@@ -484,7 +566,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px]">4. GST Accrual (18%)</label>
+                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
+                      <Percent size={9} className="text-amber-500" />
+                      <span>4. GST Accrual</span>
+                    </label>
                     <div className="flex space-x-1">
                       <select 
                         value={taxConfig.gstRate}
@@ -506,7 +591,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px]">5. Recovery / Debits</label>
+                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
+                      <Receipt size={9} className="text-amber-500" />
+                      <span>5. Recovery / Debits</span>
+                    </label>
                     <input 
                       type="number" 
                       placeholder="For materials provided" 
@@ -517,7 +605,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                   </div>
 
                   <div className="bg-[#1e293b] text-white p-2.5 rounded border border-gray-800 flex flex-col justify-center">
-                    <span className="text-[8px] uppercase font-bold text-amber-400">6. NET CONTRACTOR CLEARANCE</span>
+                    <span className="text-[8px] uppercase font-bold text-amber-400 flex items-center gap-1">
+                      <ShieldCheck size={8} className="text-amber-400 animate-pulse" />
+                      <span>6. NET CONTRACTOR CLEARANCE</span>
+                    </span>
                     <span className="text-sm font-extrabold font-mono text-white mt-0.5">₹{parseFloat(billForm.netPayableAmount || '0').toLocaleString()}</span>
                   </div>
                 </div>
@@ -525,7 +616,10 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5">Transition Status</label>
+                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
+                    <ShieldCheck size={10} className="text-amber-500" />
+                    <span>Transition Status</span>
+                  </label>
                   <select 
                     value={billForm.status}
                     onChange={(e) => setBillForm({ ...billForm, status: e.target.value as any })}
@@ -564,92 +658,16 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
       )}
 
       {/* Bills Listing Grid */}
-      <div className="bg-white border rounded shadow-sm overflow-x-auto text-[10px]">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-[#f3f4f6] text-gray-600 uppercase font-bold border-b border-gray-300">
-              <th className="p-2">Bill No</th>
-              <th className="p-2">Date</th>
-              <th className="p-2">Project</th>
-              <th className="p-2">Subcontractor Target</th>
-              <th className="p-2">Civil Works Particulars</th>
-              <th className="p-2 text-right">Gross Certified</th>
-              <th className="p-2 text-right">Deductions (GST, Ret, TDS, Rec)</th>
-              <th className="p-2 text-right">Net Accrued</th>
-              <th className="p-2 text-center">Status</th>
-              <th className="p-2 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredBills.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="p-4 text-center text-gray-400">No subcontractor bills logged under active parameters.</td>
-              </tr>
-            ) : (
-              filteredBills.map(b => {
-                const totalDeductions = b.retentionAmount + b.tdsAmount + b.recoveryAmount;
-                const formattedDeductions = `Ret: ${b.retentionAmount.toLocaleString()} | TDS: ${b.tdsAmount.toLocaleString()} | Recovery: ${b.recoveryAmount.toLocaleString()}`;
-                return (
-                  <tr key={b.id} className="hover:bg-gray-50 transition">
-                    <td className="p-2 font-bold font-mono text-gray-900">{b.billNo}</td>
-                    <td className="p-2 font-mono">{b.billDate}</td>
-                    <td className="p-2 font-semibold text-gray-700">{b.projectName}</td>
-                    <td className="p-2">
-                      <span className="font-bold text-[#002f6c]">{b.subcontractorName}</span>
-                      <div className="text-[9px] text-gray-500">{b.subcontractorFirm || 'Personal'}</div>
-                    </td>
-                    <td className="p-2 font-medium text-gray-850 max-w-[200px] truncate" title={b.workDescription || ''}>{b.workDescription || '-'}</td>
-                    <td className="p-2 text-right font-mono font-semibold">₹{b.grossAmount.toLocaleString()}</td>
-                    <td className="p-2 text-right font-mono" title={formattedDeductions}>
-                      <span>₹{totalDeductions.toLocaleString()}</span>
-                      <div className="text-[8px] text-gray-500 font-bold">{formattedDeductions}</div>
-                    </td>
-                    <td className="p-2 text-right font-mono font-bold text-gray-950">₹{b.netPayableAmount.toLocaleString()}</td>
-                    <td className="p-2 text-center">
-                      <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded ${
-                        b.status === 'Draft' ? 'bg-gray-100 text-gray-800' :
-                        b.status === 'Approved' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="p-2 text-center">
-                      <div className="flex justify-center items-center space-x-1">
-                        {b.status !== 'Posted & Locked' ? (
-                          <>
-                            <button 
-                              onClick={() => handleEditBillClick(b)}
-                              className="p-1 hover:bg-gray-200 text-blue-600 rounded"
-                              title="Edit Bill Details"
-                            >
-                              <Edit size={11} />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteBill(b.id, b.billNo)}
-                              className="p-1 hover:bg-gray-200 text-red-650 rounded"
-                              title="Delete Bill"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </>
-                        ) : (
-                          <button 
-                            onClick={() => handleReversalBill(b.id, b.billNo)}
-                            className="px-1.5 py-0.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded flex items-center space-x-1 hover:scale-105 transition"
-                            title="Trigger a full reversal audit correction"
-                            disabled={b.workDescription?.includes("[REVERSED]")}
-                          >
-                            <span>Reverse</span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+      <div className="bg-white border rounded shadow-sm overflow-hidden p-2 text-[10px]">
+        <ERPTable
+          id="subcontractor-bills-table"
+          data={filteredBills}
+          columns={erpColumns}
+          idKey="id"
+          searchPlaceholder="Filter certified contractor bills..."
+          rowActions={erpRowActions}
+          exportFilename="subcontractor_bills"
+        />
       </div>
     </div>
   );

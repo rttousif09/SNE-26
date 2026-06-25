@@ -10,6 +10,7 @@ import { TopBar } from './components/TopBar';
 import { Login } from './components/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Projects } from './pages/Projects';
+import { BOQPage } from './pages/BOQPage';
 import { Workers } from './pages/Workers';
 import { Billing } from './pages/Billing';
 import { ClientPayment } from './pages/ClientPayment';
@@ -33,7 +34,8 @@ import StaffManagement from './pages/StaffManagement';
 import ActivityLog from './pages/ActivityLog';
 import { NumberingSettingsPage } from './pages/NumberingSettings';
 import { Subcontractors } from './pages/subcontractors';
-import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud } from 'lucide-react';
+import { DMSPage } from './pages/DMSPage';
+import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud, Pin, FolderMinus, RefreshCw, Copy, Plus, Trash2, Clock, ChevronLeft, ChevronRight, Undo, AlertCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
 import { SuccessToast } from './components/AnimatedERP';
@@ -50,7 +52,357 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
     (paymentSheetApprovals?.filter(s => s.status === 'Pending').length || 0) +
     (expensesLedger?.filter(e => e.status === 'Submitted').length || 0);
 
-  const [currentTab, setCurrentTab] = useState('dashboard');
+  // Multi-Tab Workspace representation
+  interface WorkspaceTab {
+    id: string;
+    type: string;
+    title: string;
+    isPinned?: boolean;
+    hasUnsavedChanges?: boolean;
+    refreshKey?: number;
+    props?: any;
+  }
+
+  const [tabs, setTabs] = useState<WorkspaceTab[]>(() => {
+    try {
+      const saved = localStorage.getItem('sn-erp-workspace-tabs');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [{ id: 'dashboard', type: 'dashboard', title: 'Workspace Home', isPinned: true }];
+  });
+
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    try {
+      const savedActive = localStorage.getItem('sn-erp-workspace-active-tab');
+      if (savedActive) {
+        return savedActive;
+      }
+    } catch (e) {}
+    return 'dashboard';
+  });
+
+  const [recentlyClosedTabs, setRecentlyClosedTabs] = useState<WorkspaceTab[]>(() => {
+    try {
+      const savedRecent = localStorage.getItem('sn-erp-workspace-recently-closed');
+      if (savedRecent) {
+        return JSON.parse(savedRecent);
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [recentTabs, setRecentTabs] = useState<Omit<WorkspaceTab, 'isPinned'>[]>(() => {
+    try {
+      const savedHistory = localStorage.getItem('sn-erp-workspace-history');
+      if (savedHistory) {
+        return JSON.parse(savedHistory);
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; tab: WorkspaceTab | null }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    tab: null
+  });
+
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
+  const [isRecentDropdownOpen, setIsRecentDropdownOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Save changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('sn-erp-workspace-tabs', JSON.stringify(tabs));
+  }, [tabs]);
+
+  useEffect(() => {
+    localStorage.setItem('sn-erp-workspace-active-tab', activeTabId);
+  }, [activeTabId]);
+
+  useEffect(() => {
+    localStorage.setItem('sn-erp-workspace-recently-closed', JSON.stringify(recentlyClosedTabs));
+  }, [recentlyClosedTabs]);
+
+  useEffect(() => {
+    localStorage.setItem('sn-erp-workspace-history', JSON.stringify(recentTabs));
+  }, [recentTabs]);
+
+  const getTabNameForType = (type: string) => {
+    switch (type) {
+      case 'dashboard': return 'Workspace Home';
+      case 'projects': return 'Projects';
+      case 'workers': return 'Workers Management';
+      case 'dms': return 'DMS Document Center';
+      case 'boqs': return 'BOQ Management';
+      case 'billing': return 'Billing Management';
+      case 'client-payment': return 'Client Payment';
+      case 'kharchi': return 'Kharchi';
+      case 'advance': return 'Advance';
+      case 'worker-payment': return 'Workers Payment';
+      case 'worker-ledger': return 'Worker Ledger & Advance Recovery';
+      case 'approvals': return 'Approvals Workflow';
+      case 'expenses': return 'Expenses Ledger';
+      case 'mess': return 'Mess Management';
+      case 'dlr': return 'Daily Labour Report (DLR)';
+      case 'materials': return 'Material & Inventory Management';
+      case 'assets': return 'Equipment & Asset Register';
+      case 'expenses-summary': return 'Expenses Summary Dashboard';
+      case 'site-monthly-summary': return 'Site Monthly Report';
+      case 'daily-site-summary': return 'AI Daily Site Summary';
+      case 'bill-tracking': return 'Bill Tracking Workflow';
+      case 'floor-abstracts': return 'Floor Abstract';
+      case 'financial-year-archive': return 'Financial Year Archive & Closing';
+      case 'activity-log': return 'System Activity Log';
+      case 'subcontractors': return 'Subcontractor Dashboard';
+      case 'subcontractors-master': return 'Subcontractor Directory';
+      case 'subcontractors-billing': return 'Subcontractor Bills';
+      case 'subcontractors-payments': return 'Subcontractor Payments';
+      case 'subcontractors-ledger': return 'Subcontractor Reconciliation Ledger';
+      case 'subcontractors-audit': return 'Subcontractor Security Audit Trails';
+      case 'numbering-settings': return 'Document Numbering Settings';
+      case 'staff-management': return 'Staff & Access Management';
+      default: return 'Workspace Home';
+    }
+  };
+
+  const openTab = (type: string, title?: string, props?: any, forceNew = false) => {
+    let tabId = type;
+    if (props && props.tabId) {
+      tabId = props.tabId;
+    } else if (forceNew) {
+      tabId = `${type}:${Date.now()}`;
+    }
+
+    const existing = tabs.find(t => t.id === tabId);
+    if (existing) {
+      setActiveTabId(tabId);
+      return;
+    }
+
+    const resolvedTitle = title || getTabNameForType(type);
+    const newTab: WorkspaceTab = {
+      id: tabId,
+      type,
+      title: resolvedTitle,
+      props,
+      isPinned: false,
+      hasUnsavedChanges: false,
+      refreshKey: 0
+    };
+
+    setTabs(prev => {
+      if (prev.some(t => t.id === tabId)) return prev;
+      return [...prev, newTab];
+    });
+    setActiveTabId(tabId);
+
+    // Track recently opened modules (max 10, newest first)
+    setRecentTabs(prev => {
+      const filtered = prev.filter(item => item.id !== tabId);
+      return [{ id: tabId, type, title: resolvedTitle, props }, ...filtered].slice(0, 10);
+    });
+  };
+
+  const handleSetCurrentTab = (tab: string) => {
+    openTab(tab);
+  };
+
+  const currentTab = activeTabId;
+  const setCurrentTab = handleSetCurrentTab;
+
+  const handleCloseTab = (idToClose: string) => {
+    const tabToClose = tabs.find(t => t.id === idToClose);
+    if (!tabToClose) return;
+
+    if (tabToClose.type !== 'dashboard') {
+      setRecentlyClosedTabs(prev => {
+        const filtered = prev.filter(t => t.id !== idToClose);
+        return [tabToClose, ...filtered].slice(0, 10);
+      });
+    }
+
+    const newTabs = tabs.filter(t => t.id !== idToClose);
+    setTabs(newTabs);
+
+    if (activeTabId === idToClose && newTabs.length > 0) {
+      const closedIndex = tabs.findIndex(t => t.id === idToClose);
+      const nextActiveIndex = Math.min(closedIndex, newTabs.length - 1);
+      setActiveTabId(newTabs[nextActiveIndex].id);
+    }
+  };
+
+  const handleCloseTabRequest = (idToClose: string) => {
+    const tab = tabs.find(t => t.id === idToClose);
+    if (!tab) return;
+    if (tab.isPinned) return;
+
+    if (tab.hasUnsavedChanges) {
+      setPendingCloseTabId(idToClose);
+    } else {
+      handleCloseTab(idToClose);
+    }
+  };
+
+  const handleTogglePinTab = (tabId: string) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, isPinned: !t.isPinned } : t));
+  };
+
+  const handleRefreshTab = (tabId: string) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, refreshKey: (t.refreshKey || 0) + 1 } : t));
+  };
+
+  const handleDuplicateTab = (tab: WorkspaceTab) => {
+    const duplicateId = `${tab.type}:dup:${Date.now()}`;
+    const duplicateTab: WorkspaceTab = {
+      ...tab,
+      id: duplicateId,
+      title: `${tab.title} (Copy)`,
+      isPinned: false,
+      hasUnsavedChanges: false,
+      refreshKey: 0
+    };
+    setTabs(prev => [...prev, duplicateTab]);
+    setActiveTabId(duplicateId);
+  };
+
+  const handleCloseOtherTabs = (keepTabId: string) => {
+    const tabsToClose = tabs.filter(t => t.id !== keepTabId && !t.isPinned);
+    const hasUnsaved = tabsToClose.some(t => t.hasUnsavedChanges);
+    if (hasUnsaved) {
+      alert("Some other tabs have unsaved changes. Please review and close them individually to protect your data.");
+      return;
+    }
+    setTabs(prev => prev.filter(t => t.id === keepTabId || t.isPinned));
+    setActiveTabId(keepTabId);
+  };
+
+  const handleCloseAllTabs = () => {
+    const tabsToClose = tabs.filter(t => !t.isPinned);
+    const hasUnsaved = tabsToClose.some(t => t.hasUnsavedChanges);
+    if (hasUnsaved) {
+      alert("Some tabs have unsaved changes. Please review and close them individually to protect your data.");
+      return;
+    }
+    const pinnedTabs = tabs.filter(t => t.isPinned);
+    if (pinnedTabs.length > 0) {
+      setTabs(pinnedTabs);
+      setActiveTabId(pinnedTabs[0].id);
+    } else {
+      const defaultTab = { id: 'dashboard', type: 'dashboard', title: 'Workspace Home', isPinned: true };
+      setTabs([defaultTab]);
+      setActiveTabId('dashboard');
+    }
+  };
+
+  const handleReopenRecentlyClosedTab = () => {
+    if (recentlyClosedTabs.length === 0) return;
+    const lastClosed = recentlyClosedTabs[0];
+    setRecentlyClosedTabs(prev => prev.slice(1));
+    setTabs(prev => {
+      if (prev.find(t => t.id === lastClosed.id)) return prev;
+      return [...prev, lastClosed];
+    });
+    setActiveTabId(lastClosed.id);
+  };
+
+  const handleUnsavedChange = (tabId: string, hasUnsaved: boolean) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, hasUnsavedChanges: hasUnsaved } : t));
+  };
+
+  const switchToNextTab = () => {
+    if (tabs.length <= 1) return;
+    const currentIndex = tabs.findIndex(t => t.id === activeTabId);
+    const nextIndex = (currentIndex + 1) % tabs.length;
+    setActiveTabId(tabs[nextIndex].id);
+  };
+
+  const switchToPrevTab = () => {
+    if (tabs.length <= 1) return;
+    const currentIndex = tabs.findIndex(t => t.id === activeTabId);
+    const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    setActiveTabId(tabs[prevIndex].id);
+  };
+
+  const openTabRef = React.useRef<any>(null);
+  openTabRef.current = openTab;
+
+  useEffect(() => {
+    (window as any).openWorkspaceTab = (type: string, title?: string, props?: any, forceNew = false) => {
+      if (openTabRef.current) {
+        openTabRef.current(type, title, props, forceNew);
+      }
+    };
+    return () => {
+      delete (window as any).openWorkspaceTab;
+    };
+  }, []);
+
+  // Keyboard shortcuts listener
+  useEffect(() => {
+    const handleWorkspaceKeys = (e: KeyboardEvent) => {
+      const isModifier = e.ctrlKey || e.altKey;
+      if (!isModifier) return;
+
+      const key = e.key.toLowerCase();
+      
+      if (key === 't') {
+        e.preventDefault();
+        openTab('dashboard', 'Workspace Home', null, true);
+      }
+      
+      if (key === 'w') {
+        e.preventDefault();
+        handleCloseTabRequest(activeTabId);
+      }
+      
+      if (e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        switchToNextTab();
+      }
+      if (key === 'arrowright' && e.altKey) {
+        e.preventDefault();
+        switchToNextTab();
+      }
+
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        switchToPrevTab();
+      }
+      if (key === 'arrowleft' && e.altKey) {
+        e.preventDefault();
+        switchToPrevTab();
+      }
+    };
+
+    window.addEventListener('keydown', handleWorkspaceKeys, true);
+    return () => window.removeEventListener('keydown', handleWorkspaceKeys, true);
+  }, [tabs, activeTabId]);
+
+  // Context Menu click away
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      if (contextMenu.visible) {
+        setContextMenu(prev => ({ ...prev, visible: false }));
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, [contextMenu.visible]);
+
   const [bottomTab, setBottomTab] = useState<'properties' | 'error-log' | 'backup'>('properties');
   const [isBottomMinimized, setIsBottomMinimized] = useState(false);
   const [backupFileError, setBackupFileError] = useState<string | null>(null);
@@ -296,69 +648,141 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
     };
   }, []);
 
+  const tabsScrollRef = React.useRef<HTMLDivElement>(null);
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabsScrollRef.current) {
+      const scrollAmount = 200;
+      tabsScrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   const renderContent = () => {
-    switch (currentTab) {
-      case 'dashboard': return <Dashboard />;
-      case 'projects': return <Projects />;
-      case 'workers': return <Workers />;
-      case 'billing': return <Billing />;
-      case 'client-payment': return <ClientPayment />;
-      case 'kharchi': return <Kharchi />;
-      case 'advance': return <Advance />;
-      case 'worker-payment': return <WorkerPayment />;
-      case 'worker-ledger': return <WorkerLedger />;
-      case 'approvals': return <Approvals />;
-      case 'expenses': return <Expenses />;
-      case 'mess': return <Mess />;
-      case 'dlr': return <DLR />;
-      case 'materials': return <Materials />;
-      case 'assets': return <EquipmentAssetManagement />;
-      case 'expenses-summary': return <ExpensesSummary />;
-      case 'site-monthly-summary': return <SiteMonthlySummary />;
-      case 'daily-site-summary': return <DailySiteSummary />;
-      case 'bill-tracking': return <BillTracking />;
-      case 'floor-abstracts': return <FloorAbstracts />;
-      case 'financial-year-archive': return <FinancialYearArchive />;
-      case 'activity-log': return <ActivityLog />;
-      case 'subcontractors': return <Subcontractors />;
-      case 'numbering-settings': return <NumberingSettingsPage />;
+    const activeTab = tabs.find(t => t.id === activeTabId) || { id: 'dashboard', type: 'dashboard', title: 'Workspace Home', refreshKey: 0, props: null };
+    const type = activeTab.type;
+    const props = activeTab.props || {};
+    const key = `${activeTab.id}-${activeTab.refreshKey || 0}`;
+
+    // Pass onUnsavedChange to our multi-record screens so they can lock tab closing when forms are dirty
+    const onUnsavedChangeCallback = (hasUnsaved: boolean) => handleUnsavedChange(activeTab.id, hasUnsaved);
+
+    switch (type) {
+      case 'dashboard': return <Dashboard key={key} setCurrentTab={setCurrentTab} />;
+      case 'projects': return <Projects key={key} />;
+      case 'dms': return <DMSPage key={key} />;
+      case 'workers': return <Workers key={key} initialWorkerId={props.initialWorkerId} initialView={props.initialView} onUnsavedChange={onUnsavedChangeCallback} />;
+      case 'boqs': return <BOQPage key={key} onUnsavedChange={onUnsavedChangeCallback} />;
+      case 'billing': return <Billing key={key} />;
+      case 'client-payment': return <ClientPayment key={key} />;
+      case 'kharchi': return <Kharchi key={key} />;
+      case 'advance': return <Advance key={key} />;
+      case 'worker-payment': return <WorkerPayment key={key} initialWorkerId={props.initialWorkerId} onUnsavedChange={onUnsavedChangeCallback} />;
+      case 'worker-ledger': return <WorkerLedger key={key} />;
+      case 'approvals': return <Approvals key={key} />;
+      case 'expenses': return <Expenses key={key} />;
+      case 'mess': return <Mess key={key} />;
+      case 'dlr': return <DLR key={key} />;
+      case 'materials': return <Materials key={key} />;
+      case 'assets': return <EquipmentAssetManagement key={key} />;
+      case 'expenses-summary': return <ExpensesSummary key={key} />;
+      case 'site-monthly-summary': return <SiteMonthlySummary key={key} />;
+      case 'daily-site-summary': return <DailySiteSummary key={key} />;
+      case 'bill-tracking': return <BillTracking key={key} />;
+      case 'floor-abstracts': return <FloorAbstracts key={key} />;
+      case 'financial-year-archive': return <FinancialYearArchive key={key} />;
+      case 'activity-log': return <ActivityLog key={key} />;
+      case 'subcontractors': return <Subcontractors key={key} initialTab="dashboard" />;
+      case 'subcontractors-master': return <Subcontractors key={key} initialTab="master" />;
+      case 'subcontractors-billing': return <Subcontractors key={key} initialTab="billing" />;
+      case 'subcontractors-payments': return <Subcontractors key={key} initialTab="payments" />;
+      case 'subcontractors-ledger': return <Subcontractors key={key} initialTab="ledger" />;
+      case 'subcontractors-audit': return <Subcontractors key={key} initialTab="audit" />;
+      case 'numbering-settings': return <NumberingSettingsPage key={key} />;
       case 'staff-management':
         if (user?.username === 'saddamsne' || user?.username === 'rejatousifsne') {
-          return <StaffManagement />;
+          return <StaffManagement key={key} />;
         }
-        return <Dashboard />;
-      default: return <Dashboard />;
+        return <Dashboard key={key} setCurrentTab={setCurrentTab} />;
+      default: return <Dashboard key={key} setCurrentTab={setCurrentTab} />;
     }
   };
 
   const getTabName = () => {
-    switch (currentTab) {
-      case 'dashboard': return 'Overview';
-      case 'projects': return 'Projects';
-      case 'workers': return 'Workers Management';
-      case 'billing': return 'Billing Management';
-      case 'client-payment': return 'Client Payment';
-      case 'kharchi': return 'Kharchi';
-      case 'advance': return 'Advance';
-      case 'worker-payment': return 'Workers Payment';
-      case 'worker-ledger': return 'Worker Ledger & Advance Recovery';
-      case 'approvals': return 'Approvals Workflow';
-      case 'expenses': return 'Expenses Ledger';
-      case 'mess': return 'Mess Management';
-      case 'dlr': return 'Daily Labour Report (DLR)';
-      case 'materials': return 'Material & Inventory Management';
-      case 'assets': return 'Equipment & Asset Register';
-      case 'expenses-summary': return 'Expenses Summary Dashboard';
-      case 'site-monthly-summary': return 'Site Monthly Report';
-      case 'daily-site-summary': return 'AI Daily Site Summary';
-      case 'bill-tracking': return 'Bill Tracking Workflow';
-      case 'floor-abstracts': return 'Floor Abstract';
-      case 'financial-year-archive': return 'Financial Year Archive & Closing';
-      case 'activity-log': return 'System Activity Log';
-      case 'subcontractors': return 'Subcontractor Management ERP';
-      case 'numbering-settings': return 'Document Numbering Settings';
-      case 'staff-management': return 'Staff & Access Management';
-      default: return 'Overview';
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (activeTab) {
+      return activeTab.title;
+    }
+    return 'Workspace Home';
+  };
+
+  const getBreadcrumbs = (tabId: string) => {
+    const tab = tabs.find(t => t.id === tabId);
+    const type = tab ? tab.type : tabId;
+    switch (type) {
+      case 'dashboard':
+        return ['Overview'];
+      case 'projects':
+        return ['Masters', 'Projects'];
+      case 'workers':
+        return ['Masters', 'Workers'];
+      case 'dlr':
+        return ['Labour Management', 'Attendance (DLR)'];
+      case 'advance':
+        return ['Labour Management', 'Advance Registers'];
+      case 'worker-payment':
+        return ['Labour Management', 'Worker Payment'];
+      case 'worker-ledger':
+        return ['Labour Management', 'Worker Ledger'];
+      case 'floor-abstracts':
+        return ['Floor Abstract', 'Floor Abstracts'];
+      case 'subcontractors':
+        return ['Subcontractor Management', 'Subcontractor Dashboard'];
+      case 'subcontractors-master':
+        return ['Subcontractor Management', 'Subcontractor Directory'];
+      case 'subcontractors-billing':
+        return ['Subcontractor Management', 'Subcontractor Bills'];
+      case 'subcontractors-payments':
+        return ['Subcontractor Management', 'Subcontractor Payments'];
+      case 'subcontractors-ledger':
+        return ['Subcontractor Management', 'Reconciliation Ledger'];
+      case 'subcontractors-audit':
+        return ['Subcontractor Management', 'Audit Trail Logs'];
+      case 'boqs':
+        return ['Billing & Collections', 'BOQ Management'];
+      case 'dms':
+        return ['Document System', 'DMS Document Center'];
+      case 'billing':
+        return ['Billing & Collections', 'Billing Management'];
+      case 'client-payment':
+        return ['Billing & Collections', 'Client Payment'];
+      case 'materials':
+        return ['Inventory & Store', 'Materials & Inventory'];
+      case 'assets':
+        return ['Inventory & Store', 'Equipment Assets'];
+      case 'expenses':
+        return ['Expenses', 'Expenses Ledger'];
+      case 'expenses-summary':
+        return ['Expenses', 'Expenses Summary'];
+      case 'site-monthly-summary':
+        return ['Reports', 'Site Monthly Summary'];
+      case 'daily-site-summary':
+        return ['Reports', 'Daily Site Summary'];
+      case 'bill-tracking':
+        return ['Reports', 'Bill Tracking Workflow'];
+      case 'financial-year-archive':
+        return ['Reports', 'Financial Year Archive'];
+      case 'numbering-settings':
+        return ['Settings', 'Numbering Settings'];
+      case 'staff-management':
+        return ['Settings', 'Staff Management'];
+      case 'activity-log':
+        return ['Settings', 'Activity Log'];
+      case 'approvals':
+        return ['Approvals Workflow'];
+      default:
+        return ['Overview'];
     }
   };
 
@@ -542,7 +966,269 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           )}
 
           {/* Main Editor Area */}
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.4 }} className="flex-1 overflow-auto flex flex-col">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.4 }} className="flex-1 overflow-hidden flex flex-col bg-slate-100">
+            {/* Multi-Tab Workspace Bar */}
+            <div className="bg-[#eef2f6] border-b border-[#cbd5e1] flex items-center h-9 px-1 select-none shrink-0 print:hidden relative">
+              
+              {/* Left Scroll Button */}
+              <button 
+                onClick={() => scrollTabs('left')}
+                className="p-1.5 hover:bg-slate-200 text-slate-600 rounded-sm cursor-pointer hover:text-slate-850 transition-colors"
+                title="Scroll Left"
+              >
+                <ChevronLeft size={14} />
+              </button>
+
+              {/* Scrollable tabs container */}
+              <div 
+                ref={tabsScrollRef}
+                className="flex-1 flex items-end h-full overflow-x-auto space-x-0.5 px-1 pt-1.5"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {tabs.map((tab) => {
+                  const isActive = tab.id === activeTabId;
+                  return (
+                    <div
+                      key={tab.id}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({
+                          visible: true,
+                          x: e.clientX,
+                          y: e.clientY,
+                          tab
+                        });
+                      }}
+                      onDoubleClick={() => handleTogglePinTab(tab.id)}
+                      onClick={() => setActiveTabId(tab.id)}
+                      className={`group relative flex items-center h-[28px] px-3 py-1 rounded-t border-t border-x text-xs transition-all duration-150 cursor-pointer select-none shrink-0 ${
+                        isActive 
+                          ? 'bg-white border-[#cbd5e1] font-bold text-blue-900 border-b-transparent z-15 shadow-[0_-1px_3px_rgba(0,0,0,0.05)]' 
+                          : 'bg-slate-200/70 border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-800 border-b-[#cbd5e1]'
+                      }`}
+                      style={{ maxWidth: '160px', minWidth: '95px' }}
+                    >
+                      {/* Left accent top border line for active tab */}
+                      {isActive && (
+                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-indigo-600 rounded-t" />
+                      )}
+
+                      {/* Icon */}
+                      <span className="mr-1.5 shrink-0 text-slate-500">
+                        {tab.isPinned ? '📌' : '📄'}
+                      </span>
+
+                      {/* Title */}
+                      <span className="truncate flex-1 pr-4" title={tab.title}>
+                        {tab.title}
+                      </span>
+
+                      {/* Unsaved Indicator / Close Button */}
+                      <div className="absolute right-1.5 flex items-center justify-center">
+                        {tab.hasUnsavedChanges && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 animate-pulse" title="Unsaved changes" />
+                        )}
+                        {!tab.isPinned && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCloseTabRequest(tab.id);
+                            }}
+                            className="p-0.5 rounded-full hover:bg-red-500 hover:text-white text-slate-400 group-hover:opacity-100 transition-opacity"
+                            style={{ opacity: isActive ? 1 : 0.4 }}
+                            title="Close tab (Alt+W)"
+                          >
+                            <X size={10} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Right Scroll Button */}
+              <button 
+                onClick={() => scrollTabs('right')}
+                className="p-1.5 hover:bg-slate-200 text-slate-600 rounded-sm cursor-pointer hover:text-slate-850 transition-colors mr-1"
+                title="Scroll Right"
+              >
+                <ChevronRight size={14} />
+              </button>
+
+              {/* Action Buttons & Dropdowns */}
+              <div className="flex items-center space-x-1 shrink-0 h-full border-l border-slate-300 pl-1.5 pr-1">
+                {/* Reopen recently closed tab button */}
+                <button
+                  disabled={recentlyClosedTabs.length === 0}
+                  onClick={handleReopenRecentlyClosedTab}
+                  className={`p-1.5 rounded-sm transition-colors cursor-pointer ${
+                    recentlyClosedTabs.length > 0 
+                      ? 'text-slate-700 hover:bg-slate-200' 
+                      : 'text-slate-350 cursor-not-allowed'
+                  }`}
+                  title={recentlyClosedTabs.length > 0 ? `Reopen recently closed tab (${recentlyClosedTabs[0].title})` : 'No recently closed tabs'}
+                >
+                  <Undo size={14} />
+                </button>
+
+                {/* History Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsRecentDropdownOpen(!isRecentDropdownOpen)}
+                    className="p-1.5 text-slate-700 hover:bg-slate-200 rounded-sm cursor-pointer flex items-center space-x-0.5 transition-colors"
+                    title="Recently opened modules history"
+                  >
+                    <Clock size={14} />
+                    <ChevronDown size={10} />
+                  </button>
+
+                  {isRecentDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsRecentDropdownOpen(false)} />
+                      <div className="absolute right-0 mt-1 w-56 bg-white border border-slate-300 rounded shadow-lg z-50 py-1 text-xs text-slate-700">
+                        <div className="px-3 py-1 font-bold text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-100">
+                          Recently Opened
+                        </div>
+                        {recentTabs.length === 0 ? (
+                          <div className="px-3 py-2 text-slate-400 italic">No history yet</div>
+                        ) : (
+                          recentTabs.map((item, idx) => (
+                            <button
+                              key={`${item.id}-${idx}`}
+                              onClick={() => {
+                                openTab(item.type, item.title, item.props);
+                                setIsRecentDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-3 py-1.5 hover:bg-slate-100 flex items-center space-x-2 truncate transition-colors"
+                            >
+                              <span className="text-slate-400 text-[10px]">📄</span>
+                              <span className="truncate flex-1">{item.title}</span>
+                            </button>
+                          ))
+                        )}
+                        <div className="border-t border-slate-100 mt-1 pt-1 flex justify-between px-2">
+                          <button
+                            onClick={() => {
+                              handleCloseAllTabs();
+                              setIsRecentDropdownOpen(false);
+                            }}
+                            className="text-red-600 hover:bg-red-50 px-2 py-1 rounded w-full text-center font-semibold"
+                          >
+                            Close All Tabs
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Right-Click Tab Context Menu */}
+            {contextMenu.visible && (
+              <>
+                <div className="fixed inset-0 z-45" onContextMenu={(e) => { e.preventDefault(); setContextMenu(prev => ({ ...prev, visible: false })); }} onClick={() => setContextMenu(prev => ({ ...prev, visible: false }))} />
+                <div 
+                  className="fixed bg-white border border-slate-300 rounded shadow-lg py-1 z-50 text-xs text-slate-700 w-48 font-sans select-none"
+                  style={{ top: contextMenu.y, left: contextMenu.x }}
+                >
+                  <button
+                    onClick={() => {
+                      if (contextMenu.tab) handleRefreshTab(contextMenu.tab.id);
+                      setContextMenu(prev => ({ ...prev, visible: false }));
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 flex items-center space-x-2 transition-colors"
+                  >
+                    <RefreshCw size={12} className="text-slate-500" />
+                    <span>Refresh / Reload Tab</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (contextMenu.tab) handleDuplicateTab(contextMenu.tab);
+                      setContextMenu(prev => ({ ...prev, visible: false }));
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 flex items-center space-x-2 transition-colors"
+                  >
+                    <Copy size={12} className="text-slate-500" />
+                    <span>Duplicate Tab</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (contextMenu.tab) handleTogglePinTab(contextMenu.tab.id);
+                      setContextMenu(prev => ({ ...prev, visible: false }));
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 flex items-center space-x-2 transition-colors"
+                  >
+                    <Pin size={12} className={contextMenu.tab?.isPinned ? "text-amber-500 font-bold" : "text-slate-500"} />
+                    <span>{contextMenu.tab?.isPinned ? "Unpin Tab" : "Pin Tab"}</span>
+                  </button>
+
+                  <div className="border-t border-slate-200 my-1" />
+
+                  <button
+                    disabled={contextMenu.tab?.isPinned}
+                    onClick={() => {
+                      if (contextMenu.tab) handleCloseTabRequest(contextMenu.tab.id);
+                      setContextMenu(prev => ({ ...prev, visible: false }));
+                    }}
+                    className={`w-full text-left px-3 py-1.5 hover:bg-[#ffebee] hover:text-red-800 flex items-center space-x-2 transition-colors ${
+                      contextMenu.tab?.isPinned ? "opacity-40 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    <X size={12} className="text-red-500" />
+                    <span>Close Tab</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (contextMenu.tab) handleCloseOtherTabs(contextMenu.tab.id);
+                      setContextMenu(prev => ({ ...prev, visible: false }));
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 flex items-center space-x-2 transition-colors"
+                  >
+                    <FolderMinus size={12} className="text-slate-500" />
+                    <span>Close Other Tabs</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleCloseAllTabs();
+                      setContextMenu(prev => ({ ...prev, visible: false }));
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-red-50 flex items-center space-x-2 transition-colors text-red-600 font-semibold"
+                  >
+                    <Trash2 size={12} className="text-red-500" />
+                    <span>Close All Tabs</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Breadcrumbs Banner */}
+            <div className="bg-[#f1f5f9] border-b border-[#cbd5e1] px-4 py-1.5 flex items-center space-x-1.5 text-[10px] text-slate-500 font-sans select-none shrink-0 print:hidden">
+              <span 
+                className="hover:text-blue-800 hover:underline cursor-pointer font-bold uppercase tracking-tight text-slate-400"
+                onClick={() => setCurrentTab('dashboard')}
+              >
+                SN ERP
+              </span>
+              <span className="text-slate-350">/</span>
+              {getBreadcrumbs(currentTab).map((crumb, idx, arr) => {
+                const isLast = idx === arr.length - 1;
+                return (
+                  <React.Fragment key={idx}>
+                    <span className={isLast ? 'text-[#002f6c] font-extrabold font-sans' : 'text-slate-600 font-medium'}>
+                      {crumb}
+                    </span>
+                    {!isLast && <span className="text-slate-300">/</span>}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
             <main className="flex-1 overflow-y-auto bg-white p-2">
               <AnimatePresence mode="wait">
                 <motion.div
@@ -730,6 +1416,23 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           </motion.div>
         </div>
       </div>
+
+      {/* Persistent Enterprise Status Footer */}
+      <footer className="bg-[#eef2f6] border-t border-[#8c9ba8] px-4 py-1 flex items-center justify-between text-[9px] text-slate-500 font-mono shrink-0 select-none print:hidden">
+        <div className="flex items-center space-x-3">
+          <span className="font-extrabold text-[#002f6c]">SN ENTERPRISES ERP</span>
+          <span className="text-slate-300">|</span>
+          <span>Version: 3.4.0-Enterprise</span>
+        </div>
+        <div className="flex items-center space-x-3">
+          <span>Current FY: 2026-2027</span>
+          <span className="text-slate-300">|</span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span>Last Backup: {new Date().toLocaleDateString('en-IN', {day: 'numeric', month: 'short'})} (Synced Offline)</span>
+          </span>
+        </div>
+      </footer>
       
       {/* Keyboard Shortcut Help Modal (SAP Layout Guideline) */}
       <AnimatePresence>
@@ -874,6 +1577,72 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         message={successToast.message} 
         onClose={() => setSuccessToast(prev => ({ ...prev, open: false }))} 
       />
+
+      {/* Unsaved Changes Confirmation Modal */}
+      <AnimatePresence>
+        {pendingCloseTabId && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-[99999] p-4 select-none print:hidden">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="bg-white border-2 border-red-600 w-full max-w-md shadow-2xl flex flex-col rounded-sm overflow-hidden text-black"
+            >
+              <div className="bg-red-600 text-white px-3 py-1.5 flex items-center justify-between font-bold text-[11px] font-mono shadow-md select-none">
+                <div className="flex items-center space-x-2">
+                  <AlertCircle size={14} className="text-white animate-pulse" />
+                  <span>Unsaved Changes Warning</span>
+                </div>
+                <button 
+                  onClick={() => setPendingCloseTabId(null)}
+                  className="bg-red-800 hover:bg-red-700 text-white font-bold px-1.5 py-0.5 rounded-sm text-[9px] transition-colors cursor-pointer"
+                >
+                  [X]
+                </button>
+              </div>
+
+              <div className="p-4 flex flex-col space-y-3 font-sans text-xs">
+                <p className="font-semibold text-slate-800">
+                  This workspace tab contains unsaved form entries or configurations.
+                </p>
+                <p className="text-slate-650 leading-relaxed">
+                  Closing this tab will permanently discard your draft changes. Are you sure you want to proceed?
+                </p>
+              </div>
+
+              <div className="bg-slate-100 p-2.5 flex items-center justify-end space-x-2 border-t border-slate-250 shrink-0 font-sans">
+                <button
+                  onClick={() => setPendingCloseTabId(null)}
+                  className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1 font-bold text-[10px] shadow-sm rounded-sm uppercase tracking-wider cursor-pointer font-sans"
+                >
+                  Cancel & Return
+                </button>
+                <button
+                  onClick={() => {
+                    if (pendingCloseTabId) {
+                      // Discard changes and force close the tab
+                      const tabToClose = tabs.find(t => t.id === pendingCloseTabId);
+                      if (tabToClose) {
+                        // Mark as clean to close it safely
+                        setTabs(prev => prev.map(t => t.id === pendingCloseTabId ? { ...t, hasUnsavedChanges: false } : t));
+                        // Delay slightly to allow state to update
+                        setTimeout(() => {
+                          handleCloseTab(pendingCloseTabId);
+                          setPendingCloseTabId(null);
+                        }, 50);
+                      }
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white border border-red-700 px-4 py-1 font-bold text-[10px] shadow-sm rounded-sm uppercase tracking-wider cursor-pointer font-sans"
+                >
+                  Discard Changes
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Status Bar */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="h-5 bg-[#d9e4f1] border-t border-[#8c9ba8] flex items-center px-2 text-[10px] text-gray-800 justify-between print:hidden">

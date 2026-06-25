@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog, BOQ, BOQItem, BOQRevision, BOQExtraItem, BOQAuditLog } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 interface AppState {
@@ -38,6 +38,8 @@ interface AppState {
   activityLogs: ActivityLog[];
   numberingSettings: NumberingSettings[];
   numberingAuditLogs: NumberingAuditLog[];
+  boqs: BOQ[];
+  boqAuditLogs: BOQAuditLog[];
 }
 
 
@@ -56,6 +58,10 @@ interface AppContextType extends AppState {
   addProject: (project: Omit<Project, 'id'>) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
+  addBOQ: (boq: Omit<BOQ, 'id'>) => Promise<void>;
+  updateBOQ: (id: string, boq: Partial<BOQ>) => Promise<void>;
+  deleteBOQ: (id: string) => Promise<void>;
+  addBOQAuditLog: (log: Omit<BOQAuditLog, 'id' | 'timestamp'>) => Promise<void>;
   addWorker: (worker: Omit<Worker, 'id'>) => void;
   updateWorker: (id: string, worker: Partial<Worker>) => void;
   deleteWorker: (id: string) => void;
@@ -211,6 +217,8 @@ const initialState: AppState = {
   activityLogs: [],
   numberingSettings: [],
   numberingAuditLogs: [],
+  boqs: [],
+  boqAuditLogs: [],
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -270,6 +278,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     activityLogs: [],
     numberingSettings: [],
     numberingAuditLogs: [],
+    boqs: [],
+    boqAuditLogs: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
@@ -278,7 +288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const [
           pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes, assetsRes, assetTransfersRes, assetMaintenancesRes,
-          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes, staffRes, faRes, actRes, numSetRes, numAuditRes
+          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes, staffRes, faRes, actRes, numSetRes, numAuditRes, boqsRes, boqAuditRes
         ] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
@@ -314,7 +324,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/floor-abstracts').then(r => r.json()).catch(() => []),
           fetch('/api/activity-logs').then(r => r.json()).catch(() => []),
           fetch('/api/numbering-settings').then(r => r.json()).catch(() => []),
-          fetch('/api/numbering-settings/audit-logs').then(r => r.json()).catch(() => [])
+          fetch('/api/numbering-settings/audit-logs').then(r => r.json()).catch(() => []),
+          fetch('/api/boqs').then(r => r.json()).catch(() => []),
+          fetch('/api/boqs-audit-logs').then(r => r.json()).catch(() => [])
         ]);
 
         const stateObj: AppState = {
@@ -352,7 +364,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           floorAbstracts: faRes || [],
           activityLogs: actRes || [],
           numberingSettings: numSetRes || [],
-          numberingAuditLogs: numAuditRes || []
+          numberingAuditLogs: numAuditRes || [],
+          boqs: boqsRes || [],
+          boqAuditLogs: boqAuditRes || []
         };
         setState(stateObj);
 
@@ -387,6 +401,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('activityLogs', actRes || []).catch(() => {});
         await saveAllToStore('numberingSettings', numSetRes || []).catch(() => {});
         await saveAllToStore('numberingAuditLogs', numAuditRes || []).catch(() => {});
+        await saveAllToStore('boqs', boqsRes || []).catch(() => {});
+        await saveAllToStore('boqAuditLogs', boqAuditRes || []).catch(() => {});
       } catch (err) {
         console.error('Error loading from Express API, loading from IndexedDB fallback:', err);
         try {
@@ -425,6 +441,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const activityLogs = await getAllFromStore('activityLogs').catch(() => []);
           const numberingSettings = await getAllFromStore('numberingSettings').catch(() => []);
           const numberingAuditLogs = await getAllFromStore('numberingAuditLogs').catch(() => []);
+          const boqs = await getAllFromStore('boqs').catch(() => []);
+          const boqAuditLogs = await getAllFromStore('boqAuditLogs').catch(() => []);
 
           const isDbEmpty = projects.length === 0 && workers.length === 0 && billings.length === 0 &&
                             clientPayments.length === 0 && kharchis.length === 0 && advances.length === 0 &&
@@ -475,7 +493,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               floorAbstracts,
               activityLogs,
               numberingSettings,
-              numberingAuditLogs
+              numberingAuditLogs,
+              boqs,
+              boqAuditLogs
             });
           }
         } catch (e) {
@@ -765,6 +785,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await fetch(`/api/workers/${id}`, { method: 'DELETE' });
       await saveAllToStore('workers', state.workers.filter(w => w.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addBOQ = async (boq: Omit<BOQ, 'id'>) => {
+    const newBOQ = { ...boq, id: generateId() };
+    setState(s => ({ ...s, boqs: [...s.boqs, newBOQ] }));
+    triggerSuccess('BOQ successfully created: ' + newBOQ.boqNo);
+    try {
+      await fetch('/api/boqs', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
+        body: JSON.stringify(newBOQ)
+      });
+      await saveAllToStore('boqs', [...state.boqs, newBOQ]);
+      refreshActivityLogs();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateBOQ = async (id: string, boq: Partial<BOQ>) => {
+    setState(s => {
+      const updated = s.boqs.map(b => b.id === id ? { ...b, ...boq } : b);
+      return { ...s, boqs: updated };
+    });
+    triggerSuccess('BOQ updated successfully.');
+    try {
+      const existing = state.boqs.find(b => b.id === id);
+      if (existing) {
+        const merged = { ...existing, ...boq };
+        await fetch(`/api/boqs/${id}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-Username': user?.username || 'Admin'
+          },
+          body: JSON.stringify(merged)
+        });
+        const currentUpdated = state.boqs.map(b => b.id === id ? merged : b);
+        await saveAllToStore('boqs', currentUpdated);
+        refreshActivityLogs();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteBOQ = async (id: string) => {
+    setState(s => ({ ...s, boqs: s.boqs.filter(b => b.id !== id) }));
+    triggerSuccess('BOQ deleted successfully.');
+    try {
+      await fetch(`/api/boqs/${id}`, { 
+        method: 'DELETE',
+        headers: { 'X-User-Username': user?.username || 'Admin' }
+      });
+      await saveAllToStore('boqs', state.boqs.filter(b => b.id !== id));
+      refreshActivityLogs();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addBOQAuditLog = async (log: Omit<BOQAuditLog, 'id' | 'timestamp'>) => {
+    const newLog: BOQAuditLog = {
+      ...log,
+      id: 'bal_' + Math.random().toString(36).substring(2, 11),
+      timestamp: new Date().toISOString()
+    };
+    setState(s => ({ ...s, boqAuditLogs: [newLog, ...s.boqAuditLogs] }));
+    try {
+      await fetch('/api/boqs-audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLog)
+      });
+      await saveAllToStore('boqAuditLogs', [newLog, ...state.boqAuditLogs]);
     } catch (e) {
       console.error(e);
     }
@@ -2182,6 +2283,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addProject,
       updateProject,
       deleteProject,
+      addBOQ,
+      updateBOQ,
+      deleteBOQ,
+      addBOQAuditLog,
       addWorker,
       updateWorker,
       deleteWorker,

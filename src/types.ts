@@ -724,6 +724,128 @@ export interface SubcontractorLedger {
   summary: SubcontractorLedgerSummary;
 }
 
+export interface BOQItem {
+  id: string;
+  itemCode: string;
+  description: string;
+  unit: string;
+  boqQuantity: number;
+  boqRate: number;
+  boqAmount: number; // calculated: boqQuantity * boqRate
+  executedQuantity: number;
+  billedQuantity: number;
+  remarks?: string;
+  category?: 'Shuttering' | 'Reinforcement' | 'Concreting' | 'Excavation' | 'Masonry' | 'Plastering' | 'Flooring' | 'Other';
+}
+
+export interface BOQRevision {
+  id: string;
+  revisionNo: number;
+  revisionDate: string;
+  items: BOQItem[];
+  remarks?: string;
+}
+
+export interface BOQExtraItem {
+  id: string;
+  itemCode: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  remarks?: string;
+  approvalStatus: 'Draft' | 'Pending Approval' | 'Approved' | 'Closed';
+}
+
+export interface BOQ {
+  id: string;
+  boqNo: string;
+  projectId: string;
+  clientName: string;
+  date: string;
+  revisionNo: number;
+  remarks?: string;
+  boqPdfName?: string;
+  boqPdfData?: string;
+  boqExcelName?: string;
+  boqExcelData?: string;
+  items: BOQItem[];
+  revisions: BOQRevision[];
+  extraItems: BOQExtraItem[];
+  status: 'Draft' | 'Pending Approval' | 'Approved' | 'Revised' | 'Closed';
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+}
+
+export interface BOQAuditLog {
+  id: string;
+  timestamp: string;
+  username: string;
+  boqId?: string;
+  boqNo: string;
+  action: string;
+  oldValue?: string;
+  newValue?: string;
+  details: string;
+}
+
+export interface DMSDocument {
+  id: string;
+  projectId?: string;
+  category: 'Project Documents' | 'Worker Documents' | 'Subcontractor Documents' | 'Company Documents';
+  docType: string;
+  fileName: string;
+  description?: string;
+  tags?: string; // stringified array of strings
+  uploadDate: string;
+  expiryDate?: string;
+  attachmentData?: string;
+  attachmentName?: string;
+  attachmentType?: string;
+  fileSize: number;
+  version: number;
+  revisions?: string; // stringified array of DocumentRevision
+  status: 'Draft' | 'Pending Review' | 'Approved' | 'Rejected' | 'Archived';
+  approver?: string;
+  approvalDate?: string;
+  approvalRemarks?: string;
+  linkedEntity?: string; // stringified array of DocumentLink
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+}
+
+export interface DocumentRevision {
+  version: number;
+  fileName: string;
+  uploadDate: string;
+  uploadedBy: string;
+  attachmentName?: string;
+  attachmentType?: string;
+  attachmentData?: string;
+  description?: string;
+}
+
+export interface DocumentLink {
+  entityType: 'project' | 'worker' | 'staff' | 'subcontractor' | 'bill' | 'payment' | 'boq';
+  entityId: string;
+  entityLabel: string;
+}
+
+export interface DMSAuditLog {
+  id: string;
+  timestamp: string;
+  username: string;
+  actionType: string;
+  recordId: string;
+  details: string;
+}
+
+
 
 
 

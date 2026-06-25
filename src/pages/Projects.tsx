@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2, Search, FileText, Info, FileSpreadsheet } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Search, FileText, Info, FileSpreadsheet, Building2, User, Phone, MapPin, Calendar, CreditCard, ShieldCheck, Briefcase, FileKey, Layers, Tag, Upload } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { PDFExportButton } from '../components/PDFExportButton';
+import { ERPTable, ERPColumn, ERPRowAction, ERPBulkAction } from '../components/ERPTable';
 
 export const Projects: React.FC = () => {
   const { user, projects, addProject, updateProject, deleteProject, billings, clientPayments, workerPayments, advances, expensesLedger } = useAppContext();
@@ -275,6 +276,77 @@ export const Projects: React.FC = () => {
     handleCancel();
   };
 
+  const erpColumns: ERPColumn<any>[] = [
+    { key: 'name', header: 'Project Name', sortable: true, filterable: true, frozen: true, render: (val, row) => (
+      <div>
+        <div className="font-extrabold text-[#0056b3]">{val}</div>
+        {row.towersCount ? (
+          <div className="text-[9px] text-indigo-700 font-bold font-mono mt-0.5">
+            Towers ({row.towersCount}): {row.towerNames && row.towerNames.length > 0 ? row.towerNames.join(', ') : 'None named'}
+          </div>
+        ) : null}
+      </div>
+    ) },
+    { key: 'clientName', header: 'Client Name', sortable: true, filterable: true },
+    { key: 'startDate', header: 'Start Date', sortable: true, filterable: true },
+    { key: 'completionDate', header: 'Completion Date', sortable: true, filterable: true },
+    { key: 'address', header: 'Address', sortable: true, filterable: true },
+    { key: 'contacts', header: 'Contact Numbers', sortable: false, filterable: false, render: (_, project) => (
+      <div className="space-y-0.5 text-[9px] text-gray-600 font-mono">
+        {project.pmContact && <div>PM: {project.pmContact}</div>}
+        {project.beContact && <div>BE: {project.beContact}</div>}
+        {project.siContact && <div>SI: {project.siContact}</div>}
+        {project.repContact && <div>Rep: {project.repContact}</div>}
+        {!project.pmContact && !project.beContact && !project.siContact && !project.repContact && <span className="text-gray-400">-</span>}
+      </div>
+    ) },
+    { key: 'budget', header: 'Budget (INR)', sortable: true, filterable: true, isNumeric: true },
+    { key: 'status', header: 'Status', sortable: true, filterable: true }
+  ];
+
+  const erpRowActions: ERPRowAction<any>[] = [
+    {
+      label: 'View Details',
+      icon: <Info size={13} />,
+      onClick: (row) => setViewDetailsId(row.id),
+      tooltip: 'View Details'
+    },
+    {
+      label: 'Health PDF',
+      icon: <FileText size={13} />,
+      onClick: (row) => handleDownloadReport(row),
+      tooltip: 'Health PDF Report'
+    },
+    ...(!isReadOnly ? [
+      {
+        label: 'Edit',
+        icon: <Edit size={13} />,
+        onClick: (row) => handleEdit(row),
+        tooltip: 'Edit Record'
+      },
+      {
+        label: 'Delete',
+        icon: <Trash2 size={13} />,
+        onClick: (row) => setDeleteId(row.id),
+        tooltip: 'Delete Record',
+        className: 'text-red-600 hover:bg-red-50'
+      }
+    ] : [])
+  ];
+
+  const erpBulkActions: ERPBulkAction[] = !isReadOnly ? [
+    {
+      label: 'Delete Selected',
+      icon: <Trash2 size={12} />,
+      onClick: (ids) => {
+        if (confirm(`Are you sure you want to delete the ${ids.length} selected projects? This action is irreversible.`)) {
+          ids.forEach(id => deleteProject(id));
+        }
+      },
+      className: 'bg-red-800 text-white hover:bg-red-600'
+    }
+  ] : [];
+
   return (
     <div className="text-[11px]">
       <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
@@ -333,24 +405,6 @@ export const Projects: React.FC = () => {
               Completed
             </button>
           </div>
-          <Search size={12} className="text-gray-600" />
-          <span className="font-semibold text-gray-700">Search:</span>
-          <input
-            type="text"
-            className="sap-input w-36 text-[11px]"
-            placeholder="Filter..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="hover:bg-gray-300 p-0.5 rounded text-gray-500 cursor-pointer flex items-center"
-              title="Clear Search"
-            >
-              <X size={10} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -387,23 +441,38 @@ export const Projects: React.FC = () => {
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Group A: Basic Details */}
-              <div className="sap-panel p-3">
-                <div className="font-bold text-[#0056b3] border-b border-[#8c9ba8] pb-1 mb-2">A. Basic Details</div>
+              <div className="sap-panel p-3 border border-blue-200 bg-blue-50/5">
+                <div className="font-bold text-[#0056b3] border-b border-[#8c9ba8] pb-1 mb-2 flex items-center gap-1.5">
+                  <Building2 size={13} />
+                  <span>A. Basic Details</span>
+                </div>
                 <div className="space-y-1.5 text-[11px]">
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">1. Project Name *</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Building2 size={10} className="text-blue-500" />
+                      <span>1. Project Name *</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="text" className="sap-input" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">2. Client Name</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <User size={10} className="text-blue-500" />
+                      <span>2. Client Name</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">3. Address *</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <MapPin size={10} className="text-blue-500" />
+                      <span>3. Address *</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="text" className="sap-input" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">4. Project Type</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Tag size={10} className="text-blue-500" />
+                      <span>4. Project Type</span>
+                    </label>
                     <select disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.projectType} onChange={e => setFormData({...formData, projectType: e.target.value as any})}>
                       <option value="Residential">Residential</option>
                       <option value="Commercial">Commercial</option>
@@ -411,19 +480,31 @@ export const Projects: React.FC = () => {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">5. Start Date *</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Calendar size={10} className="text-blue-500" />
+                      <span>5. Start Date *</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="date" className="sap-input" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">6. Completion Date</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Calendar size={10} className="text-blue-500" />
+                      <span>6. Completion Date</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="date" className="sap-input" value={formData.completionDate} onChange={e => setFormData({...formData, completionDate: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">7. Expected Budget (INR) *</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <CreditCard size={10} className="text-blue-500" />
+                      <span>7. Expected Budget (INR) *</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} required type="number" className="sap-input" value={formData.budget} onChange={e => setFormData({...formData, budget: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700 font-bold text-blue-800">8. Project Status *</label>
+                    <label className="font-semibold text-gray-700 font-bold text-blue-800 flex items-center gap-1">
+                      <ShieldCheck size={10} className="text-blue-600 animate-pulse" />
+                      <span>8. Project Status *</span>
+                    </label>
                     <select required className="sap-input font-bold border-blue-400" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
                       <option value="Ongoing">Ongoing</option>
                       <option value="Completed">Completed</option>
@@ -433,30 +514,48 @@ export const Projects: React.FC = () => {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">9. Number of Towers</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Layers size={10} className="text-blue-500" />
+                      <span>9. Number of Towers</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="number" min="0" className="sap-input" value={formData.towersCount} onChange={e => setFormData({...formData, towersCount: e.target.value})} placeholder="e.g., 3" />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">10. Tower Names (Comma Separated)</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Layers size={10} className="text-blue-500" />
+                      <span>10. Tower Names</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.towerNamesText} onChange={e => setFormData({...formData, towerNamesText: e.target.value})} placeholder="e.g., Tower A, Tower B, Tower C" />
                   </div>
                 </div>
               </div>
 
               {/* Group B: Contract Information */}
-              <div className="sap-panel p-3">
-                <div className="font-bold text-[#0056b3] border-b border-[#8c9ba8] pb-1 mb-2">B. Contract Info.</div>
+              <div className="sap-panel p-3 border border-purple-200 bg-purple-50/5">
+                <div className="font-bold text-[#0056b3] border-b border-[#8c9ba8] pb-1 mb-2 flex items-center gap-1.5">
+                  <Briefcase size={13} className="text-purple-600" />
+                  <span>B. Contract Info.</span>
+                </div>
                 <div className="space-y-1.5 text-[11px]">
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">1. Work Order No</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <FileKey size={10} className="text-purple-500" />
+                      <span>1. Work Order No</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.workOrderNo} onChange={e => setFormData({...formData, workOrderNo: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">2. Scope of Work</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <FileText size={10} className="text-purple-500" />
+                      <span>2. Scope of Work</span>
+                    </label>
                     <textarea disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input h-[85px] resize-none" value={formData.scopeOfWork} onChange={e => setFormData({...formData, scopeOfWork: e.target.value})} />
                   </div>
                   <div className="flex flex-col">
-                    <label className="font-semibold text-gray-700">3. Rate Type</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Tag size={10} className="text-purple-500" />
+                      <span>3. Rate Type</span>
+                    </label>
                     <select disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.rateType} onChange={e => setFormData({...formData, rateType: e.target.value as any})}>
                       <option value="Item Rate">Item Rate</option>
                       <option value="Supply">Supply</option>
@@ -465,7 +564,10 @@ export const Projects: React.FC = () => {
                     </select>
                   </div>
                   <div className="flex flex-col pt-1">
-                    <label className="font-semibold text-gray-700">4. Work Order Proof</label>
+                    <label className="font-semibold text-gray-700 flex items-center gap-1">
+                      <Upload size={10} className="text-purple-500" />
+                      <span>4. Work Order Proof</span>
+                    </label>
                     <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="file" className="sap-input py-1" accept="application/pdf,image/*" onChange={handleFileUpload} />
                     {formData.workOrderFileName && (
                       <span className="text-[9px] text-green-700 mt-1 truncate font-mono">Attached: {formData.workOrderFileName}</span>
@@ -475,46 +577,73 @@ export const Projects: React.FC = () => {
               </div>
 
               {/* Group C: Site Contacts */}
-              <div className="sap-panel p-3">
-                <div className="font-bold text-[#0056b3] border-b border-[#8c9ba8] pb-1 mb-2">C. Site Contacts</div>
+              <div className="sap-panel p-3 border border-amber-200 bg-amber-50/5">
+                <div className="font-bold text-[#0056b3] border-b border-[#8c9ba8] pb-1 mb-2 flex items-center gap-1.5">
+                  <Phone size={13} className="text-amber-600" />
+                  <span>C. Site Contacts</span>
+                </div>
                 <div className="space-y-3 text-[11px]">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">1. Project Manager Name</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <User size={9} className="text-amber-500" />
+                        <span>1. Project Manager</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.projectManager} onChange={e => setFormData({...formData, projectManager: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">PM Contact No.</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <Phone size={9} className="text-amber-500" />
+                        <span>PM Contact No.</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.pmContact} onChange={e => setFormData({...formData, pmContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">2. Billing Engineer Name</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <User size={9} className="text-amber-500" />
+                        <span>2. Billing Engineer</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.billingEngineer} onChange={e => setFormData({...formData, billingEngineer: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">BE Contact No.</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <Phone size={9} className="text-amber-500" />
+                        <span>BE Contact No.</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.beContact} onChange={e => setFormData({...formData, beContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">3. Site-Incharge Name</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <User size={9} className="text-amber-500" />
+                        <span>3. Site-Incharge</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.siteIncharge} onChange={e => setFormData({...formData, siteIncharge: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">SI Contact No.</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <Phone size={9} className="text-amber-500" />
+                        <span>SI Contact No.</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.siContact} onChange={e => setFormData({...formData, siContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">4. Our Representative Name</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <User size={9} className="text-amber-500" />
+                        <span>4. Representative</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.ourRepresentatives} onChange={e => setFormData({...formData, ourRepresentatives: e.target.value})} placeholder="Name" />
                     </div>
                     <div className="flex flex-col">
-                      <label className="font-semibold text-gray-500">Rep Contact No.</label>
+                      <label className="font-semibold text-gray-500 flex items-center gap-1">
+                        <Phone size={9} className="text-amber-500" />
+                        <span>Rep Contact No.</span>
+                      </label>
                       <input disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} type="text" className="sap-input" value={formData.repContact} onChange={e => setFormData({...formData, repContact: e.target.value})} placeholder="Phone number" />
                     </div>
                   </div>
@@ -538,93 +667,17 @@ export const Projects: React.FC = () => {
       )}
       </AnimatePresence>
 
-      <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
-        <thead className="sap-header">
-          <tr>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-8"></th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project Name</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Client Name</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Start Date</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Completion Date</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Address</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Contact Numbers</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal">Budget</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-24">Status</th>
-            <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredProjects.map((project, idx) => (
-            <motion.tr 
-              initial={{ opacity: 0, y: 5 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              transition={{ duration: 0.2 }}
-              key={project.id} 
-              className="hover:bg-[#e6f2ff] cursor-default"
-            >
-              <td className="border border-[#8c9ba8] px-2 py-1 text-center text-gray-500 bg-[#eef2f6] w-8">{idx + 1}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1 font-semibold">
-                {project.name}
-                {project.towersCount ? (
-                  <div className="text-[9px] text-indigo-700 font-bold font-mono mt-0.5">
-                    Towers ({project.towersCount}): {project.towerNames && project.towerNames.length > 0 ? project.towerNames.join(', ') : 'None named'}
-                  </div>
-                ) : null}
-              </td>
-              <td className="border border-[#8c9ba8] px-2 py-1">{project.clientName || '-'}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1">{project.startDate}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1">{project.completionDate || '-'}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1">{project.address}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1">
-                <div className="space-y-0.5 text-[10px] text-gray-600 font-mono">
-                  {project.pmContact && <div>PM: {project.pmContact}</div>}
-                  {project.beContact && <div>BE: {project.beContact}</div>}
-                  {project.siContact && <div>SI: {project.siContact}</div>}
-                  {project.repContact && <div>Rep: {project.repContact}</div>}
-                  {!project.pmContact && !project.beContact && !project.siContact && !project.repContact && <span className="text-gray-400">-</span>}
-                </div>
-              </td>
-              <td className="border border-[#8c9ba8] px-2 py-1 text-right">{project.budget.toLocaleString()}</td>
-              <td className="border border-[#8c9ba8] px-2 py-1 text-center font-semibold">
-                <span className={`px-1.5 py-0.5 rounded-sm border text-[9px] uppercase tracking-wide inline-block ${
-                  project.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                  project.status === 'Ongoing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                  project.status === 'On Hold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                  project.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                  'bg-gray-50 text-gray-700 border-gray-200'
-                }`}>
-                  {project.status || 'Ongoing'}
-                </span>
-              </td>
-              <td className="border border-[#8c9ba8] px-2 py-1 text-center">
-                <div className="flex border border-gray-300 rounded shadow-sm overflow-hidden inline-flex bg-white">
-                  <button onClick={() => setViewDetailsId(project.id)} className="p-1 text-[#0056b3] hover:bg-blue-50 border-r border-gray-300" title="View Project Details">
-                    <Info size={13} />
-                  </button>
-                  <button onClick={() => handleDownloadReport(project)} className="p-1 text-green-700 hover:bg-green-50 border-r border-gray-300" title="Project Health Report PDF">
-                    <FileText size={13} />
-                  </button>
-                  {!isReadOnly && (
-                    <>
-                      <button onClick={() => handleEdit(project)} className="p-1 text-blue-600 hover:bg-blue-50 border-r border-gray-300" title="Edit">
-                        <Edit size={13} />
-                      </button>
-                      <button onClick={() => setDeleteId(project.id)} className="p-1 text-red-600 hover:bg-red-50" title="Delete">
-                        <Trash2 size={13} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </td>
-            </motion.tr>
-          ))}
-          {filteredProjects.length === 0 && (
-            <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-              <td colSpan={8} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">No projects found.</td>
-            </motion.tr>
-          )}
-        </tbody>
-      </table>
+      <ERPTable
+        id="projects-table"
+        data={filteredProjects}
+        columns={erpColumns}
+        idKey="id"
+        searchPlaceholder="Filter project list..."
+        rowActions={erpRowActions}
+        bulkActions={erpBulkActions}
+        statusBadgeColumns={['status']}
+        exportFilename="erp_projects_list"
+      />
 
       {viewDetailsId && projects.find(p => p.id === viewDetailsId) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">

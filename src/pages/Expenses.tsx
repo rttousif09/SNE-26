@@ -3,7 +3,8 @@ import { useAppContext } from '../store';
 import { ExpenseEntry } from '../types';
 import { 
   Plus, X, Edit, Trash2, Calendar, FileText, Check, Save,
-  ArrowDownCircle, ArrowUpCircle, Wallet, Download, Printer, Filter, Info, FileSpreadsheet
+  ArrowDownCircle, ArrowUpCircle, Wallet, Download, Printer, Filter, Info, FileSpreadsheet,
+  Building2, Tag, Landmark, Upload, DollarSign
 } from 'lucide-react';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { motion, AnimatePresence } from 'motion/react';
@@ -959,7 +960,10 @@ export const Expenses: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] text-gray-500 font-bold mb-1">DATE</label>
+                <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                  <Calendar size={11} className="text-blue-500" />
+                  <span>DATE</span>
+                </label>
                 <input 
                   type="date"
                   required 
@@ -970,7 +974,10 @@ export const Expenses: React.FC = () => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-[10px] text-gray-500 font-bold mb-1">TRANSACTION DESCRIPTION / MEMO</label>
+                <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                  <FileText size={11} className="text-blue-500" />
+                  <span>TRANSACTION DESCRIPTION / MEMO</span>
+                </label>
                 <input 
                   type="text" 
                   required
@@ -982,7 +989,10 @@ export const Expenses: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] text-gray-500 font-bold mb-1">PROJECT LINK (OPTIONAL)</label>
+                <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                  <Building2 size={11} className="text-blue-500" />
+                  <span>PROJECT LINK (OPTIONAL)</span>
+                </label>
                 <select 
                   value={formData.projectId}
                   onChange={(e) => {
@@ -1008,7 +1018,10 @@ export const Expenses: React.FC = () => {
               {transactionType === 'spent' ? (
                 <>
                   <div>
-                    <label className="block text-[10px] text-gray-500 font-bold mb-1">EXPENSE CATEGORY</label>
+                    <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                      <Tag size={11} className="text-blue-500" />
+                      <span>EXPENSE CATEGORY</span>
+                    </label>
                     <select 
                       value={formData.category}
                       onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -1027,7 +1040,10 @@ export const Expenses: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-gray-500 font-bold mb-1">SPENT AMOUNT (₹)</label>
+                    <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                      <DollarSign size={11} className="text-blue-500" />
+                      <span>SPENT AMOUNT (₹)</span>
+                    </label>
                     <input 
                       type="number" 
                       required
@@ -1043,7 +1059,10 @@ export const Expenses: React.FC = () => {
               ) : (
                 <>
                   <div>
-                    <label className="block text-[10px] text-gray-500 font-bold mb-1">BANK (E.G., SBI)</label>
+                    <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                      <Landmark size={11} className="text-blue-500" />
+                      <span>BANK (E.G., SBI)</span>
+                    </label>
                     <input 
                       type="text" 
                       required
@@ -1055,7 +1074,10 @@ export const Expenses: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-gray-500 font-bold mb-1">CREDIT AMOUNT (₹)</label>
+                    <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                      <DollarSign size={11} className="text-blue-500" />
+                      <span>CREDIT AMOUNT (₹)</span>
+                    </label>
                     <input 
                       type="number" 
                       required
@@ -1071,7 +1093,10 @@ export const Expenses: React.FC = () => {
               )}
 
               <div className="md:col-span-2">
-                <label className="block text-[10px] text-gray-500 font-bold mb-1">BILL / RECEIPT PROOF (OPTIONAL)</label>
+                <label className="block text-[10px] text-gray-500 font-bold mb-1 flex items-center gap-1">
+                  <Upload size={11} className="text-blue-500" />
+                  <span>BILL / RECEIPT PROOF (OPTIONAL)</span>
+                </label>
                 <input 
                   type="file" 
                   accept="image/*,application/pdf"

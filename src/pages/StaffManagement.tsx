@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppContext } from '../store';
 import { Staff } from '../types';
 import { Plus, X, Edit, Trash2, Shield, FolderGit2, CheckSquare, Square, RefreshCw, Key, UserCheck, HelpCircle } from 'lucide-react';
+import { ERPTable, ERPColumn, ERPRowAction } from '../components/ERPTable';
 
 export default function StaffManagement() {
   const { staff, projects, addStaff, updateStaff, deleteStaff, user } = useAppContext();
@@ -19,6 +20,82 @@ export default function StaffManagement() {
   });
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // ERP Columns for Staff Table
+  const erpColumns: ERPColumn<Staff>[] = [
+    { key: 'name', header: 'Staff Name', sortable: true, filterable: true },
+    { key: 'username', header: 'User ID (Username)', sortable: true, filterable: true, render: (val) => (
+      <span className="font-mono text-blue-700 font-bold">{val}</span>
+    )},
+    { key: 'password', header: 'Plaintext Password', sortable: true, filterable: true, render: (val) => (
+      <span className="font-mono text-gray-900 tracking-wider">{val || '••••••••'}</span>
+    )},
+    { key: 'allowedModules', header: 'Permitted Modules', sortable: true, filterable: true, render: (_, st) => {
+      const allowedCount = st.allowedModules ? st.allowedModules.length : 0;
+      return allowedCount === MODULES_LIST.length ? (
+        <span className="inline-block bg-orange-100 text-orange-900 px-1.5 py-0.5 rounded font-bold border border-orange-300">
+          ALL MODULES (UNRESTRICTED)
+        </span>
+      ) : allowedCount === 0 ? (
+        <span className="inline-block bg-red-100 text-red-900 px-1.5 py-0.5 rounded font-bold border border-red-300 text-[10px]">
+          NO ACCESS GRANTED
+        </span>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          <span className="inline-block bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded font-bold border border-blue-300 w-fit">
+            {allowedCount} of {MODULES_LIST.length} permitted
+          </span>
+          <span className="text-[9px] text-gray-500 truncate max-w-sm">
+            {st.allowedModules.map(mId => MODULES_LIST.find(m => m.id === mId)?.label || mId).join(', ')}
+          </span>
+        </div>
+      );
+    }},
+    { key: 'allowedProjects', header: 'Assigned Projects', sortable: true, filterable: true, render: (_, st) => {
+      const projectsLength = st.allowedProjects ? st.allowedProjects.length : 0;
+      const matchingProjectNames = (st.allowedProjects || [])
+        .map(pid => projects.find(p => p.id === pid)?.name || pid)
+        .join(', ');
+      return projectsLength === projects.length ? (
+        <span className="inline-block bg-green-100 text-green-900 px-1.5 py-0.5 rounded font-bold border border-green-300">
+          ALL PROJECTS (UNRESTRICTED)
+        </span>
+      ) : projectsLength === 0 ? (
+        <span className="inline-block bg-yellow-100 text-yellow-950 px-1.5 py-0.5 rounded font-bold border border-yellow-300 text-[10px]">
+          NO PROJECTS CHOSEN
+        </span>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          <span className="inline-block bg-green-50 text-green-800 px-1.5 py-0.5 rounded font-bold border border-green-200 w-fit">
+            {projectsLength} active {projectsLength === 1 ? 'project' : 'projects'}
+          </span>
+          <span className="text-[9px] text-gray-500 truncate" title={matchingProjectNames}>
+            {matchingProjectNames}
+          </span>
+        </div>
+      );
+    }},
+    { key: 'createdDate', header: 'Credentials Created', sortable: true, filterable: true, render: (val) => (
+      <span>{val ? new Date(val).toLocaleDateString() : 'N/A'}</span>
+    )}
+  ];
+
+  // ERP Row Actions for Staff Table
+  const erpRowActions: ERPRowAction<Staff>[] = [
+    {
+      label: 'Edit',
+      icon: <Edit size={11} />,
+      onClick: (row) => startEdit(row),
+      tooltip: 'Edit credentials & permissions'
+    },
+    {
+      label: 'Delete',
+      icon: <Trash2 size={11} />,
+      onClick: (row) => confirmDelete(row),
+      tooltip: 'Revoke staff credentials / Delete',
+      className: 'text-red-600 hover:bg-red-50'
+    }
+  ];
 
   // List of all accessible modules with labels
   const MODULES_LIST = [
@@ -410,141 +487,16 @@ export default function StaffManagement() {
       ) : null}
 
       {/* Staff Grid/Table Panel */}
-      <div className="bg-white border border-[#8c9ba8] rounded shadow-sm overflow-hidden">
-        <div className="bg-[#eef2f6] border-b border-[#8c9ba8] p-1.5 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center space-x-1">
-            <UserCheck size={13} className="text-blue-800" />
-            <span className="font-bold text-gray-800">
-              Active Registered Staff Members ({filteredStaff.length})
-            </span>
-          </div>
-
-          {/* Search Box */}
-          <div className="w-full sm:w-60 bg-white border border-[#8c9ba8] rounded flex items-center p-[2px] px-1 font-mono">
-            <span className="text-gray-400 mr-1 text-[10px]">SEARCH:</span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Filter by name, user ID..."
-              className="flex-1 text-[10px] bg-transparent focus:outline-none text-[11px]"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-gray-700">
-                <X size={10} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-[#8c9ba8]">
-                <th className="p-1 px-2 border-r border-gray-200 text-left w-12">S.No.</th>
-                <th className="p-1 px-2 border-r border-gray-200 text-left">Staff Name</th>
-                <th className="p-1 px-2 border-r border-gray-200 text-left font-mono">Requested User ID (Username)</th>
-                <th className="p-1 px-2 border-r border-gray-200 text-left font-mono">Plaintext Password</th>
-                <th className="p-1 px-2 border-r border-gray-200 text-left">Permitted Modules</th>
-                <th className="p-1 px-2 border-r border-gray-200 text-left">Assigned Projects</th>
-                <th className="p-1 px-2 border-r border-gray-200 text-left">Credentials Created</th>
-                <th className="p-1 px-2 text-center w-24">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStaff.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-6 text-center text-gray-500 font-medium">
-                    {searchQuery ? 'No staff matched the current filter terms.' : 'No custom staff accounts configured yet. Click "Add Staff Account" above to create credentials!'}
-                  </td>
-                </tr>
-              ) : (
-                filteredStaff.map((st, idx) => {
-                  const allowedCount = st.allowedModules ? st.allowedModules.length : 0;
-                  const projectsLength = st.allowedProjects ? st.allowedProjects.length : 0;
-                  
-                  // Map matching project names
-                  const matchingProjectNames = (st.allowedProjects || [])
-                    .map(pid => projects.find(p => p.id === pid)?.name || pid)
-                    .join(', ');
-
-                  return (
-                    <tr 
-                      key={st.id} 
-                      className="border-b border-gray-200 hover:bg-[#e6f2ff] even:bg-gray-50 transition-colors"
-                    >
-                      <td className="p-1 px-2 border-r border-gray-200 font-mono text-gray-600">{idx + 1}</td>
-                      <td className="p-1 px-2 border-r border-gray-200 font-bold text-gray-800">{st.name}</td>
-                      <td className="p-1 px-2 border-r border-gray-200 font-mono text-blue-700 bg-gray-50/50">{st.username}</td>
-                      <td className="p-1 px-2 border-r border-gray-200 font-mono text-gray-900 bg-orange-50/20 tracking-wider">
-                        {st.password || '••••••••'}
-                      </td>
-                      <td className="p-1 px-2 border-r border-gray-200">
-                        {allowedCount === MODULES_LIST.length ? (
-                          <span className="inline-block bg-orange-100 text-orange-900 px-1 py-0.5 rounded font-bold border border-orange-300">
-                            ALL MODULES (UNRESTRICTED)
-                          </span>
-                        ) : allowedCount === 0 ? (
-                          <span className="inline-block bg-red-100 text-red-900 px-1 py-0.5 rounded font-bold border border-red-300 text-[10px]">
-                            NO ACCESS GRANTED
-                          </span>
-                        ) : (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-block bg-blue-100 text-blue-900 px-1 py-0.5 rounded font-bold border border-blue-300 w-fit">
-                              {allowedCount} of {MODULES_LIST.length} permitted
-                            </span>
-                            <span className="text-[9px] text-gray-500 truncate max-w-sm">
-                              {st.allowedModules.map(mId => MODULES_LIST.find(m => m.id === mId)?.label || mId).join(', ')}
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-1 px-2 border-r border-gray-200 max-w-xs">
-                        {projectsLength === projects.length ? (
-                          <span className="inline-block bg-green-100 text-green-900 px-1 py-0.5 rounded font-bold border border-green-300">
-                            ALL PROJECTS (UNRESTRICTED)
-                          </span>
-                        ) : projectsLength === 0 ? (
-                          <span className="inline-block bg-yellow-100 text-yellow-950 px-1 py-0.5 rounded font-bold border border-yellow-300 text-[10px]">
-                            NO PROJECTS CHOSEN
-                          </span>
-                        ) : (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-block bg-green-50 text-green-800 px-1 py-0.5 rounded font-bold border border-green-200 w-fit">
-                              {projectsLength} active {projectsLength === 1 ? 'project' : 'projects'}
-                            </span>
-                            <span className="text-[9px] text-gray-500 truncate" title={matchingProjectNames}>
-                              {matchingProjectNames}
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-1 px-2 border-r border-gray-200 font-mono text-gray-500">
-                        {st.createdDate ? new Date(st.createdDate).toLocaleDateString() : 'N/A'}
-                      </td>
-                      <td className="p-1 text-center flex items-center justify-center space-x-1">
-                        <button
-                          onClick={() => startEdit(st)}
-                          className="p-1 text-blue-700 bg-blue-50 border border-blue-300 hover:bg-blue-100 rounded transition-colors"
-                          title="Edit credentials & permissions"
-                        >
-                          <Edit size={11} />
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(st)}
-                          className="p-1 text-red-700 bg-red-50 border border-red-300 hover:bg-red-100 rounded transition-colors"
-                          title="Revoke staff credentials / Delete"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="bg-white border border-[#8c9ba8] rounded shadow-sm overflow-hidden p-2">
+        <ERPTable
+          id="staff-table"
+          data={filteredStaff}
+          columns={erpColumns}
+          idKey="id"
+          searchPlaceholder="Filter staff members..."
+          rowActions={erpRowActions}
+          exportFilename="active_staff_members"
+        />
       </div>
 
       {/* Explanatory Help Ribbon */}

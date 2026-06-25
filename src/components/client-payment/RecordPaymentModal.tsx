@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Save, X, Landmark, Percent, Ban, HelpCircle, FileClock } from 'lucide-react';
+import { Save, X, Landmark, Percent, Ban, HelpCircle, FileClock, Building2, Tag, Calendar, DollarSign, Link, CreditCard, Wallet, Notebook } from 'lucide-react';
 import { Project, Billing } from '../../types';
 
 interface RecordPaymentModalProps {
@@ -102,7 +102,10 @@ export const RecordPaymentModal = ({
           <div className="p-4 grid grid-cols-2 gap-3 text-xs">
             {/* Project Selection */}
             <div className="flex flex-col space-y-1 col-span-2">
-              <label className="font-semibold text-gray-700">Project / Site <span className="text-red-500">*</span></label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <Building2 size={11} className="text-blue-500" />
+                <span>Project / Site <span className="text-red-500">*</span></span>
+              </label>
               <select
                 required
                 className="sap-input font-bold text-[#002f6c]"
@@ -120,7 +123,10 @@ export const RecordPaymentModal = ({
 
             {/* Category Selection */}
             <div className="flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">Category <span className="text-red-500">*</span></label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <Tag size={11} className="text-blue-500" />
+                <span>Category <span className="text-red-500">*</span></span>
+              </label>
               <select
                 required
                 className="sap-input font-semibold"
@@ -144,7 +150,10 @@ export const RecordPaymentModal = ({
 
             {/* Payment Date */}
             <div className="flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">Payment Date <span className="text-red-500">*</span></label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <Calendar size={11} className="text-blue-500" />
+                <span>Payment Date <span className="text-red-500">*</span></span>
+              </label>
               <input
                 required
                 type="date"
@@ -156,7 +165,10 @@ export const RecordPaymentModal = ({
 
             {/* Amount Received */}
             <div className="flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">Amount Received <span className="text-red-500">*</span></label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <DollarSign size={11} className="text-blue-500" />
+                <span>Amount Received <span className="text-red-500">*</span></span>
+              </label>
               <input
                 required
                 type="number"
@@ -172,7 +184,10 @@ export const RecordPaymentModal = ({
             {/* Associate with specific bill when suitable */}
             {['RA Bill payment', 'GST', 'Retention'].includes(formData.category) && (
               <div className="flex flex-col space-y-1">
-                <label className="font-semibold text-gray-700">Link Bill (Optional)</label>
+                <label className="font-semibold text-gray-700 flex items-center gap-1">
+                  <Link size={11} className="text-blue-500" />
+                  <span>Link Bill (Optional)</span>
+                </label>
                 <select
                   disabled={!formData.projectId}
                   className="sap-input"
@@ -194,7 +209,10 @@ export const RecordPaymentModal = ({
 
             {/* Payment Mode */}
             <div className="flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">Payment Mode</label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <Wallet size={11} className="text-blue-500" />
+                <span>Payment Mode</span>
+              </label>
               <select
                 className="sap-input"
                 value={formData.paymentMode}
@@ -211,7 +229,10 @@ export const RecordPaymentModal = ({
 
             {/* Bank Name */}
             <div className="flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">Bank Name</label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <Building2 size={11} className="text-blue-500" />
+                <span>Bank Name</span>
+              </label>
               <input
                 type="text"
                 className="sap-input"
@@ -223,7 +244,10 @@ export const RecordPaymentModal = ({
 
             {/* UTR / Cheque No. */}
             <div className="flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">UTR / Cheque No.</label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <CreditCard size={11} className="text-blue-500" />
+                <span>UTR / Cheque No.</span>
+              </label>
               <input
                 type="text"
                 className="sap-input font-mono uppercase"
@@ -235,7 +259,10 @@ export const RecordPaymentModal = ({
 
             {/* Payment Reference */}
             <div className="flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">Payment Reference / Advice No</label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <Notebook size={11} className="text-blue-500" />
+                <span>Payment Reference / Advice No</span>
+              </label>
               <input
                 type="text"
                 className="sap-input"
@@ -247,7 +274,10 @@ export const RecordPaymentModal = ({
 
             {/* Remarks */}
             <div className="col-span-2 flex flex-col space-y-1">
-              <label className="font-semibold text-gray-700">Remarks</label>
+              <label className="font-semibold text-gray-700 flex items-center gap-1">
+                <Notebook size={11} className="text-blue-500" />
+                <span>Remarks</span>
+              </label>
               <input
                 type="text"
                 className="sap-input"

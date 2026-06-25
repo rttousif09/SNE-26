@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2, Search, Printer, FileSpreadsheet, Briefcase, User, Calendar, CreditCard, DollarSign, ArrowRight } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Search, Printer, FileSpreadsheet, Briefcase, User, Calendar, CreditCard, DollarSign, ArrowRight, Building2, FileKey, ShieldCheck, Tag, FolderOpen } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { LabourRequirementPlanning } from '../components/LabourRequirementPlanning';
@@ -8,8 +8,15 @@ import { WorkerAttendanceLog } from '../components/WorkerAttendanceLog';
 import { PDFExportButton } from '../components/PDFExportButton';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { Upload } from 'lucide-react';
+import { ERPTable, ERPColumn, ERPRowAction } from '../components/ERPTable';
 
-export const Workers: React.FC = () => {
+export interface WorkersProps {
+  initialWorkerId?: string;
+  initialView?: 'directory' | 'ledger' | 'planning' | 'transfers' | 'attendance';
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
+}
+
+export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, onUnsavedChange }) => {
   const { 
     user,
     workers, 
@@ -29,6 +36,69 @@ export const Workers: React.FC = () => {
   } = useAppContext();
 
   const isReadOnly = user?.username === 'saddamsne';
+
+  // ERP Columns for Workers Directory
+  const erpColumns: ERPColumn<any>[] = [
+    { key: 'serialNo', header: 'Sr No', sortable: true, filterable: true, width: 70 },
+    { key: 'workerId', header: 'Worker ID', sortable: true, filterable: true, frozen: true },
+    { key: 'name', header: 'Worker Name', sortable: true, filterable: true },
+    { key: 'project', header: 'Primary Site', sortable: true, filterable: true, render: (_, row) => {
+      const proj = projects.find(p => p.id === row.projectId);
+      return proj ? proj.name : 'Unassigned';
+    }},
+    { key: 'designation', header: 'Designation / Role', sortable: true, filterable: true, render: (val) => (
+      <span className="text-[10px] bg-slate-100 border border-slate-300 px-1.5 py-0.5 rounded-sm font-semibold">{val}</span>
+    )},
+    { key: 'joiningDate', header: 'Joining Date', sortable: true, filterable: true },
+    { key: 'exitDate', header: 'Exit Date', sortable: true, filterable: true, render: (val) => val || <span className="text-gray-400 italic">Active</span> }
+  ];
+
+  // ERP Row Actions for Workers Directory
+  const erpRowActions: ERPRowAction<any>[] = [
+    {
+      label: 'Open in New Tab',
+      icon: <FolderOpen size={11} className="text-blue-600" />,
+      onClick: (row) => {
+        if ((window as any).openWorkspaceTab) {
+          (window as any).openWorkspaceTab('workers', `Worker: ${row.name}`, { initialWorkerId: row.id, initialView: 'ledger', tabId: `worker:${row.id}` });
+        }
+      },
+      tooltip: 'Open worker deep ledger in a new workspace tab'
+    },
+    {
+      label: 'Ledger Account',
+      icon: <ArrowRight size={11} />,
+      onClick: (row) => {
+        setSelectedWorkerId(row.id);
+        setActiveView('ledger');
+      },
+      tooltip: 'Deep Ledger Inquiry'
+    },
+    ...(!isReadOnly ? [
+      {
+        label: 'Transfer Site',
+        icon: <ArrowRight size={11} className="text-purple-600" />,
+        onClick: (row) => {
+          setTransferModalData(row);
+          setTransferForm({ toProjectId: '', transferDate: new Date().toISOString().substring(0, 10), remarks: '' });
+        },
+        tooltip: 'Transfer to another project site'
+      },
+      {
+        label: 'Edit',
+        icon: <Edit size={11} />,
+        onClick: (row) => handleEdit(row),
+        tooltip: 'Edit Worker details'
+      },
+      {
+        label: 'Delete',
+        icon: <Trash2 size={11} />,
+        onClick: (row) => setDeleteId(row.id),
+        tooltip: 'Delete Worker',
+        className: 'text-red-600 hover:bg-red-50'
+      }
+    ] : [])
+  ];
 
   const [activeView, setActiveView] = useState<'directory' | 'ledger' | 'planning' | 'transfers' | 'attendance'>('directory');
   
@@ -57,6 +127,22 @@ export const Workers: React.FC = () => {
     }
     return '';
   });
+
+  useEffect(() => {
+    if (initialWorkerId) {
+      setSelectedWorkerId(initialWorkerId);
+    }
+    if (initialView) {
+      setActiveView(initialView);
+    }
+  }, [initialWorkerId, initialView]);
+
+  useEffect(() => {
+    if (onUnsavedChange) {
+      const hasUnsaved = isAdding && (formData.name !== '' || formData.workerId !== '');
+      onUnsavedChange(hasUnsaved);
+    }
+  }, [isAdding, formData, onUnsavedChange]);
 
   React.useEffect(() => {
     const handleGlobalSearch = (e: Event) => {
@@ -655,25 +741,6 @@ export const Workers: React.FC = () => {
                 />
                 <span className="text-[10.5px] font-bold text-gray-600 uppercase tracking-tight">Transferred Only</span>
               </label>
-              <div className="w-px h-4 bg-gray-300 mx-1"></div>
-              <Search size={12} className="text-gray-600" />
-              <span className="font-semibold text-gray-700">Filter Search:</span>
-              <input
-                type="text"
-                className="sap-input w-52 text-[11px]"
-                placeholder="Find by Name or ID..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="hover:bg-gray-300 p-0.5 rounded text-gray-500 cursor-pointer flex items-center"
-                  title="Clear Search"
-                >
-                  <X size={10} />
-                </button>
-              )}
             </div>
           </div>
 
@@ -713,28 +780,43 @@ export const Workers: React.FC = () => {
                   <X size={12} />
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Serial No:</label>
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 p-1">
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <FileKey size={11} className="text-blue-500" />
+                    <span>Serial No:</span>
+                  </label>
                   <input required type="text" className="sap-input flex-1" value={formData.serialNo} onChange={e => setFormData({...formData, serialNo: e.target.value})} />
                 </div>
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Worker ID (Unique):</label>
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <FileKey size={11} className="text-blue-500" />
+                    <span>Worker ID:</span>
+                  </label>
                   <input required type="text" className="sap-input flex-1 font-mono font-bold text-blue-900" placeholder="Worker ID" value={formData.workerId} onChange={e => setFormData({...formData, workerId: e.target.value})} />
                 </div>
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Full Name:</label>
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <User size={11} className="text-blue-500" />
+                    <span>Full Name:</span>
+                  </label>
                   <input required type="text" className="sap-input flex-1" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                 </div>
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Project / Site:</label>
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <Building2 size={11} className="text-blue-500" />
+                    <span>Project / Site:</span>
+                  </label>
                   <select required className="sap-input flex-1 text-[11px]" value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
                     <option value="">Select Site Project</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Designation / Role:</label>
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <Briefcase size={11} className="text-blue-500" />
+                    <span>Role / Desg:</span>
+                  </label>
                   <select required className="sap-input flex-1 font-sans" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})}>
                     <option value="">Select Role...</option>
                     <option value="Carpenter">Carpenter</option>
@@ -751,16 +833,25 @@ export const Workers: React.FC = () => {
                     <option value="Storeman">Storeman</option>
                   </select>
                 </div>
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Daily Rate (₹):</label>
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <DollarSign size={11} className="text-blue-500" />
+                    <span>Daily Rate (₹):</span>
+                  </label>
                   <input type="number" className="sap-input flex-1 font-mono" placeholder="Optional" value={formData.dailyRate} onChange={e => setFormData({...formData, dailyRate: e.target.value})} />
                 </div>
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Joining Date:</label>
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <Calendar size={11} className="text-blue-500" />
+                    <span>Joining Date:</span>
+                  </label>
                   <input required type="date" className="sap-input flex-1" value={formData.joiningDate} onChange={e => setFormData({...formData, joiningDate: e.target.value})} />
                 </div>
-                <div className="flex items-center">
-                  <label className="w-28 font-semibold text-gray-700">Exit Date (Optional):</label>
+                <div className="flex items-center space-x-2">
+                  <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
+                    <Calendar size={11} className="text-blue-500" />
+                    <span>Exit Date:</span>
+                  </label>
                   <input type="date" className="sap-input flex-1" value={formData.exitDate} onChange={e => setFormData({...formData, exitDate: e.target.value})} />
                 </div>
                 <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-end pt-2 space-x-2 border-t border-gray-200 mt-2">
@@ -854,108 +945,15 @@ export const Workers: React.FC = () => {
           </AnimatePresence>
 
           {/* Master Spreadsheet Table */}
-          <table className="w-full border-collapse border border-[#8c9ba8] bg-white shadow-sm">
-            <thead className="sap-header select-none">
-              <tr className="divide-x divide-[#8c9ba8]">
-                <th className="border border-[#8c9ba8] px-2 py-1.5 text-center font-bold w-12 bg-[#bcc5cf]/40">Sr No</th>
-                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold w-28">Worker ID</th>
-                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold">Worker Name</th>
-                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold">Primary Site Location</th>
-                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold">Designation/Role</th>
-                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold w-24">Joining Date</th>
-                <th className="border border-[#8c9ba8] px-3 py-1.5 text-left font-bold w-24">Exit Date</th>
-                <th className="border border-[#8c9ba8] px-2 py-1.5 text-center font-bold w-24">Deep Ledger</th>
-                {!isReadOnly && <th className="border border-[#8c9ba8] px-2 py-1.5 text-center font-bold w-16">Editor</th>}
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence mode="popLayout">
-              {Object.entries(
-                filteredWorkers.reduce((acc, worker) => {
-                  const pId = worker.projectId || 'unassigned';
-                  if (!acc[pId]) acc[pId] = [];
-                  acc[pId].push(worker);
-                  return acc;
-                }, {} as Record<string, typeof filteredWorkers>)
-              ).flatMap(([pId, projectWorkers]) => [
-                  <motion.tr 
-                    layout="position"
-                    initial={{ opacity: 0, x: -20 }} 
-                    animate={{ opacity: 1, x: 0 }} 
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.2 }}
-                    key={`header-${pId}`}
-                    className="bg-[#cbd4df] font-bold border-t border-b border-[#8c9ba8]">
-                    <td colSpan={isReadOnly ? 8 : 9} className="px-3 py-1.5 border border-[#bcc5cf] text-[#002f6c] uppercase tracking-wider text-[10.5px]">
-                      🏗️ {pId === 'unassigned' ? 'Unassigned Site / General Working Setup' : getProjectName(pId)} ({projectWorkers.length} Worker{projectWorkers.length !== 1 && 's'})
-                    </td>
-                  </motion.tr>,
-                  ...projectWorkers.map((worker, idx) => (
-                    <motion.tr 
-                      layout="position"
-                      initial={{ opacity: 0, x: -20 }} 
-                      animate={{ opacity: 1, x: 0 }} 
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ duration: 0.3, ease: 'easeOut' }} 
-                      key={worker.id} 
-                      className="hover:bg-[#e6f2ff] cursor-default border-b border-gray-150 divide-x divide-gray-150"
-                    >
-                      <td className="border border-[#bcc5cf] px-2 py-1.5 text-center font-mono text-gray-500 font-semibold">{worker.serialNo}</td>
-                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono text-blue-900 font-bold">{worker.workerId}</td>
-                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-bold text-gray-800">{worker.name}</td>
-                      <td className="border border-[#bcc5cf] px-3 py-1.5 text-gray-700">{getProjectName(worker.projectId)}</td>
-                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-sans"><span className="text-xs bg-slate-100 border border-slate-300 px-1.5 py-0.2 rounded-sm font-semibold">{worker.designation}</span></td>
-                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono">{worker.joiningDate}</td>
-                      <td className="border border-[#bcc5cf] px-3 py-1.5 font-mono">{worker.exitDate || <span className="text-gray-400 italic">Active</span>}</td>
-                      <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
-                        <button
-                          onClick={() => {
-                            setSelectedWorkerId(worker.id);
-                            setActiveView('ledger');
-                          }}
-                          className="text-[#0056b3] bg-blue-50 border border-blue-200 hover:bg-[#002f6c] hover:text-white transition px-2 py-0.5 rounded flex items-center mx-auto text-[9.5px] font-bold"
-                        >
-                          <span>Ledger Account</span>
-                          <ArrowRight size={10} className="ml-1" />
-                        </button>
-                      </td>
-                      {!isReadOnly && (
-                        <td className="border border-[#bcc5cf] px-2 py-1 text-center select-none">
-                          <div className="flex items-center justify-center space-x-2">
-                            <button 
-                              onClick={() => { 
-                                setTransferModalData(worker); 
-                                setTransferForm({ 
-                                  toProjectId: '', 
-                                  transferDate: new Date().toISOString().substring(0,10), 
-                                  remarks: '' 
-                                }); 
-                              }} 
-                              className="text-purple-600 hover:text-purple-800 p-0.5 border border-transparent hover:border-purple-300 rounded" 
-                              title="Transfer Worker to another Site"
-                            >
-                              <ArrowRight size={12} />
-                            </button>
-                            <button onClick={() => handleEdit(worker)} className="text-blue-600 hover:text-blue-800 p-0.5 border border-transparent hover:border-blue-300 rounded" title="Edit Profile Details">
-                              <Edit size={12} />
-                            </button>
-                            <button onClick={() => setDeleteId(worker.id)} className="text-red-600 hover:text-red-800 p-0.5 border border-transparent hover:border-red-300 rounded" title="Delete Worker Registration">
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </motion.tr>
-                  ))
-                ])}
-              {filteredWorkers.length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isReadOnly ? 8 : 9} className="border border-[#8c9ba8] px-3 py-8 text-center text-gray-500 font-semibold italic bg-amber-50/10">No workers registered matching search query terms.</td>
-                </motion.tr>
-              )}
-              </AnimatePresence>
-            </tbody>
-          </table>
+          <ERPTable
+            id="workers-directory-table"
+            data={filteredWorkers}
+            columns={erpColumns}
+            idKey="id"
+            searchPlaceholder="Filter workers by name, ID or role..."
+            rowActions={erpRowActions}
+            exportFilename="workers_directory"
+          />
         </div>
       ) : (
         <div className="flex-1 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-3 pt-2 h-full overflow-hidden">
