@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip, Printer, FileSpreadsheet } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip, Printer, FileSpreadsheet, Eye, RefreshCw } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { checkBillingDuplicate, addOverrideLog } from '../lib/duplicateChecker';
@@ -31,6 +31,7 @@ export const Billing: React.FC = () => {
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [printingBill, setPrintingBill] = useState<BillingType | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
 
   React.useEffect(() => {
     if (projects.length > 0 && !summaryProjectId) {
@@ -69,7 +70,13 @@ export const Billing: React.FC = () => {
     measurementItems: [] as MeasurementItem[],
     hardCopyFile: '',
     hardCopyFileName: '',
-    hardCopyFileType: ''
+    hardCopyFileType: '',
+    taxInvoiceFile: '',
+    taxInvoiceFileName: '',
+    taxInvoiceFileType: '',
+    gstr3bFile: '',
+    gstr3bFileName: '',
+    gstr3bFileType: ''
   });
 
   React.useEffect(() => {
@@ -120,7 +127,13 @@ export const Billing: React.FC = () => {
       measurementItems: bill.measurementItems || [],
       hardCopyFile: bill.hardCopyFile || '',
       hardCopyFileName: bill.hardCopyFileName || '',
-      hardCopyFileType: bill.hardCopyFileType || ''
+      hardCopyFileType: bill.hardCopyFileType || '',
+      taxInvoiceFile: bill.taxInvoiceFile || '',
+      taxInvoiceFileName: bill.taxInvoiceFileName || '',
+      taxInvoiceFileType: bill.taxInvoiceFileType || '',
+      gstr3bFile: bill.gstr3bFile || '',
+      gstr3bFileName: bill.gstr3bFileName || '',
+      gstr3bFileType: bill.gstr3bFileType || ''
     });
     setEditingId(bill.id);
     setIsAdding(true);
@@ -153,7 +166,13 @@ export const Billing: React.FC = () => {
       measurementItems: [],
       hardCopyFile: '',
       hardCopyFileName: '',
-      hardCopyFileType: ''
+      hardCopyFileType: '',
+      taxInvoiceFile: '',
+      taxInvoiceFileName: '',
+      taxInvoiceFileType: '',
+      gstr3bFile: '',
+      gstr3bFileName: '',
+      gstr3bFileType: ''
     });
   };
 
@@ -379,6 +398,58 @@ export const Billing: React.FC = () => {
     }));
   };
 
+  const handleTaxInvoiceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      setFormData(prev => ({
+        ...prev,
+        taxInvoiceFile: base64String,
+        taxInvoiceFileName: file.name,
+        taxInvoiceFileType: file.type
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeTaxInvoice = () => {
+    setFormData(prev => ({
+      ...prev,
+      taxInvoiceFile: '',
+      taxInvoiceFileName: '',
+      taxInvoiceFileType: ''
+    }));
+  };
+
+  const handleGstr3bChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      setFormData(prev => ({
+        ...prev,
+        gstr3bFile: base64String,
+        gstr3bFileName: file.name,
+        gstr3bFileType: file.type
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeGstr3b = () => {
+    setFormData(prev => ({
+      ...prev,
+      gstr3bFile: '',
+      gstr3bFileName: '',
+      gstr3bFileType: ''
+    }));
+  };
+
   const downloadFile = (fileDataStr: string, fileName: string, fileType: string) => {
     try {
       const link = document.createElement('a');
@@ -411,7 +482,13 @@ export const Billing: React.FC = () => {
       measurementItems: formData.measurementItems || [],
       hardCopyFile: formData.hardCopyFile || undefined,
       hardCopyFileName: formData.hardCopyFileName || undefined,
-      hardCopyFileType: formData.hardCopyFileType || undefined
+      hardCopyFileType: formData.hardCopyFileType || undefined,
+      taxInvoiceFile: formData.taxInvoiceFile || undefined,
+      taxInvoiceFileName: formData.taxInvoiceFileName || undefined,
+      taxInvoiceFileType: formData.taxInvoiceFileType || undefined,
+      gstr3bFile: formData.gstr3bFile || undefined,
+      gstr3bFileName: formData.gstr3bFileName || undefined,
+      gstr3bFileType: formData.gstr3bFileType || undefined
     };
 
     const onProceedSave = async (bypassCheck: boolean = false, overrideReason: string = '') => {
@@ -626,14 +703,221 @@ export const Billing: React.FC = () => {
                 </div>
               )}
               {bill.hardCopyFileName && (
-                <div className="p-1 px-2 text-[10px] bg-[#e6f4ea] border border-[#d4edda] rounded text-emerald-900 truncate">
-                  <strong className="block text-[9px] uppercase tracking-wide">Attachment:</strong>
-                  <span title={bill.hardCopyFileName}>📎 {bill.hardCopyFileName}</span>
+                <div className="p-1.5 px-2 text-[10px] bg-[#e6f4ea] border border-[#d4edda] rounded text-emerald-900 flex items-center justify-between gap-1">
+                  <div className="truncate min-w-0">
+                    <strong className="block text-[9px] uppercase tracking-wide">Attachment:</strong>
+                    <span className="truncate block font-medium" title={bill.hardCopyFileName}>📎 {bill.hardCopyFileName}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {bill.hardCopyFile && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewFile({ url: bill.hardCopyFile!, name: bill.hardCopyFileName || 'bill-copy', type: bill.hardCopyFileType || 'application/octet-stream' });
+                        }}
+                        className="p-1 text-emerald-800 hover:bg-emerald-100/50 rounded cursor-pointer"
+                        title="Preview Hard Copy"
+                      >
+                        <Eye size={11} />
+                      </button>
+                    )}
+                    {bill.hardCopyFile && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadFile(bill.hardCopyFile!, bill.hardCopyFileName || 'bill-copy', bill.hardCopyFileType || 'application/octet-stream');
+                        }}
+                        className="p-1 text-emerald-800 hover:bg-emerald-100/50 rounded cursor-pointer"
+                        title="Download Hard Copy"
+                      >
+                        <Download size={11} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               {!bill.debitReason && !bill.holdReason && !bill.hardCopyFileName && (
                 <span className="text-[10px] text-gray-400 italic font-sans block">No special remarks or duplicate over-ride records found.</span>
               )}
+
+              {/* GST Supporting Documents Section */}
+              <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
+                <h5 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">📁 GST Compliance Files</h5>
+                
+                {/* Tax Invoice */}
+                <div className="flex items-center justify-between p-1.5 px-2 bg-emerald-50/50 border border-emerald-100 rounded text-slate-700">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-emerald-700 font-bold text-[9px]">📄 Invoice:</span>
+                    {bill.taxInvoiceFileName ? (
+                      <span className="truncate max-w-[120px] font-medium text-slate-800 text-[10px]" title={bill.taxInvoiceFileName}>
+                        {bill.taxInvoiceFileName}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic text-[10px]">Not attached</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {bill.taxInvoiceFile ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewFile({ url: bill.taxInvoiceFile!, name: bill.taxInvoiceFileName || 'tax-invoice', type: bill.taxInvoiceFileType || 'application/octet-stream' });
+                          }}
+                          className="p-1 text-emerald-700 hover:bg-emerald-100 rounded cursor-pointer"
+                          title="Preview Tax Invoice"
+                        >
+                          <Eye size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadFile(bill.taxInvoiceFile!, bill.taxInvoiceFileName || 'tax-invoice', bill.taxInvoiceFileType || 'application/octet-stream');
+                          }}
+                          className="p-1 text-emerald-700 hover:bg-emerald-100 rounded cursor-pointer"
+                          title="Download Tax Invoice"
+                        >
+                          <Download size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if(confirm("Are you sure you want to remove the Tax Invoice attachment?")) {
+                              updateBilling(bill.id, {
+                                ...bill,
+                                taxInvoiceFile: undefined,
+                                taxInvoiceFileName: undefined,
+                                taxInvoiceFileType: undefined
+                              });
+                            }
+                          }}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                          title="Remove Tax Invoice"
+                        >
+                          <X size={11} />
+                        </button>
+                      </>
+                    ) : (
+                      <label className="text-[9px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-3xs">
+                        Attach
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="application/pdf,image/png,image/jpeg,image/jpg"
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const base64String = event.target?.result as string;
+                              updateBilling(bill.id, {
+                                ...bill,
+                                taxInvoiceFile: base64String,
+                                taxInvoiceFileName: file.name,
+                                taxInvoiceFileType: file.type
+                              });
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* GSTR-3B */}
+                <div className="flex items-center justify-between p-1.5 px-2 bg-teal-50/50 border border-teal-100 rounded text-slate-700">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-teal-700 font-bold text-[9px]">📊 GSTR-3B:</span>
+                    {bill.gstr3bFileName ? (
+                      <span className="truncate max-w-[120px] font-medium text-slate-800 text-[10px]" title={bill.gstr3bFileName}>
+                        {bill.gstr3bFileName}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic text-[10px]">Not attached</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {bill.gstr3bFile ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewFile({ url: bill.gstr3bFile!, name: bill.gstr3bFileName || 'gstr3b', type: bill.gstr3bFileType || 'application/octet-stream' });
+                          }}
+                          className="p-1 text-teal-700 hover:bg-teal-100 rounded cursor-pointer"
+                          title="Preview GSTR-3B"
+                        >
+                          <Eye size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadFile(bill.gstr3bFile!, bill.gstr3bFileName || 'gstr3b', bill.gstr3bFileType || 'application/octet-stream');
+                          }}
+                          className="p-1 text-teal-700 hover:bg-teal-100 rounded cursor-pointer"
+                          title="Download GSTR-3B"
+                        >
+                          <Download size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if(confirm("Are you sure you want to remove the GSTR-3B attachment?")) {
+                              updateBilling(bill.id, {
+                                ...bill,
+                                gstr3bFile: undefined,
+                                gstr3bFileName: undefined,
+                                gstr3bFileType: undefined
+                              });
+                            }
+                          }}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                          title="Remove GSTR-3B"
+                        >
+                          <X size={11} />
+                        </button>
+                      </>
+                    ) : (
+                      <label className="text-[9px] bg-teal-600 hover:bg-teal-700 text-white font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-3xs">
+                        Attach
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="application/pdf,image/png,image/jpeg,image/jpg"
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const base64String = event.target?.result as string;
+                              updateBilling(bill.id, {
+                                ...bill,
+                                gstr3bFile: base64String,
+                                gstr3bFileName: file.name,
+                                gstr3bFileType: file.type
+                              });
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-col gap-1 w-full text-[10px]">
@@ -1440,6 +1724,13 @@ export const Billing: React.FC = () => {
             
             <div className="col-span-2 border border-dashed border-gray-300 rounded-sm p-3 bg-gray-50 flex flex-col mt-2">
               <span className="font-semibold text-gray-700 mb-1 text-[11px]">Upload Bill Hard Copy (Optional):</span>
+              <input
+                id="hard-copy-upload"
+                type="file"
+                className="hidden"
+                accept="application/pdf,image/png,image/jpeg,image/jpg"
+                onChange={handleFileChange}
+              />
               {!formData.hardCopyFile ? (
                 <div
                   onDragOver={handleDragOver}
@@ -1455,13 +1746,6 @@ export const Billing: React.FC = () => {
                   <Upload size={18} className="text-gray-400 mb-1" />
                   <p className="text-gray-600 font-medium text-center">Drag and drop hard copy here, or <span className="text-[#0056b3] underline">browse file</span></p>
                   <p className="text-gray-400 text-[9px] mt-0.5 text-center">Supports PDF, JPEG, PNG (Max 10MB)</p>
-                  <input
-                    id="hard-copy-upload"
-                    type="file"
-                    className="hidden"
-                    accept="application/pdf,image/png,image/jpeg,image/jpg"
-                    onChange={handleFileChange}
-                  />
                 </div>
               ) : (
                 <div className="w-full bg-white border border-[#ffebad] rounded-sm p-2 flex items-center justify-between">
@@ -1473,6 +1757,22 @@ export const Billing: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFile({ url: formData.hardCopyFile, name: formData.hardCopyFileName || 'uploaded-bill', type: formData.hardCopyFileType || 'application/octet-stream' })}
+                      className="p-1 text-slate-700 hover:bg-slate-100 rounded-sm cursor-pointer"
+                      title="Preview Attachment"
+                    >
+                      <Eye size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('hard-copy-upload')?.click()}
+                      className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-sm cursor-pointer"
+                      title="Replace Attachment"
+                    >
+                      <RefreshCw size={12} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => downloadFile(formData.hardCopyFile, formData.hardCopyFileName || 'uploaded-bill', formData.hardCopyFileType || 'application/octet-stream')}
@@ -1492,6 +1792,145 @@ export const Billing: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* GST-Specific Supporting Documents (Tax Invoice, GSTR-3B) */}
+            <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 border-t border-dashed border-gray-200 pt-3">
+              {/* Tax Invoice Upload */}
+              <div className="border border-dashed border-emerald-300 rounded p-3 bg-emerald-50/20 flex flex-col">
+                <span className="font-semibold text-emerald-800 mb-1 text-[11px] flex items-center gap-1">
+                  📄 Attach GST Tax Invoice:
+                </span>
+                <input
+                  id="tax-invoice-upload"
+                  type="file"
+                  className="hidden"
+                  accept="application/pdf,image/png,image/jpeg,image/jpg"
+                  onChange={handleTaxInvoiceChange}
+                />
+                {!formData.taxInvoiceFile ? (
+                  <div
+                    className="w-full py-3 border border-dashed border-emerald-200 hover:border-emerald-400 rounded flex flex-col items-center justify-center cursor-pointer transition-all bg-white"
+                    onClick={() => document.getElementById('tax-invoice-upload')?.click()}
+                  >
+                    <Upload size={14} className="text-emerald-500 mb-1" />
+                    <p className="text-gray-600 text-[10px] font-medium text-center">Click to browse Tax Invoice</p>
+                    <p className="text-gray-400 text-[8px] mt-0.5 text-center">PDF, PNG, JPEG (Max 10MB)</p>
+                  </div>
+                ) : (
+                  <div className="w-full bg-white border border-emerald-200 rounded p-2 flex items-center justify-between">
+                    <div className="flex items-center space-x-2 truncate">
+                      <Paperclip size={13} className="text-emerald-600 animate-pulse" />
+                      <div className="flex flex-col truncate">
+                        <span className="font-semibold text-gray-700 text-[10px] truncate" title={formData.taxInvoiceFileName}>{formData.taxInvoiceFileName}</span>
+                        <span className="text-[9px] text-emerald-600 font-semibold">Invoice Attached</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFile({ url: formData.taxInvoiceFile, name: formData.taxInvoiceFileName || 'tax-invoice', type: formData.taxInvoiceFileType || 'application/octet-stream' })}
+                        className="p-1 text-slate-700 hover:bg-slate-50 rounded cursor-pointer"
+                        title="Preview Invoice"
+                      >
+                        <Eye size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('tax-invoice-upload')?.click()}
+                        className="p-1 text-indigo-600 hover:bg-indigo-50 rounded cursor-pointer"
+                        title="Replace Invoice"
+                      >
+                        <RefreshCw size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadFile(formData.taxInvoiceFile, formData.taxInvoiceFileName || 'tax-invoice', formData.taxInvoiceFileType || 'application/octet-stream')}
+                        className="p-1 text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer animate-none"
+                        title="Download Invoice"
+                      >
+                        <Download size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={removeTaxInvoice}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                        title="Remove Invoice"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* GSTR-3B Upload */}
+              <div className="border border-dashed border-teal-300 rounded p-3 bg-teal-50/20 flex flex-col">
+                <span className="font-semibold text-teal-800 mb-1 text-[11px] flex items-center gap-1">
+                  📊 Attach GSTR-3B Filing Copy:
+                </span>
+                <input
+                  id="gstr3b-upload"
+                  type="file"
+                  className="hidden"
+                  accept="application/pdf,image/png,image/jpeg,image/jpg"
+                  onChange={handleGstr3bChange}
+                />
+                {!formData.gstr3bFile ? (
+                  <div
+                    className="w-full py-3 border border-dashed border-teal-200 hover:border-teal-400 rounded flex flex-col items-center justify-center cursor-pointer transition-all bg-white"
+                    onClick={() => document.getElementById('gstr3b-upload')?.click()}
+                  >
+                    <Upload size={14} className="text-teal-500 mb-1" />
+                    <p className="text-gray-600 text-[10px] font-medium text-center">Click to browse GSTR-3B</p>
+                    <p className="text-gray-400 text-[8px] mt-0.5 text-center">PDF, PNG, JPEG (Max 10MB)</p>
+                  </div>
+                ) : (
+                  <div className="w-full bg-white border border-teal-200 rounded p-2 flex items-center justify-between">
+                    <div className="flex items-center space-x-2 truncate">
+                      <Paperclip size={13} className="text-teal-600 animate-pulse" />
+                      <div className="flex flex-col truncate">
+                        <span className="font-semibold text-gray-700 text-[10px] truncate" title={formData.gstr3bFileName}>{formData.gstr3bFileName}</span>
+                        <span className="text-[9px] text-teal-600 font-semibold">GSTR-3B Attached</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFile({ url: formData.gstr3bFile, name: formData.gstr3bFileName || 'gstr3b', type: formData.gstr3bFileType || 'application/octet-stream' })}
+                        className="p-1 text-slate-700 hover:bg-slate-50 rounded cursor-pointer"
+                        title="Preview GSTR-3B"
+                      >
+                        <Eye size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('gstr3b-upload')?.click()}
+                        className="p-1 text-indigo-600 hover:bg-indigo-50 rounded cursor-pointer"
+                        title="Replace GSTR-3B"
+                      >
+                        <RefreshCw size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadFile(formData.gstr3bFile, formData.gstr3bFileName || 'gstr3b', formData.gstr3bFileType || 'application/octet-stream')}
+                        className="p-1 text-teal-600 hover:bg-teal-50 rounded cursor-pointer animate-none"
+                        title="Download GSTR-3B"
+                      >
+                        <Download size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={removeGstr3b}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                        title="Remove GSTR-3B"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="col-span-2 flex justify-end pt-2 space-x-2">
@@ -2558,6 +2997,7 @@ export const Billing: React.FC = () => {
                   ) : (
                     gstBills.map(b => {
                       const isExpanded = expandedBillId === `${b.projectId}_${b.billNo}`;
+                      const originalBill = billings.find(ob => ob.projectId === b.projectId && ob.billNo === b.billNo);
                       return (
                         <React.Fragment key={`${b.projectId}_${b.billNo}`}>
                           <tr 
@@ -2578,13 +3018,25 @@ export const Billing: React.FC = () => {
                               {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(b.amount)}
                             </td>
                             <td className="p-1.5 px-3 border-r border-slate-200 font-sans text-slate-700 font-medium text-left">
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                                b.gstStatus === 'Deposited' || b.gstStatus === 'Paid'
-                                  ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200'
-                                  : 'bg-amber-100/80 text-amber-800 border border-amber-200'
-                              }`}>
-                                {b.gstStatus}
-                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                  b.gstStatus === 'Deposited' || b.gstStatus === 'Paid'
+                                    ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200'
+                                    : 'bg-amber-100/80 text-amber-800 border border-amber-200'
+                                }`}>
+                                  {b.gstStatus}
+                                </span>
+                                {originalBill?.taxInvoiceFile && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[8px] font-semibold tracking-wide font-sans shadow-3xs" title="GST Tax Invoice Attached">
+                                    📎 Invoice
+                                  </span>
+                                )}
+                                {originalBill?.gstr3bFile && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[8px] font-semibold tracking-wide font-sans shadow-3xs" title="GSTR-3B Filing Copy Attached">
+                                    📊 GSTR-3B
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-1.5 px-3 text-center font-sans">
                               <span className={`text-[10px] font-bold inline-flex items-center gap-1 border rounded px-1.5 py-0.5 shadow-3xs transition-colors ${
@@ -2904,6 +3356,85 @@ export const Billing: React.FC = () => {
           }
         }}
       />
+
+      {/* Document Preview Lightbox Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-xs no-print">
+          <div className="bg-white rounded-md shadow-2xl w-full max-w-4xl mx-4 overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="bg-slate-50 border-b border-slate-100 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2 min-w-0">
+                <Paperclip size={16} className="text-blue-600 shrink-0" />
+                <h3 className="font-bold text-slate-800 text-[13px] truncate" title={previewFile.name}>
+                  Preview: {previewFile.name}
+                </h3>
+                <span className="text-[10px] bg-slate-200/80 text-slate-700 px-1.5 py-0.5 rounded font-mono shrink-0 hidden sm:inline-block">
+                  {previewFile.type}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 shrink-0">
+                <button
+                  onClick={() => downloadFile(previewFile.url, previewFile.name, previewFile.type)}
+                  className="bg-[#eef2f6] hover:bg-[#e2e8f0] text-slate-700 font-bold text-[11px] px-2.5 py-1.5 rounded-sm flex items-center space-x-1 cursor-pointer transition-colors"
+                  title="Download File"
+                >
+                  <Download size={12} />
+                  <span>Download</span>
+                </button>
+                <button
+                  onClick={() => setPreviewFile(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                  title="Close Preview"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Viewer */}
+            <div className="p-4 flex-1 overflow-auto bg-slate-100 flex items-center justify-center min-h-[300px]">
+              {previewFile.type.startsWith('image/') ? (
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  className="max-h-[65vh] max-w-full object-contain rounded border border-slate-200 shadow-sm"
+                />
+              ) : previewFile.type === 'application/pdf' ? (
+                <iframe
+                  src={previewFile.url}
+                  title={previewFile.name}
+                  className="w-full h-[65vh] border border-slate-200 rounded shadow-inner bg-white"
+                />
+              ) : (
+                <div className="text-center py-10 bg-white rounded-sm p-8 border border-slate-200 max-w-md shadow-sm">
+                  <Paperclip size={40} className="mx-auto text-slate-350 mb-3" />
+                  <h4 className="font-bold text-slate-700 text-sm mb-1">Preview Unavailable</h4>
+                  <p className="text-slate-500 text-xs mb-4">
+                    This file format ({previewFile.type}) cannot be direct-previewed in the browser. You can download the file to view it on your device.
+                  </p>
+                  <button
+                    onClick={() => downloadFile(previewFile.url, previewFile.name, previewFile.type)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-sm inline-flex items-center space-x-1 cursor-pointer shadow-xs"
+                  >
+                    <Download size={12} />
+                    <span>Download & Open File</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 border-t border-slate-100 px-4 py-2.5 flex justify-end">
+              <button
+                onClick={() => setPreviewFile(null)}
+                className="sap-btn-secondary py-1 px-3 cursor-pointer text-[11px]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

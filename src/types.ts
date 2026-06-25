@@ -75,6 +75,12 @@ export interface Billing {
   tdsCertificateReceived?: number;
   tdsCertificatePending?: number;
   gstStatus?: string;
+  taxInvoiceFile?: string;
+  taxInvoiceFileName?: string;
+  taxInvoiceFileType?: string;
+  gstr3bFile?: string;
+  gstr3bFileName?: string;
+  gstr3bFileType?: string;
   retentionStatus?: 'Pending' | 'Partially Cleared' | 'Fully Resolved';
   holdStatus?: 'Pending' | 'Partially Cleared' | 'Fully Resolved';
 }
