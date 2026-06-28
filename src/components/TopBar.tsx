@@ -21,7 +21,9 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
   const msgDropdownRef = useRef<HTMLDivElement>(null);
+  const themeDropdownRef = useRef<HTMLDivElement>(null);
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
 
   const [showMyProfile, setShowMyProfile] = useState(false);
@@ -374,6 +376,18 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
       setDarkMode(true);
       document.documentElement.classList.add('dark');
     }
+    
+    const handleThemeChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && typeof customEvent.detail.darkMode === 'boolean') {
+        setDarkMode(customEvent.detail.darkMode);
+      }
+    };
+    
+    window.addEventListener('theme-changed', handleThemeChange);
+    return () => {
+      window.removeEventListener('theme-changed', handleThemeChange);
+    };
   }, []);
 
   const toggleDarkMode = () => {
@@ -386,6 +400,7 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
       document.documentElement.classList.remove('dark');
       localStorage.setItem('sap-dark-mode', 'false');
     }
+    window.dispatchEvent(new CustomEvent('theme-changed', { detail: { darkMode: newDarkMode } }));
   };
 
   // Close dropdowns if clicked outside
@@ -402,6 +417,9 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
       }
       if (searchDropdownRef.current && !searchDropdownRef.current.contains(event.target as Node)) {
         setIsSearchFocused(false);
+      }
+      if (themeDropdownRef.current && !themeDropdownRef.current.contains(event.target as Node)) {
+        setIsThemeDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -422,18 +440,85 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
         
         {/* Notifications and Profile */}
         <div className="flex items-center space-x-3">
-          {/* Theme Toggle Button */}
-          <button
-            onClick={toggleDarkMode}
-            title={darkMode ? "Switch to SAP Light Mode" : "Switch to Dark Mode"}
-            className="flex items-center justify-center p-1.5 hover:bg-[#001f4d] rounded transition duration-150 text-white focus:outline-none cursor-pointer"
-          >
-            {darkMode ? (
-              <Sun size={15} className="text-amber-400" />
-            ) : (
-              <Moon size={15} className="text-blue-100" />
+          {/* Theme Selector Dropdown */}
+          <div className="relative" ref={themeDropdownRef}>
+            <button
+              onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+              title="Change Workspace Theme"
+              className="flex items-center space-x-1.5 p-1.5 hover:bg-[#001f4d] rounded transition duration-150 text-white focus:outline-none cursor-pointer border border-[#8c9ba8]/20 bg-[#002f6c]"
+            >
+              {darkMode ? (
+                <Moon size={13} className="text-blue-300" />
+              ) : (
+                <Sun size={13} className="text-amber-400" />
+              )}
+              <span className="font-mono text-[9px] uppercase tracking-wider font-bold">Theme</span>
+              <ChevronDown size={10} className={`transform transition-transform text-blue-200 ${isThemeDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isThemeDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#8c9ba8] shadow-2xl rounded-sm z-50 animate-fade-in text-slate-800 p-2 divide-y divide-gray-100 flex flex-col">
+                <div className="pb-1.5 mb-1.5">
+                  <span className="font-bold text-[9px] uppercase tracking-wide text-gray-500 block">Workspace Display Theme</span>
+                  <span className="text-[8px] text-gray-400">Calibrate screen brightness for optimal task efficiency</span>
+                </div>
+                
+                <div className="space-y-1.5 pt-1.5">
+                  {/* SAP-Inspired Blue Option */}
+                  <button
+                    onClick={() => {
+                      if (darkMode) toggleDarkMode();
+                      setIsThemeDropdownOpen(false);
+                    }}
+                    className={`w-full text-left p-2 rounded-sm transition-all duration-150 flex items-start space-x-2.5 border ${
+                      !darkMode 
+                        ? 'bg-blue-50/70 border-blue-300 shadow-sm ring-1 ring-blue-100' 
+                        : 'bg-white border-gray-100 hover:bg-slate-50 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-[#0056b3] rounded-full border border-blue-400 mt-0.5 shrink-0 flex items-center justify-center">
+                      {!darkMode && <Check size={10} className="text-white font-bold" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[10px] text-slate-950 uppercase tracking-tight">SAP Blue (Light)</span>
+                        <span className="bg-[#e6f2ff] text-[#0056b3] font-mono text-[7px] font-bold px-1 rounded uppercase border border-blue-200">Default</span>
+                      </div>
+                      <p className="text-[9px] text-slate-500 mt-0.5 leading-normal">
+                        Classic light interface. Recommended for high-brightness standard offices and daytime workflows.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* High-Contrast Dark Mode Option */}
+                  <button
+                    onClick={() => {
+                      if (!darkMode) toggleDarkMode();
+                      setIsThemeDropdownOpen(false);
+                    }}
+                    className={`w-full text-left p-2 rounded-sm transition-all duration-150 flex items-start space-x-2.5 border ${
+                      darkMode 
+                        ? 'bg-blue-950/25 border-blue-800 shadow-sm ring-1 ring-blue-900/35' 
+                        : 'bg-white border-gray-100 hover:bg-slate-50 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-[#1c1e21] rounded-full border border-gray-600 mt-0.5 shrink-0 flex items-center justify-center">
+                      {darkMode && <Check size={10} className="text-[#5da5e1] font-bold" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[10px] text-slate-950 uppercase tracking-tight">High-Contrast Dark</span>
+                        <span className="bg-slate-900 text-amber-400 font-mono text-[7px] font-bold px-1 rounded uppercase border border-slate-700">Eye-Care</span>
+                      </div>
+                      <p className="text-[9px] text-slate-500 mt-0.5 leading-normal">
+                        Specifically calibrated with reduced eye-strain luminance. Perfect for long-duration, high-intensity data entry.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              </div>
             )}
-          </button>
+          </div>
 
           {/* Messages */}
           <div className="relative" ref={msgDropdownRef}>
@@ -1078,7 +1163,7 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowLeft size={14} className="text-green-700" /></button>
           <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowRight size={14} className="text-green-700" /></button>
           <button title="Print view" onClick={() => window.print()} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Printer size={14} className="text-gray-700" /></button>
-          <button title="Toggle Dark Mode" onClick={toggleDarkMode} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm">
+          <button title={darkMode ? "Switch to Default SAP Blue Theme" : "Switch to High-Contrast Dark Theme (Optimized for Long-Duration Data Entry)"} onClick={toggleDarkMode} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm">
             {darkMode ? <Sun size={14} className="text-amber-500" /> : <Moon size={14} className="text-gray-700" />}
           </button>
         </div>

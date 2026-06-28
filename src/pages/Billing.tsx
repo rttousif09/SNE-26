@@ -23,7 +23,7 @@ export const Billing: React.FC = () => {
   const { user, billings, projects, clientPayments = [], addBilling, updateBilling, deleteBilling, numberingSettings = [], previewNextNumber, consumeNextNumber } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const billingConfig = numberingSettings?.find((s: any) => s.moduleKey === 'billing');
-  const isAutoBillingActive = billingConfig?.status === 'Active';
+  const isAutoBillingActive = false; // Turned off as per user request so bill numbers are entered manually
 
   const [activeTab, setActiveTab] = useState<'records' | 'retention' | 'tds' | 'debit' | 'hold' | 'gst'>('records');
   const [summaryProjectId, setSummaryProjectId] = useState<string>('all');

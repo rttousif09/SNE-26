@@ -9,7 +9,8 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check": "node -e \"console.log(process.cwd())\""
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

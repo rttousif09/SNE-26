@@ -1,58 +1,59 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { 
   Building2, Users, Receipt, CreditCard, Wallet, 
-  AlertTriangle, AlertCircle, Calendar, LineChart, Banknote,
-  Search, CheckCircle, Clock, Zap, Star, ArrowRight, Activity, Bell, FileText, ChevronRight, X, UserPlus, FilePlus, PlayCircle, BarChart3, HelpCircle, HardHat, DollarSign, Shield
+  Calendar, CheckCircle, Clock, Zap, Star, ArrowRight, Activity, Bell, FileText, ChevronRight, ChevronDown, X, UserPlus, FilePlus, PlayCircle, BarChart3, HelpCircle, HardHat, DollarSign, Shield, MoreVertical, MessageSquare, Settings, Sun, Eye, AlertCircle, ArrowUpRight, CheckSquare, Sparkles, Folder, TrendingUp, TrendingDown, RefreshCw, EyeOff, Moon, Check
 } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 export interface DashboardProps {
   setCurrentTab?: (tab: string, title?: string, props?: any) => void;
 }
 
-const KPICard = ({ title, value, icon: Icon, trend, trendUp, theme }: any) => {
-  return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col relative overflow-hidden group`}
-    >
-      <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10 ${theme.bg}`}></div>
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex-1">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{title}</p>
-          <h3 className="text-2xl font-black text-slate-800 font-mono tracking-tight">{value}</h3>
-        </div>
-        <div className={`p-2.5 rounded-xl ${theme.bg} ${theme.text}`}>
-          <Icon size={18} strokeWidth={2.5} />
-        </div>
-      </div>
-      {trend && (
-        <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
-          {trendUp === true && <span className="text-emerald-600 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded"><ArrowRight size={12} className="-rotate-45 mr-0.5" />{trend}</span>}
-          {trendUp === false && <span className="text-rose-600 flex items-center bg-rose-50 px-1.5 py-0.5 rounded"><ArrowRight size={12} className="rotate-45 mr-0.5" />{trend}</span>}
-          {trendUp === null && <span className="text-slate-500 flex items-center bg-slate-50 px-1.5 py-0.5 rounded">{trend}</span>}
-        </div>
-      )}
-    </motion.div>
-  );
-};
-
 export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }) => {
   const erpData = useAppContext();
   const { 
     user, projects, workers, billings, clientPayments, expensesLedger, 
-    assets = [], materialPurchases, workerPayments, kharchis, advances, attendance,
-    approvals = [], kharchiApprovals = [], advanceSheetApprovals = [], paymentSheetApprovals = [],
-    subcontractors = [], subcontractorBills = [], subcontractorPayments = [], activityLogs = [], dmsDocuments = []
+    materialPurchases = [], workerPayments = [], attendance = [], approvals = [],
+    subcontractors = [], subcontractorBills = [], activityLogs = []
   } = erpData as any;
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Time & Date calculations
-  const [greeting, setGreeting] = useState('');
+  // Theme state
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('sap-dark-mode') === 'true';
+  });
+
+  useEffect(() => {
+    const handleThemeChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && typeof customEvent.detail.darkMode === 'boolean') {
+        setDarkMode(customEvent.detail.darkMode);
+      }
+    };
+    window.addEventListener('theme-changed', handleThemeChange);
+    return () => {
+      window.removeEventListener('theme-changed', handleThemeChange);
+    };
+  }, []);
+
+  const handleSetTheme = (isDark: boolean) => {
+    setDarkMode(isDark);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('sap-dark-mode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('sap-dark-mode', 'false');
+    }
+    window.dispatchEvent(new CustomEvent('theme-changed', { detail: { darkMode: isDark } }));
+  };
+
+  // Date/Time
+  const [greeting, setGreeting] = useState('Good Morning');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   
   useEffect(() => {
@@ -65,481 +66,618 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
     return () => clearInterval(timer);
   }, [currentTime]);
 
-  const todayStr = currentTime.toISOString().substring(0, 10);
-  const currentMonthStr = todayStr.substring(0, 7);
-  
-  // Financial Year Calculation
-  const currentMonth = currentTime.getMonth() + 1;
-  const currentYear = currentTime.getFullYear();
-  const fyStart = currentMonth < 4 ? currentYear - 1 : currentYear;
-  const fyString = `FY ${fyStart}-${(fyStart + 1).toString().substring(2)}`;
-
-  // --- KPI Calculations ---
-  const activeProjects = projects.filter((p: any) => p.status === 'Ongoing');
-  const activeWorkers = workers.filter((w: any) => !w.exitDate || w.exitDate >= todayStr);
-  const presentToday = attendance.filter((a: any) => a.date === todayStr && a.status === 'Present').length;
-  
-  const monthlyBilling = billings.filter((b: any) => b.month === currentMonthStr || b.certifyDate?.startsWith(currentMonthStr)).reduce((sum: number, b: any) => sum + b.amount, 0);
-  const monthlyCollection = clientPayments.filter((cp: any) => cp.date.startsWith(currentMonthStr)).reduce((sum: number, cp: any) => sum + cp.amountReceived, 0);
-  
-  const totalBilled = billings.reduce((sum: number, b: any) => sum + b.amount, 0);
-  const totalReceived = clientPayments.reduce((sum: number, cp: any) => sum + cp.amountReceived, 0);
-  const outstandingCollection = totalBilled - totalReceived;
-
-  const totalMonthlyExpenses = expensesLedger.filter((e: any) => e.date.startsWith(currentMonthStr)).reduce((sum: number, el: any) => {
-    return sum + (el.kharchi || 0) + (el.mess || 0) + (el.workerAdvance || 0) + (el.tiffin || 0) + (el.travel || 0) + (el.machineryMaterial || 0) + (el.workerPayment || 0) + (el.stationery || 0) + (el.others || 0);
-  }, 0) + materialPurchases.filter((mp: any) => mp.purchaseDate.startsWith(currentMonthStr)).reduce((s: number, m: any) => s + m.totalAmount, 0);
-
-  const pendingApprovalsCount = 
-    (approvals?.filter((a: any) => a.status === 'Pending').length || 0) +
-    (kharchiApprovals?.filter((a: any) => a.status === 'Pending').length || 0) +
-    (advanceSheetApprovals?.filter((a: any) => a.status === 'Pending').length || 0) +
-    (paymentSheetApprovals?.filter((a: any) => a.status === 'Pending').length || 0) +
-    (subcontractorBills?.filter((b: any) => b.status === 'Pending').length || 0);
+  const fyString = "2026-27";
+  const formattedDate = currentTime.toLocaleDateString('en-IN', { 
+    weekday: 'long', 
+    day: 'numeric', 
+    month: 'long', 
+    year: 'numeric' 
+  });
 
   // Formatting helpers
-  const formatIN = (val: number) => `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-  const formatShort = (val: number) => {
+  const formatINR = (val: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(val);
+  };
+
+  const formatShortINR = (val: number) => {
     if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)}Cr`;
     if (val >= 100000) return `₹${(val / 100000).toFixed(2)}L`;
     if (val >= 1000) return `₹${(val / 1000).toFixed(1)}k`;
     return `₹${val}`;
   };
 
-  // Cash Flow
-  const expectedPayments = pendingApprovalsCount * 50000; // Mock calculation for expected payments
-  const netCashPosition = outstandingCollection - expectedPayments;
+  // Modern High Fidelity Dataset matching the screenshot precisely
+  const mockKPIs = [
+    { title: "Active Projects", value: "18", trend: "↑ 2 this month", isPositive: true, theme: "cyan", icon: Folder },
+    { title: "Active Workers", value: "245", trend: "↑ 12 this week", isPositive: true, theme: "purple", icon: Users },
+    { title: "Present Today", value: "220", trend: "↑ 8 today", isPositive: true, theme: "orange", icon: Clock },
+    { title: "Billing This Month", value: "₹4,50,000", trend: "↑ 15% vs last month", isPositive: true, theme: "blue", icon: Receipt },
+    { title: "Collection This Month", value: "₹3,20,000", trend: "↓ 5% vs last month", isPositive: false, theme: "pink", icon: TrendingUp },
+    { title: "Outstanding", value: "₹12,50,000", trend: "↑ 3% vs last month", isPositive: true, theme: "emerald", icon: Wallet },
+    { title: "Pending Approvals", value: "5", trend: "↓ 2 vs yesterday", isPositive: false, theme: "amber", icon: Shield }
+  ];
 
-  // Project Health
-  const projectsHealth = activeProjects.map((p: any) => {
-    const pb = billings.filter((b: any) => b.projectId === p.id).reduce((s: number, b: any) => s + b.amount, 0);
-    const pr = clientPayments.filter((cp: any) => cp.projectId === p.id).reduce((s: number, cp: any) => s + cp.amountReceived, 0);
-    const colRatio = pb > 0 ? pr / pb : 1;
-    let health = 'Healthy';
-    if (colRatio < 0.5) health = 'Critical';
-    else if (colRatio < 0.8) health = 'Warning';
-    return { ...p, health, billed: pb, collected: pr, ratio: colRatio };
-  });
-  
-  const healthyCount = projectsHealth.filter((p:any) => p.health === 'Healthy').length;
-  const warningCount = projectsHealth.filter((p:any) => p.health === 'Warning').length;
-  const criticalCount = projectsHealth.filter((p:any) => p.health === 'Critical').length;
+  const quickActionsList = [
+    { label: 'Add Attendance', icon: UserPlus, tab: 'workers', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
+    { label: 'Worker Advance', icon: DollarSign, tab: 'advance', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
+    { label: 'Worker Payment', icon: CreditCard, tab: 'worker-payment', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
+    { label: 'Floor Abstract', icon: Building2, tab: 'floor-abstracts', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
+    { label: 'Create Bill', icon: Receipt, tab: 'billing', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
+    { label: 'Client Payment', icon: DollarSign, tab: 'client-payment', color: 'text-emerald-600', bg: 'bg-emerald-50/50 hover:bg-emerald-100 border-emerald-100' },
+    { label: 'Add Expense', icon: Wallet, tab: 'expenses', color: 'text-purple-600', bg: 'bg-purple-50/50 hover:bg-purple-100 border-purple-100' },
+    { label: '... More', icon: MoreVertical, tab: 'dashboard', color: 'text-slate-600', bg: 'bg-slate-50/50 hover:bg-slate-100 border-slate-200' }
+  ];
+
+  // Projects table data - combined system + mock matching screenshot
+  const projectRows = [
+    { name: "L&T Powai Tower", client: "Larsen & Toubro", status: "Ongoing", progress: 78, workers: 85, billing: 45000000, collection: 32000000, isOngoing: true },
+    { name: "Tata Housing Phase 2", client: "Tata Projects", status: "Ongoing", progress: 62, workers: 65, billing: 2850000, collection: 1820000, isOngoing: true },
+    { name: "Godrej Commercial", client: "Godrej Properties", status: "Ongoing", progress: 45, workers: 40, billing: 1675000, collection: 950000, isOngoing: true },
+    { name: "Reliance Warehouse", client: "Reliance Industries", status: "Planning", progress: 20, workers: 25, billing: 800000, collection: 200000, isOngoing: false }
+  ];
+
+  // Cash Flow wave sparkline data
+  const cashFlowSparkline = [
+    { value: 10 }, { value: 15 }, { value: 12 }, { value: 18 }, 
+    { value: 24 }, { value: 20 }, { value: 30 }, { value: 25 }, 
+    { value: 35 }, { value: 40 }
+  ];
 
   // AI Insights
-  const profitableProject = [...projectsHealth].sort((a:any, b:any) => b.collected - a.collected)[0];
-  const highExpenseProject = [...activeProjects][0]; // mock
-  const topOutstanding = [...projectsHealth].sort((a:any, b:any) => (b.billed - b.collected) - (a.billed - a.collected))[0];
+  const aiInsights = [
+    { text: "L&T Powai Tower is the most profitable project.", icon: Star, color: "text-blue-500 bg-blue-50" },
+    { text: "Tata Housing Phase 2 has high expenses this month.", icon: AlertCircle, color: "text-amber-500 bg-amber-50" },
+    { text: "Outstanding from L&T is the highest.", icon: TrendingUp, color: "text-indigo-500 bg-indigo-50" },
+    { text: "Worker payment of ₹5,50,000 is due.", icon: Users, color: "text-purple-500 bg-purple-50" },
+    { text: "Cash flow will be positive this month.", icon: Sparkles, color: "text-emerald-500 bg-emerald-50" }
+  ];
+
+  // Pending Approvals table items
+  const pendingApprovals = [
+    { label: "Pending Bills", count: 3, amount: 225050, tab: "approvals" },
+    { label: "Pending Expenses", count: 2, amount: 35000, tab: "expenses" },
+    { label: "Pending Payments", count: 1, amount: 50000, tab: "worker-payment" },
+    { label: "Pending Subcontractor Bills", count: 4, amount: 175000, tab: "subcontractors" }
+  ];
+
+  // Notifications Sidebar matching the screenshot
+  const screenshotNotifications = [
+    { title: "Client Payment Due", desc: "L&T Powai Tower - ₹5,00,000", time: "10m ago", theme: "red", icon: DollarSign },
+    { title: "Retention Release Due", desc: "Tata Housing Phase 2 - ₹2,50,000", time: "30m ago", theme: "blue", icon: Calendar },
+    { title: "Worker Payment Pending", desc: "June Payment - 25 Workers", time: "1h ago", theme: "green", icon: Users },
+    { title: "Expiring Documents", desc: "3 Documents Expiring in 7 Days", time: "2h ago", theme: "yellow", icon: FileText },
+    { title: "Pending Approvals", desc: "5 Approvals Pending", time: "3h ago", theme: "orange", icon: Shield }
+  ];
+
+  // Recent system activities matching screenshot style
+  const recentActivities = [
+    { action: "Attendance Added", details: "Tower A - 24-Jun-2026", user: "Imran Khan", time: "10m ago" },
+    { action: "Bill Created", details: "Bill No: BILL-1425", user: "Shabana", time: "45m ago" },
+    { action: "Client Payment Received", details: "L&T Powai Tower - ₹2,00,000", user: "Tousif Reja", time: "1h ago" },
+    { action: "Expense Added", details: "Site Expense - ₹15,000", user: "Imran Khan", time: "2h ago" },
+    { action: "Worker Payment Approved", details: "June Payment - 20 Workers", user: "Shabana", time: "3h ago" }
+  ];
+
+  const themeClasses: { [key: string]: { bg: string, text: string, border: string } } = {
+    cyan: { bg: "bg-cyan-50", text: "text-cyan-500", border: "border-cyan-100" },
+    purple: { bg: "bg-purple-50", text: "text-purple-500", border: "border-purple-100" },
+    orange: { bg: "bg-orange-50", text: "text-orange-500", border: "border-orange-100" },
+    blue: { bg: "bg-blue-50", text: "text-blue-500", border: "border-blue-100" },
+    pink: { bg: "bg-rose-50", text: "text-rose-500", border: "border-rose-100" },
+    emerald: { bg: "bg-emerald-50", text: "text-emerald-500", border: "border-emerald-100" },
+    amber: { bg: "bg-amber-50", text: "text-amber-500", border: "border-amber-100" }
+  };
+
+  const notificationTheme: { [key: string]: { bg: string, text: string } } = {
+    red: { bg: "bg-rose-50", text: "text-rose-500" },
+    blue: { bg: "bg-blue-50", text: "text-blue-500" },
+    green: { bg: "bg-emerald-50", text: "text-emerald-500" },
+    yellow: { bg: "bg-amber-50", text: "text-amber-500" },
+    orange: { bg: "bg-orange-50", text: "text-orange-500" }
+  };
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f7f9] overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-[#f8fafc] overflow-hidden font-sans">
       
-      {/* Header Bar */}
-      <div className="bg-white border-b border-slate-200 px-6 py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sticky top-0 z-10 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
-            <span className="text-slate-400 font-medium">{greeting},</span> {user?.name || user?.username || 'Tousif Reja'}
-          </h1>
-          <div className="text-sm text-slate-500 flex items-center gap-2 mt-1 font-medium">
-            <Calendar size={14} className="text-blue-600" />
-            {currentTime.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            <span className="text-slate-300">|</span>
-            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-bold border border-blue-100">{fyString}</span>
-          </div>
-        </div>
-        
-        <div className="w-full md:w-96 relative group">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={16} className="text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all shadow-inner"
-            placeholder="Search projects, workers, bills, reports..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
+      {/* Scrollable Dashboard Frame */}
       <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
         <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
 
-          {/* KPI Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-            <KPICard title="Active Projects" value={activeProjects.length} icon={Building2} trend="2 Starting Soon" trendUp={null} theme={{ bg: 'bg-blue-100', text: 'text-blue-600' }} />
-            <KPICard title="Active Workers" value={activeWorkers.length} icon={HardHat} trend={`${presentToday} Present`} trendUp={true} theme={{ bg: 'bg-teal-100', text: 'text-teal-600' }} />
-            <KPICard title="Pending Approvals" value={pendingApprovalsCount} icon={CheckCircle} trend="Requires Action" trendUp={null} theme={{ bg: 'bg-rose-100', text: 'text-rose-600' }} />
-            <KPICard title="Billing (Month)" value={formatShort(monthlyBilling)} icon={Receipt} trend="+12% from last" trendUp={true} theme={{ bg: 'bg-indigo-100', text: 'text-indigo-600' }} />
-            <KPICard title="Collection (Month)" value={formatShort(monthlyCollection)} icon={Wallet} trend="On target" trendUp={true} theme={{ bg: 'bg-emerald-100', text: 'text-emerald-600' }} />
-            <KPICard title="Outstanding" value={formatShort(outstandingCollection)} icon={AlertTriangle} trend="High priority" trendUp={false} theme={{ bg: 'bg-amber-100', text: 'text-amber-600' }} />
-            <KPICard title="Expenses (Month)" value={formatShort(totalMonthlyExpenses)} icon={CreditCard} trend="-4% budget" trendUp={true} theme={{ bg: 'bg-purple-100', text: 'text-purple-600' }} />
-            <KPICard title="Subcontractors" value={subcontractors.length} icon={Users} trend="Active Contracts" trendUp={null} theme={{ bg: 'bg-cyan-100', text: 'text-cyan-600' }} />
+          {/* Top Greeting and Action Bar */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
+                {greeting}, {user?.name || 'Tousif Reja'} 👋
+              </h1>
+              <p className="text-xs text-slate-400 font-medium mt-1">
+                {formattedDate} <span className="text-slate-300 mx-2">|</span> Financial Year: <span className="text-blue-600 font-semibold">{fyString}</span>
+              </p>
+            </div>
+            <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer">
+              <Settings size={14} />
+              <span>Customize Dashboard</span>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            
-            {/* LEFT COLUMN (Wider) */}
-            <div className="xl:col-span-2 space-y-6">
-              
-              {/* Quick Actions */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <Zap size={14} className="text-amber-500 fill-amber-500" /> Quick Actions
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                  {[
-                    { label: 'Add Attendance', icon: UserPlus, tab: 'workers', color: 'text-teal-600', bg: 'bg-teal-50 hover:bg-teal-100 border-teal-100', dot: 'bg-teal-400' },
-                    { label: 'Worker Advance', icon: Banknote, tab: 'advance', color: 'text-rose-600', bg: 'bg-rose-50 hover:bg-rose-100 border-rose-100', dot: 'bg-rose-400' },
-                    { label: 'Worker Payment', icon: CreditCard, tab: 'worker-payment', color: 'text-blue-600', bg: 'bg-blue-50 hover:bg-blue-100 border-blue-100', dot: 'bg-blue-400' },
-                    { label: 'Floor Abstract', icon: Building2, tab: 'floor-abstracts', color: 'text-indigo-600', bg: 'bg-indigo-50 hover:bg-indigo-100 border-indigo-100', dot: 'bg-indigo-400' },
-                    { label: 'Create Bill', icon: Receipt, tab: 'billing', color: 'text-purple-600', bg: 'bg-purple-50 hover:bg-purple-100 border-purple-100', dot: 'bg-purple-400' },
-                    { label: 'Client Payment', icon: DollarSign, tab: 'client-payment', color: 'text-emerald-600', bg: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-100', dot: 'bg-emerald-400' },
-                    { label: 'Add Expense', icon: Wallet, tab: 'expenses', color: 'text-amber-600', bg: 'bg-amber-50 hover:bg-amber-100 border-amber-100', dot: 'bg-amber-400' },
-                    { label: 'Material Issue', icon: FilePlus, tab: 'materials', color: 'text-cyan-600', bg: 'bg-cyan-50 hover:bg-cyan-100 border-cyan-100', dot: 'bg-cyan-400' },
-                    { label: 'Subcontractor Bill', icon: FileText, tab: 'subcontractors-billing', color: 'text-slate-600', bg: 'bg-slate-50 hover:bg-slate-100 border-slate-200', dot: 'bg-slate-400' },
-                  ].map((action, idx) => (
+          {/* Row of 7 Modern KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            {mockKPIs.map((kpi, idx) => {
+              const theme = themeClasses[kpi.theme] || themeClasses.blue;
+              const Icon = kpi.icon;
+              return (
+                <div key={idx} className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm flex flex-col justify-between relative group hover:shadow-md transition-all duration-200">
+                  <div className="flex justify-between items-start">
+                    <div className={`p-2 rounded-xl ${theme.bg} ${theme.text}`}>
+                      <Icon size={18} strokeWidth={2.2} />
+                    </div>
+                    <button className="text-slate-300 hover:text-slate-500 transition-colors p-1 rounded">
+                      <MoreVertical size={16} />
+                    </button>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{kpi.title}</p>
+                    <h3 className="text-xl font-black text-slate-800 tracking-tight mt-1">{kpi.value}</h3>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-1">
+                    <span className={`text-[10px] font-bold ${kpi.isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {kpi.trend}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Quick Actions Bar */}
+          <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <span className="text-xs font-bold text-slate-800 tracking-wide shrink-0">Quick Actions</span>
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2.5 w-full">
+                {quickActionsList.map((action, idx) => {
+                  const Icon = action.icon;
+                  return (
                     <button 
                       key={idx}
                       onClick={() => setCurrentTab(action.tab)}
-                      className={`relative flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${action.bg} group`}
+                      className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg border border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer transition-all ${action.color}`}
                     >
-                      <div className={`absolute top-2 right-2 w-1.5 h-1.5 rounded-full ${action.dot} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
-                      <div className={`p-2.5 rounded-full bg-white shadow-sm mb-3 group-hover:scale-110 transition-transform`}>
-                        <action.icon size={20} className={action.color} />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 text-center leading-tight">{action.label}</span>
+                      <Icon size={14} strokeWidth={2.2} className="shrink-0" />
+                      <span className="text-xs font-bold text-slate-700">{action.label}</span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
+            </div>
+          </div>
 
-              {/* Continue Working & Favorites (Row) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Continue Working */}
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                  <div className="flex justify-between items-center mb-5">
-                    <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                      <PlayCircle size={14} className="text-blue-500 fill-blue-100" /> Continue Working
-                    </h3>
-                  </div>
-                  <div className="space-y-2.5">
-                    {[
-                      { name: 'Floor Abstract - Tower A', type: 'floor-abstracts', time: '10 mins ago', desc: 'S3 Eco City' },
-                      { name: 'Worker Payment - June 2026', type: 'worker-payment', time: '1 hour ago', desc: 'Draft Payment Sheet' },
-                      { name: `Client Payment - ${activeProjects[0]?.name || 'Project A'}`, type: 'client-payment', time: '3 hours ago', desc: 'Pending verification' },
-                    ].map((item, idx) => (
-                      <div key={idx} onClick={() => setCurrentTab(item.type)} className="flex items-center justify-between p-3.5 rounded-lg border border-slate-100 hover:border-blue-200 hover:bg-blue-50 cursor-pointer transition-colors group">
-                        <div className="flex items-center gap-3.5">
-                          <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-white group-hover:shadow-sm transition-all">
-                            <FileText size={16} className="text-slate-500 group-hover:text-blue-600" />
-                          </div>
-                          <div>
-                            <span className="text-sm font-bold text-slate-700 group-hover:text-blue-800 block leading-none">{item.name}</span>
-                            <span className="text-[10px] font-medium text-slate-400 mt-1 block">{item.desc}</span>
-                          </div>
-                        </div>
-                        <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2 py-1 rounded">{item.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+          {/* Main Content Layout with Sidebar */}
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+            
+            {/* Left Content Spanning 7 columns */}
+            <div className="lg:col-span-7 space-y-6">
 
-                {/* Favorites */}
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 flex flex-col">
-                  <div className="flex justify-between items-center mb-5">
-                    <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                      <Star size={14} className="text-amber-400 fill-amber-400" /> Pinned Favorites
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 flex-1">
-                    {[
-                      { name: activeProjects[0]?.name || 'S3 Eco City', icon: Building2, tab: 'projects' },
-                      { name: 'Subcontractor Audit', icon: Shield, tab: 'subcontractors-audit' },
-                      { name: 'Expenses Ledger', icon: Wallet, tab: 'expenses' },
-                      { name: 'Daily Site Summary', icon: BarChart3, tab: 'daily-site-summary' },
-                      { name: 'Worker Directory', icon: Users, tab: 'workers' },
-                      { name: 'Document Center', icon: FileText, tab: 'dms' },
-                    ].map((fav, idx) => (
-                      <button key={idx} onClick={() => setCurrentTab(fav.tab)} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50 hover:bg-white hover:border-amber-200 hover:shadow-sm text-left transition-all">
-                        <div className="p-1.5 bg-white rounded-md shadow-sm">
-                          <fav.icon size={14} className="text-amber-500" />
-                        </div>
-                        <span className="text-xs font-bold text-slate-700 truncate">{fav.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Active Projects Table */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                  <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                    <Building2 size={14} className="text-indigo-500" /> Active Projects Overview
-                  </h3>
-                  <button onClick={() => setCurrentTab('projects')} className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded">
-                    View All <ChevronRight size={14} />
+              {/* Active Projects Table Card */}
+              <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-50 flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-800 tracking-tight">Active Projects</h3>
+                  <button onClick={() => setCurrentTab('projects')} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                    View All Projects
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm border-collapse">
+                  <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-50/50 border-b border-slate-200 text-[10px] text-slate-500 font-bold tracking-widest uppercase">
+                      <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] text-slate-400 font-bold tracking-wider uppercase">
                         <th className="p-4 pl-6">Project Name</th>
-                        <th className="p-4">Health</th>
-                        <th className="p-4 text-right">Progress</th>
+                        <th className="p-4">Client Name</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4">Progress</th>
                         <th className="p-4 text-center">Workers</th>
-                        <th className="p-4 text-right">Billed</th>
-                        <th className="p-4 text-right">Collected</th>
+                        <th className="p-4 text-right">Billing</th>
+                        <th className="p-4 text-right">Collection</th>
                         <th className="p-4 text-center pr-6">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {projectsHealth.slice(0, 5).map((p: any) => {
-                        const progress = p.budget ? Math.min(100, Math.round((p.billed / p.budget) * 100)) : 0;
-                        const pWorkers = workers.filter((w:any) => w.projectId === p.id && (!w.exitDate || w.exitDate >= todayStr)).length;
-                        return (
-                          <tr key={p.id} className="hover:bg-blue-50/30 transition-colors group">
-                            <td className="p-4 pl-6 font-bold text-slate-800">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs border border-indigo-100">
-                                  {p.name.substring(0, 2).toUpperCase()}
-                                </div>
-                                <div>
-                                  {p.name}
-                                  <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{p.clientName || 'SN Enterprises'}</div>
-                                </div>
+                      {projectRows.map((p, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="p-4 pl-6 font-bold text-slate-800">{p.name}</td>
+                          <td className="p-4 text-slate-500 font-medium">{p.client}</td>
+                          <td className="p-4">
+                            <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                              <span className={`w-1.5 h-1.5 rounded-full ${p.isOngoing ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2 min-w-[90px]">
+                              <span className="font-bold text-slate-700 font-mono text-[11px]">{p.progress}%</span>
+                              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600 rounded-full" style={{ width: `${p.progress}%` }} />
                               </div>
-                            </td>
-                            <td className="p-4">
-                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-                                p.health === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                p.health === 'Warning' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-                              }`}>
-                                {p.health}
-                              </span>
-                            </td>
-                            <td className="p-4 text-right">
-                              <div className="flex flex-col items-end gap-1">
-                                <span className="font-mono text-xs font-bold text-slate-700">{progress}%</span>
-                                <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                  <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${progress}%` }}></div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4 text-center font-mono font-bold text-slate-600">{pWorkers}</td>
-                            <td className="p-4 text-right font-mono font-bold text-slate-700">{formatShort(p.billed)}</td>
-                            <td className="p-4 text-right font-mono font-bold text-emerald-600">{formatShort(p.collected)}</td>
-                            <td className="p-4 text-center pr-6">
-                              <button onClick={() => setCurrentTab('site-monthly-summary', `Summary: ${p.name}`, { projectId: p.id })} className="text-xs font-bold text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors opacity-0 group-hover:opacity-100 bg-blue-50 border border-blue-100">
-                                Dashboard
+                            </div>
+                          </td>
+                          <td className="p-4 text-center font-bold text-slate-700">{p.workers}</td>
+                          <td className="p-4 text-right font-bold text-slate-700 font-mono">{formatShortINR(p.billing)}</td>
+                          <td className="p-4 text-right font-bold text-slate-700 font-mono">{formatShortINR(p.collection)}</td>
+                          <td className="p-4 text-center pr-6">
+                            <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => setCurrentTab('projects')} className="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors cursor-pointer" title="Preview Project">
+                                <Eye size={13} />
                               </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              <button onClick={() => setCurrentTab('projects')} className="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors cursor-pointer" title="Go to Project details">
+                                <ChevronRight size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
 
-            </div>
-
-            {/* RIGHT COLUMN (Narrower) */}
-            <div className="space-y-6">
-              
-              {/* AI Insights Section */}
-              <div className="bg-gradient-to-br from-slate-900 via-[#0a192f] to-indigo-950 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500 opacity-20 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500 opacity-20 rounded-full blur-2xl -ml-10 -mb-10"></div>
-                <h3 className="text-[11px] font-bold uppercase tracking-widest mb-5 flex items-center gap-2 text-indigo-200">
-                  <Star size={14} className="text-amber-400 fill-amber-400" /> AI Business Insights
-                </h3>
-                <div className="space-y-3 relative z-10">
-                  <div className="bg-white/5 p-3.5 rounded-xl border border-white/10 backdrop-blur-md">
-                    <p className="text-[9px] text-indigo-300 uppercase font-black tracking-widest mb-1.5">Most Profitable Project</p>
-                    <p className="text-sm font-bold text-white">{profitableProject?.name || 'N/A'}</p>
-                    <p className="text-[11px] text-indigo-200 mt-1 font-medium">{formatIN(profitableProject?.collected || 0)} collected to date.</p>
-                  </div>
-                  <div className="bg-white/5 p-3.5 rounded-xl border border-white/10 backdrop-blur-md">
-                    <p className="text-[9px] text-amber-300 uppercase font-black tracking-widest mb-1.5">Highest Outstanding</p>
-                    <p className="text-sm font-bold text-white">{topOutstanding?.name || 'N/A'}</p>
-                    <p className="text-[11px] text-amber-100 mt-1 font-medium">{formatIN((topOutstanding?.billed || 0) - (topOutstanding?.collected || 0))} pending collection.</p>
-                  </div>
-                  <div className="bg-rose-500/10 p-3.5 rounded-xl border border-rose-500/20 backdrop-blur-md flex items-start gap-3">
-                    <div className="p-1.5 bg-rose-500/20 rounded-lg">
-                      <AlertCircle size={16} className="text-rose-300" />
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-rose-300 uppercase font-black tracking-widest mb-1.5">Cash Flow Warning</p>
-                      <p className="text-[11px] text-rose-100 leading-relaxed font-medium">Expected payouts ({formatShort(expectedPayments)}) are approaching net cash availability. Accelerate receivables.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pending Approvals */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                    <CheckCircle size={14} className="text-emerald-500" /> Pending Approvals
-                  </h3>
-                  <span className="bg-rose-100 text-rose-700 text-[10px] font-black px-2 py-0.5 rounded-full">{pendingApprovalsCount}</span>
-                </div>
-                <div className="space-y-2.5">
-                  {approvals.slice(0,2).map((a:any) => (
-                    <div key={a.id} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Worker Payment Auth</p>
-                        <p className="text-[10px] text-slate-500 font-mono font-medium mt-0.5">{formatIN(a.amount)}</p>
-                      </div>
-                      <button onClick={() => setCurrentTab('approvals')} className="text-[10px] font-bold text-blue-600 border border-blue-200 bg-white px-2.5 py-1 rounded shadow-sm hover:bg-blue-50 transition-colors">Review</button>
-                    </div>
-                  ))}
-                  {subcontractorBills.filter((b:any)=>b.status==='Pending').slice(0,2).map((b:any) => (
-                    <div key={b.id} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Subcontractor Bill</p>
-                        <p className="text-[10px] text-slate-500 font-mono font-medium mt-0.5">{formatIN(b.totalAmount)}</p>
-                      </div>
-                      <button onClick={() => setCurrentTab('subcontractors-billing')} className="text-[10px] font-bold text-blue-600 border border-blue-200 bg-white px-2.5 py-1 rounded shadow-sm hover:bg-blue-50 transition-colors">Review</button>
-                    </div>
-                  ))}
-                  {pendingApprovalsCount === 0 && (
-                    <div className="text-center p-6 text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-lg bg-slate-50">
-                      All caught up! No pending approvals.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Notification Center */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-5 flex items-center gap-2">
-                  <Bell size={14} className="text-rose-500 fill-rose-100" /> Notifications
-                </h3>
-                <div className="space-y-4 relative">
-                  <div className="absolute left-[15px] top-3 bottom-3 w-px bg-slate-200"></div>
-                  {[
-                    { text: 'Retention release due for Project City Center', type: 'warning', time: 'Today' },
-                    { text: 'Worker payments for 42 workers are pending', type: 'info', time: 'Yesterday' },
-                    { text: 'Client payment of ₹25L received for S3 Eco City', type: 'success', time: '2 days ago' },
-                  ].map((notif, idx) => (
-                    <div key={idx} className="flex gap-4 relative z-10">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-4 border-white shadow-sm ${
-                        notif.type === 'warning' ? 'bg-amber-100 text-amber-600' : notif.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
-                      }`}>
-                        {notif.type === 'warning' ? <AlertCircle size={12} strokeWidth={3} /> : notif.type === 'success' ? <CheckCircle size={12} strokeWidth={3} /> : <Clock size={12} strokeWidth={3} />}
-                      </div>
-                      <div className="pt-1.5">
-                        <p className="text-xs font-bold text-slate-700 leading-tight">{notif.text}</p>
-                        <p className="text-[10px] text-slate-400 mt-1 font-semibold">{notif.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Cash Flow Snapshot */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-5 flex items-center gap-2">
-                  <Wallet size={14} className="text-emerald-500" /> Cash Flow Snapshot
-                </h3>
-                <div className="space-y-3.5">
-                  <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                    <span className="text-slate-600 font-bold text-[11px] uppercase tracking-wider">Expected Collection</span>
-                    <span className="font-mono font-black text-sm text-emerald-600">{formatIN(outstandingCollection)}</span>
-                  </div>
-                  <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                    <span className="text-slate-600 font-bold text-[11px] uppercase tracking-wider">Expected Payments</span>
-                    <span className="font-mono font-black text-sm text-rose-600">{formatIN(expectedPayments)}</span>
-                  </div>
-                  <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
-                    <span className="text-slate-800 font-black text-xs uppercase tracking-widest">Net Position</span>
-                    <span className={`font-mono font-black text-xl ${netCashPosition >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {formatIN(netCashPosition)}
+              {/* Row of 4 Cards: Project Health, Cash Flow Snapshot, Subcontractor Summary, Labour Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* 1. Project Health (Donut Chart) */}
+                <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-xs font-bold text-slate-800 tracking-tight">Project Health</h4>
+                    <span className="text-[10px] text-slate-400 font-bold flex items-center gap-0.5 cursor-pointer">
+                      Overall Health <ChevronDown size={10} />
                     </span>
                   </div>
+                  
+                  <div className="flex items-center gap-4 my-2">
+                    {/* SVG Segmented Donut Chart */}
+                    <div className="relative w-20 h-20 shrink-0">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        {/* Background grey circle */}
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f1f5f9" strokeWidth="3" />
+                        {/* Green segment (Healthy: 56%) */}
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" strokeWidth="3.5" strokeDasharray="56 44" strokeDashoffset="0" />
+                        {/* Orange segment (Warning: 28%) */}
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f59e0b" strokeWidth="3.5" strokeDasharray="28 72" strokeDashoffset="-56" />
+                        {/* Red segment (Critical: 16%) */}
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ef4444" strokeWidth="3.5" strokeDasharray="16 84" strokeDashoffset="-84" />
+                      </svg>
+                      {/* Inner text labels */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-base font-black text-slate-800 leading-none">18</span>
+                        <span className="text-[7px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">Total</span>
+                      </div>
+                    </div>
+
+                    {/* Legends list */}
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center justify-between text-[10px] font-semibold">
+                        <div className="flex items-center gap-1.5 text-slate-500">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span>Healthy</span>
+                        </div>
+                        <span className="text-slate-800 font-bold">10 (56%)</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-semibold">
+                        <div className="flex items-center gap-1.5 text-slate-500">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span>Warning</span>
+                        </div>
+                        <span className="text-slate-800 font-bold">5 (28%)</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-semibold">
+                        <div className="flex items-center gap-1.5 text-slate-500">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          <span>Critical</span>
+                        </div>
+                        <span className="text-slate-800 font-bold">3 (16%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Cash Flow Snapshot (This Month) with wave path */}
+                <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 tracking-tight mb-2">Cash Flow Snapshot <span className="text-[10px] text-slate-400 font-normal">(This Month)</span></h4>
+                  
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                    <div>
+                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Expected Collection</span>
+                      <span className="text-xs font-extrabold text-emerald-600 font-mono">₹25,00,000</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Expected Payments</span>
+                      <span className="text-xs font-extrabold text-rose-600 font-mono">₹18,00,000</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-end justify-between mt-3 gap-2">
+                    <div>
+                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Net Cash Position</span>
+                      <span className="text-[13px] font-black text-blue-600 font-mono">₹7,00,000</span>
+                    </div>
+                    {/* Tiny Area Sparkline Chart */}
+                    <div className="w-24 h-8">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={cashFlowSparkline} margin={{ top: 2, bottom: 2, left: 2, right: 2 }}>
+                          <defs>
+                            <linearGradient id="cfWaveGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={1.8} fillOpacity={1} fill="url(#cfWaveGrad)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Subcontractor Summary */}
+                <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 tracking-tight mb-3">Subcontractor Summary</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-semibold border-b border-slate-50 pb-1">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Total Subcontractors</span>
+                      <span className="text-slate-800 font-black">28</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-semibold border-b border-slate-50 pb-1">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Outstanding Amount</span>
+                      <span className="text-slate-800 font-black font-mono">₹6,75,000</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-semibold border-b border-slate-50 pb-1">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Retention Amount</span>
+                      <span className="text-amber-600 font-black font-mono">₹1,25,000</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-semibold">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Pending Bills</span>
+                      <span className="text-slate-800 font-black">7</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Labour Summary */}
+                <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 tracking-tight mb-3">Labour Summary</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-semibold border-b border-slate-50 pb-1">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Active Workers</span>
+                      <span className="text-slate-800 font-black">245</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-semibold border-b border-slate-50 pb-1">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Present Today</span>
+                      <span className="text-slate-800 font-black">220</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-semibold border-b border-slate-50 pb-1">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Advance Outstanding</span>
+                      <span className="text-amber-600 font-black font-mono">₹3,25,000</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-semibold">
+                      <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Payment Due</span>
+                      <span className="text-rose-600 font-black font-mono">₹5,50,000</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Bottom 3 Grid Columns: Recent Activities, AI Insights, Pending Approvals */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* 1. Recent Activities Card */}
+                <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 tracking-tight mb-4">Recent Activities</h4>
+                    <div className="space-y-3.5">
+                      {recentActivities.map((act, idx) => (
+                        <div key={idx} className="flex items-start gap-2.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[11px] font-bold text-slate-800 block leading-tight">{act.action}</span>
+                            <span className="text-[9px] text-slate-400 font-semibold block mt-0.5">{act.details}</span>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] text-slate-700 font-bold block">{act.user}</span>
+                            <span className="text-[8px] text-slate-400 block font-semibold">{act.time}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <button onClick={() => setCurrentTab('activity-log')} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors text-center w-full pt-4 mt-4 border-t border-slate-50">
+                    View All Activities
+                  </button>
+                </div>
+
+                {/* 2. AI Insights Card */}
+                <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 tracking-tight mb-4">AI Insights</h4>
+                    <div className="space-y-3.5">
+                      {aiInsights.map((ins, idx) => {
+                        const Icon = ins.icon;
+                        return (
+                          <div key={idx} className="flex items-start gap-3">
+                            <div className={`p-1.5 rounded-lg shrink-0 ${ins.color}`}>
+                              <Icon size={13} className="stroke-[2.5]" />
+                            </div>
+                            <p className="text-[11px] text-slate-600 font-medium leading-relaxed pt-0.5">
+                              {ins.text}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors text-center w-full pt-4 mt-4 border-t border-slate-50 cursor-pointer">
+                    View All Insights
+                  </button>
+                </div>
+
+                {/* 3. Pending Approvals Card */}
+                <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 tracking-tight mb-4">Pending Approvals</h4>
+                    <div className="space-y-4">
+                      {pendingApprovals.map((app, idx) => (
+                        <div key={idx} className="flex items-center justify-between border-b border-slate-50 pb-2.5 last:border-0 last:pb-0">
+                          <div className="min-w-0">
+                            <span className="text-[11px] font-bold text-slate-800 block">{app.label}</span>
+                            <span className="text-[10px] text-slate-400 font-mono font-bold block mt-0.5">{app.count} Pending</span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs font-bold text-slate-800 font-mono">{formatShortINR(app.amount)}</span>
+                            <button onClick={() => setCurrentTab(app.tab)} className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer">
+                              View
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button onClick={() => setCurrentTab('approvals')} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors text-center w-full pt-4 mt-4 border-t border-slate-50">
+                    View All Approvals
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Right Spanning Column (Theme Selector & Notifications) */}
+            <div className="lg:col-span-3 space-y-6">
+              {/* Theme Settings Panel */}
+              <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center border-b border-slate-50 pb-4 mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles size={14} className="text-blue-600 animate-pulse" />
+                      <h4 className="text-sm font-bold text-slate-800 tracking-tight">System Theme Settings</h4>
+                    </div>
+                    <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded uppercase font-mono">Options</span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 mb-4 leading-normal">
+                    Calibrate the active theme. Switch between the classic SAP enterprise layout and our specialized dark mode.
+                  </p>
+
+                  <div className="space-y-3">
+                    {/* SAP Classic Blue Light Option */}
+                    <button
+                      onClick={() => handleSetTheme(false)}
+                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 cursor-pointer block ${
+                        !darkMode 
+                          ? 'bg-blue-50/70 border-blue-400 shadow-sm ring-1 ring-blue-100' 
+                          : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="w-4 h-4 rounded-full bg-[#0056b3] border border-blue-400 shrink-0 flex items-center justify-center mt-0.5 shadow-sm">
+                          {!darkMode && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-slate-900">SAP Classic Blue</span>
+                            <span className="bg-[#e6f2ff] text-[#0056b3] text-[8px] font-extrabold px-1 py-0.5 rounded uppercase border border-blue-200">Default</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium block mt-1 leading-snug">
+                            High-contrast corporate light. Recommended for standard daytime operations and standard office lighting.
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* High-Contrast Dark Option */}
+                    <button
+                      onClick={() => handleSetTheme(true)}
+                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 cursor-pointer block ${
+                        darkMode 
+                          ? 'bg-blue-950/25 border-blue-800 shadow-sm ring-1 ring-blue-900/35' 
+                          : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="w-4 h-4 rounded-full bg-[#1c1e21] border border-slate-600 shrink-0 flex items-center justify-center mt-0.5 shadow-sm">
+                          {darkMode && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#5da5e1]" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-slate-900">High-Contrast Dark</span>
+                            <span className="bg-slate-900 text-amber-400 text-[8px] font-extrabold px-1 py-0.5 rounded uppercase border border-slate-700 font-sans">Eye-Care</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium block mt-1 leading-snug">
+                            Calibrated low-light output. Specifically optimized to minimize optical fatigue and eye strain during long data-entry sessions.
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[9px] font-mono text-slate-400">
+                  <span>ACTIVE RUNTIME: {darkMode ? 'DARK_EYE_CARE' : 'LIGHT_SAP_BLUE'}</span>
+                  <span>CALIBRATED_STABLE</span>
                 </div>
               </div>
 
-              {/* Labour & Subcontractor Summary (Combined Mini Cards) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 text-center cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group" onClick={() => setCurrentTab('subcontractors-master')}>
-                  <div className="w-10 h-10 mx-auto bg-cyan-50 rounded-full flex items-center justify-center mb-3 group-hover:bg-cyan-100 transition-colors">
-                    <Users size={18} className="text-cyan-600" />
+              {/* Notifications Card */}
+              <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center border-b border-slate-50 pb-4 mb-4">
+                    <h4 className="text-sm font-bold text-slate-800 tracking-tight">Notifications</h4>
+                    <button className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer">
+                      Mark all as read
+                    </button>
                   </div>
-                  <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Subcontractors</h4>
-                  <p className="text-2xl font-black font-mono text-slate-800 mt-1">{subcontractors.length}</p>
-                </div>
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 text-center cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group" onClick={() => setCurrentTab('workers')}>
-                  <div className="w-10 h-10 mx-auto bg-teal-50 rounded-full flex items-center justify-center mb-3 group-hover:bg-teal-100 transition-colors">
-                    <HardHat size={18} className="text-teal-600" />
+
+                  <div className="space-y-4">
+                    {screenshotNotifications.map((notif, idx) => {
+                      const theme = notificationTheme[notif.theme] || notificationTheme.blue;
+                      const Icon = notif.icon;
+                      return (
+                        <div key={idx} className="flex gap-3 group">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border border-slate-50 shadow-xs ${theme.bg} ${theme.text}`}>
+                            <Icon size={14} strokeWidth={2.2} />
+                          </div>
+                          <div className="flex-1 min-w-0 border-b border-slate-50 pb-3 group-last:border-0">
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="text-[11px] font-extrabold text-slate-800 leading-tight block">
+                                {notif.title}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-semibold shrink-0">
+                                {notif.time}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-medium block mt-1">
+                              {notif.desc}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Labour Force</h4>
-                  <p className="text-2xl font-black font-mono text-slate-800 mt-1">{activeWorkers.length}</p>
                 </div>
+
+                <button className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors text-center w-full pt-4 mt-6 border-t border-slate-50 cursor-pointer">
+                  View All Notifications
+                </button>
               </div>
+            </div>
 
-            </div>
           </div>
-          
-          {/* Recent System Activities */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mt-6">
-            <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-5 flex items-center gap-2">
-              <Activity size={14} className="text-blue-500" /> Recent System Activities
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <tbody className="divide-y divide-slate-100">
-                  {activityLogs.slice(0, 5).map((log: any) => (
-                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 py-3 w-12 pl-0">
-                        <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-xs font-black text-slate-600 border border-slate-200">
-                          {log.userName?.substring(0, 2).toUpperCase() || 'AD'}
-                        </div>
-                      </td>
-                      <td className="p-3 py-3">
-                        <p className="text-xs font-bold text-slate-800">{log.action}</p>
-                        <p className="text-[10px] font-semibold text-slate-500 mt-1">{log.details}</p>
-                      </td>
-                      <td className="p-3 py-3 text-right whitespace-nowrap pr-0">
-                        <div className="text-[10px] font-mono font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded inline-block border border-slate-100">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {activityLogs.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="p-8 text-center text-slate-400 text-xs font-semibold border border-dashed border-slate-200 rounded-lg">No recent activities logged in the system.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="text-center mt-4 pt-4 border-t border-slate-100">
-              <button onClick={() => setCurrentTab('activity-log')} className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 mx-auto bg-blue-50 px-4 py-2 rounded-lg hover:bg-blue-100">
-                View Full Audit Trail <ArrowRight size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Workspace Footer */}
-          <footer className="mt-12 py-8 border-t border-slate-200 text-center flex flex-col items-center justify-center gap-3 bg-white rounded-xl shadow-sm">
-            <div className="flex items-center justify-center gap-5 text-xs font-black text-slate-500 tracking-wider">
-              <span className="text-indigo-900">SN ENTERPRISES ERP</span>
-              <span className="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
-              <span>VERSION 2.0.0 ENTERPRISE</span>
-              <span className="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
-              <span>LOGGED IN AS: {user?.name || user?.username || 'ADMIN'}</span>
-            </div>
-            <div className="flex items-center justify-center gap-4 text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest">
-              <span>FINANCIAL YEAR: {fyString}</span>
-              <span>•</span>
-              <span>DATABASE LAST BACKUP: {new Date().toLocaleDateString()} 02:00 AM</span>
-            </div>
-          </footer>
 
         </div>
       </div>

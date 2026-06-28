@@ -113,6 +113,9 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
     tab: null
   });
 
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
+
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const [isRecentDropdownOpen, setIsRecentDropdownOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -259,6 +262,49 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
 
   const handleTogglePinTab = (tabId: string) => {
     setTabs(prev => prev.map(t => t.id === tabId ? { ...t, isPinned: !t.isPinned } : t));
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedTabId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverTabId !== id) {
+      setDragOverTabId(id);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedTabId || draggedTabId === targetId) {
+      setDragOverTabId(null);
+      setDraggedTabId(null);
+      return;
+    }
+    
+    setTabs(prev => {
+      const draggedIdx = prev.findIndex(t => t.id === draggedTabId);
+      const targetIdx = prev.findIndex(t => t.id === targetId);
+      
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      
+      const newTabs = [...prev];
+      const [draggedTab] = newTabs.splice(draggedIdx, 1);
+      newTabs.splice(targetIdx, 0, draggedTab);
+      return newTabs;
+    });
+    
+    setDragOverTabId(null);
+    setDraggedTabId(null);
+  };
+  
+  const handleDragEnd = () => {
+    setDragOverTabId(null);
+    setDraggedTabId(null);
   };
 
   const handleRefreshTab = (tabId: string) => {
@@ -990,6 +1036,11 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
                   return (
                     <div
                       key={tab.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, tab.id)}
+                      onDragOver={(e) => handleDragOver(e, tab.id)}
+                      onDrop={(e) => handleDrop(e, tab.id)}
+                      onDragEnd={handleDragEnd}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         setContextMenu({
@@ -1005,9 +1056,14 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
                         isActive 
                           ? 'bg-white border-[#cbd5e1] font-bold text-blue-900 border-b-transparent z-15 shadow-[0_-1px_3px_rgba(0,0,0,0.05)]' 
                           : 'bg-slate-200/70 border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-800 border-b-[#cbd5e1]'
-                      }`}
+                      } ${draggedTabId === tab.id ? 'opacity-50' : ''}`}
                       style={{ maxWidth: '160px', minWidth: '95px' }}
                     >
+                      {/* Left drop indicator line */}
+                      {dragOverTabId === tab.id && draggedTabId !== tab.id && (
+                        <div className="absolute top-0 bottom-0 left-0 w-0.5 bg-blue-500 z-20" />
+                      )}
+
                       {/* Left accent top border line for active tab */}
                       {isActive && (
                         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-indigo-600 rounded-t" />
