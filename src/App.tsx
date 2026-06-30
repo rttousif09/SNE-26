@@ -366,7 +366,13 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   };
 
   const handleUnsavedChange = (tabId: string, hasUnsaved: boolean) => {
-    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, hasUnsavedChanges: hasUnsaved } : t));
+    setTabs(prev => {
+      const currentTab = prev.find(t => t.id === tabId);
+      if (currentTab && currentTab.hasUnsavedChanges === hasUnsaved) {
+        return prev;
+      }
+      return prev.map(t => t.id === tabId ? { ...t, hasUnsavedChanges: hasUnsaved } : t);
+    });
   };
 
   const switchToNextTab = () => {
@@ -803,6 +809,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         return ['Billing & Collections', 'Billing Management'];
       case 'client-payment':
         return ['Billing & Collections', 'Client Payment'];
+      case 'kharchi':
+        return ['Labour Management', 'Kharchi (Pocket Money)'];
       case 'materials':
         return ['Inventory & Store', 'Materials & Inventory'];
       case 'assets':

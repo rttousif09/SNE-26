@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../store';
 import { Project, Worker, FloorAbstract, FloorAbstractWorker } from '../types';
 import { Plus, Trash2, Save, X, Edit, Search, ChevronDown, ChevronUp, LayoutList, Users, Download } from 'lucide-react';
@@ -26,12 +27,15 @@ const LEVEL_OPTIONS = [
 export function FloorAbstracts() {
   const { projects, workers, floorAbstracts, addFloorAbstract, updateFloorAbstract, deleteFloorAbstract, user } = useAppContext();
   
+  const isReadOnly = user?.role === 'Viewer' || user?.username === 'saddamsne';
+  
   const [projectId, setProjectId] = useState<string>('');
   const [towerName, setTowerName] = useState<string>('');
   const [category, setCategory] = useState<'Amount' | 'Hajira'>('Amount');
   const [level, setLevel] = useState<string>('');
   
   const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState<boolean>(false);
   
   // Row state
   const [srNo, setSrNo] = useState('');
@@ -692,10 +696,12 @@ export function FloorAbstracts() {
     setFlatHajira(0);
     setRemarks('');
     setRowWorkers([]);
+    setIsAdding(false);
   };
 
   const handleEdit = (record: FloorAbstract) => {
     setIsEditing(record.id);
+    setIsAdding(true);
     setProjectId(record.projectId);
     setTowerName(record.towerName || '');
     setCategory(record.category);
@@ -809,6 +815,7 @@ export function FloorAbstracts() {
       addFloorAbstract(payload);
     }
     resetForm();
+    setIsAdding(false);
   };
 
   const handleDelete = (id: string) => {
@@ -871,17 +878,34 @@ export function FloorAbstracts() {
         </button>
       </div>
 
-      <div className="p-2 space-y-2 flex-grow overflow-y-auto w-full max-w-7xl mx-auto">
+      <div className="p-2 space-y-2 flex-grow overflow-y-auto w-full max-w-7xl mx-auto relative">
         {activeTab === 'entries' && (
           <>
-            {/* Top Filters / Creation */}
-        <div className="bg-white border border-[#8c9ba8] p-3 shadow-sm rounded-sm">
-          <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200">
-            <h3 className="font-bold text-[#002f6c] text-sm">Create/Edit Floor Abstract</h3>
-            <button onClick={resetForm} className="text-blue-600 hover:text-blue-800 text-xs flex items-center">
-              <X size={14} className="mr-1" /> Clear Selection
-            </button>
-          </div>
+            <AnimatePresence>
+              {(isAdding || isEditing) && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm"
+                    onClick={() => { resetForm(); setIsAdding(false); }}
+                  />
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="sap-panel relative z-10 w-full max-w-4xl max-h-[95vh] overflow-y-auto p-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+                  >
+                    <div className="bg-white border border-[#8c9ba8] p-3 shadow-sm rounded-sm">
+                      <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200">
+                        <h3 className="font-bold text-[#002f6c] text-sm">{isEditing ? 'Edit Floor Abstract' : 'Create Floor Abstract'}</h3>
+                        <button onClick={() => { resetForm(); setIsAdding(false); }} className="text-gray-500 hover:text-gray-800 text-xs flex items-center transition-colors">
+                          <X size={16} />
+                        </button>
+                      </div>
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div>
@@ -1120,11 +1144,20 @@ export function FloorAbstracts() {
             </div>
           </div>
         )}
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
 
         {/* Existing Records List */}
         <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden mt-4">
           <div className="bg-[#002f6c] text-white px-3 py-2 flex justify-between items-center sap-header">
             <h3 className="font-bold text-sm">Saved Floor Abstracts</h3>
+            {!isReadOnly && (
+              <button onClick={() => setIsAdding(true)} className="sap-btn-primary bg-[#004085] hover:bg-[#003366] text-white border-none py-1 px-2 text-xs flex items-center cursor-pointer shadow-sm">
+                <Plus size={12} className="mr-1" /> Add New Abstract
+              </button>
+            )}
           </div>
 
           {/* Search & Filter Controls */}

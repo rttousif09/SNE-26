@@ -90,44 +90,74 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
     return `₹${val}`;
   };
 
-  // Modern High Fidelity Dataset matching the screenshot precisely
-  const mockKPIs = [
-    { title: "Active Projects", value: "18", trend: "↑ 2 this month", isPositive: true, theme: "cyan", icon: Folder },
-    { title: "Active Workers", value: "245", trend: "↑ 12 this week", isPositive: true, theme: "purple", icon: Users },
-    { title: "Present Today", value: "220", trend: "↑ 8 today", isPositive: true, theme: "orange", icon: Clock },
-    { title: "Billing This Month", value: "₹4,50,000", trend: "↑ 15% vs last month", isPositive: true, theme: "blue", icon: Receipt },
-    { title: "Collection This Month", value: "₹3,20,000", trend: "↓ 5% vs last month", isPositive: false, theme: "pink", icon: TrendingUp },
-    { title: "Outstanding", value: "₹12,50,000", trend: "↑ 3% vs last month", isPositive: true, theme: "emerald", icon: Wallet },
-    { title: "Pending Approvals", value: "5", trend: "↓ 2 vs yesterday", isPositive: false, theme: "amber", icon: Shield }
+  // Dynamic Data Calculation
+  const currentMonth = new Date().toISOString().split('T')[0].substring(0, 7);
+  const today = new Date().toISOString().split('T')[0];
+
+  const activeProjectsCount = projects?.filter((p: any) => !p.status || p.status === 'Ongoing').length || 0;
+  const activeWorkersCount = workers?.filter((w: any) => !w.exitDate).length || 0;
+  const presentTodayCount = attendance?.filter((a: any) => a.date === today && (a.status === 'Present' || a.status === 'HalfDay')).length || 0;
+  
+  const billingThisMonth = billings?.filter((b: any) => b.month === currentMonth).reduce((sum: number, b: any) => sum + (b.amount || 0), 0) || 0;
+  const collectionThisMonth = clientPayments?.filter((cp: any) => cp.date?.startsWith(currentMonth)).reduce((sum: number, cp: any) => sum + (cp.amountReceived || 0), 0) || 0;
+  
+  const totalBilling = billings?.reduce((sum: number, b: any) => sum + (b.amount || 0), 0) || 0;
+  const totalCollection = clientPayments?.reduce((sum: number, cp: any) => sum + (cp.amountReceived || 0), 0) || 0;
+  const totalOutstanding = Math.max(0, totalBilling - totalCollection);
+
+  const { kharchiApprovals = [], advanceSheetApprovals = [], paymentSheetApprovals = [] } = erpData as any;
+  const totalPendingApprovals = 
+    (approvals?.filter((a: any) => a.status === 'Pending').length || 0) + 
+    (kharchiApprovals?.filter((a: any) => a.status === 'Pending').length || 0) + 
+    (advanceSheetApprovals?.filter((a: any) => a.status === 'Pending').length || 0) + 
+    (paymentSheetApprovals?.filter((a: any) => a.status === 'Pending').length || 0);
+
+  const dynamicKPIs = [
+    { title: "Active Projects", value: activeProjectsCount.toString(), trend: "", isPositive: true, theme: "cyan", icon: Folder },
+    { title: "Active Workers", value: activeWorkersCount.toString(), trend: "", isPositive: true, theme: "purple", icon: Users },
+    { title: "Present Today", value: presentTodayCount.toString(), trend: "", isPositive: true, theme: "orange", icon: Clock },
+    { title: "Billing This Month", value: formatINR(billingThisMonth), trend: "", isPositive: true, theme: "blue", icon: Receipt },
+    { title: "Collection This Month", value: formatINR(collectionThisMonth), trend: "", isPositive: collectionThisMonth >= billingThisMonth, theme: "pink", icon: TrendingUp },
+    { title: "Outstanding", value: formatINR(totalOutstanding), trend: "", isPositive: totalOutstanding === 0, theme: "emerald", icon: Wallet },
+    { title: "Pending Approvals", value: totalPendingApprovals.toString(), trend: "", isPositive: totalPendingApprovals === 0, theme: "amber", icon: Shield }
   ];
 
   const quickActionsList = [
     { label: 'Add Attendance', icon: UserPlus, tab: 'workers', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
     { label: 'Worker Advance', icon: DollarSign, tab: 'advance', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
+    { label: 'Kharchi (Pocket Money)', icon: Wallet, tab: 'kharchi', color: 'text-purple-600', bg: 'bg-purple-50/50 hover:bg-purple-100 border-purple-100' },
     { label: 'Worker Payment', icon: CreditCard, tab: 'worker-payment', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
     { label: 'Floor Abstract', icon: Building2, tab: 'floor-abstracts', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
     { label: 'Create Bill', icon: Receipt, tab: 'billing', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
     { label: 'Client Payment', icon: DollarSign, tab: 'client-payment', color: 'text-emerald-600', bg: 'bg-emerald-50/50 hover:bg-emerald-100 border-emerald-100' },
-    { label: 'Add Expense', icon: Wallet, tab: 'expenses', color: 'text-purple-600', bg: 'bg-purple-50/50 hover:bg-purple-100 border-purple-100' },
-    { label: '... More', icon: MoreVertical, tab: 'dashboard', color: 'text-slate-600', bg: 'bg-slate-50/50 hover:bg-slate-100 border-slate-200' }
+    { label: 'Add Expense', icon: Wallet, tab: 'expenses', color: 'text-purple-600', bg: 'bg-purple-50/50 hover:bg-purple-100 border-purple-100' }
   ];
 
-  // Projects table data - combined system + mock matching screenshot
-  const projectRows = [
-    { name: "L&T Powai Tower", client: "Larsen & Toubro", status: "Ongoing", progress: 78, workers: 85, billing: 45000000, collection: 32000000, isOngoing: true },
-    { name: "Tata Housing Phase 2", client: "Tata Projects", status: "Ongoing", progress: 62, workers: 65, billing: 2850000, collection: 1820000, isOngoing: true },
-    { name: "Godrej Commercial", client: "Godrej Properties", status: "Ongoing", progress: 45, workers: 40, billing: 1675000, collection: 950000, isOngoing: true },
-    { name: "Reliance Warehouse", client: "Reliance Industries", status: "Planning", progress: 20, workers: 25, billing: 800000, collection: 200000, isOngoing: false }
-  ];
+  const dynamicProjectRows = (projects || []).slice(0, 5).map((p: any) => {
+    const pBillings = billings?.filter((b: any) => b.projectId === p.id) || [];
+    const pBillingAmount = pBillings.reduce((sum: number, b: any) => sum + (b.amount || 0), 0);
+    const pCollections = clientPayments?.filter((cp: any) => cp.projectId === p.id) || [];
+    const pCollectionAmount = pCollections.reduce((sum: number, cp: any) => sum + (cp.amountReceived || 0), 0);
+    const pWorkers = workers?.filter((w: any) => w.projectId === p.id && !w.exitDate).length || 0;
+    
+    return {
+      name: p.name,
+      client: p.clientName || "Unknown Client",
+      status: p.status || "Ongoing",
+      progress: pBillingAmount > 0 ? Math.min(100, Math.round((pCollectionAmount / pBillingAmount) * 100)) : 0,
+      workers: pWorkers,
+      billing: pBillingAmount,
+      collection: pCollectionAmount,
+      isOngoing: p.status !== 'Completed' && p.status !== 'Archived' && p.status !== 'Cancelled'
+    };
+  });
 
-  // Cash Flow wave sparkline data
   const cashFlowSparkline = [
     { value: 10 }, { value: 15 }, { value: 12 }, { value: 18 }, 
     { value: 24 }, { value: 20 }, { value: 30 }, { value: 25 }, 
     { value: 35 }, { value: 40 }
   ];
 
-  // AI Insights
   const aiInsights = [
     { text: "L&T Powai Tower is the most profitable project.", icon: Star, color: "text-blue-500 bg-blue-50" },
     { text: "Tata Housing Phase 2 has high expenses this month.", icon: AlertCircle, color: "text-amber-500 bg-amber-50" },
@@ -136,13 +166,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
     { text: "Cash flow will be positive this month.", icon: Sparkles, color: "text-emerald-500 bg-emerald-50" }
   ];
 
-  // Pending Approvals table items
-  const pendingApprovals = [
-    { label: "Pending Bills", count: 3, amount: 225050, tab: "approvals" },
-    { label: "Pending Expenses", count: 2, amount: 35000, tab: "expenses" },
-    { label: "Pending Payments", count: 1, amount: 50000, tab: "worker-payment" },
-    { label: "Pending Subcontractor Bills", count: 4, amount: 175000, tab: "subcontractors" }
-  ];
+  const pendingApprovalsList = [
+    { label: "Worker Advances", count: approvals?.filter((a: any) => a.status === 'Pending').length || 0, amount: approvals?.filter((a: any) => a.status === 'Pending').reduce((s: number, a: any) => s + (a.requestAmount || a.amount), 0) || 0, tab: "approvals" },
+    { label: "Kharchi", count: kharchiApprovals?.filter((a: any) => a.status === 'Pending').length || 0, amount: kharchiApprovals?.filter((a: any) => a.status === 'Pending').reduce((s: number, a: any) => s + (a.requestAmount || a.totalAmount), 0) || 0, tab: "approvals" },
+    { label: "Worker Payments", count: paymentSheetApprovals?.filter((a: any) => a.status === 'Pending').length || 0, amount: paymentSheetApprovals?.filter((a: any) => a.status === 'Pending').reduce((s: number, a: any) => s + (a.requestAmount || a.totalAmount), 0) || 0, tab: "approvals" }
+  ].filter(p => p.count > 0);
+  
+  if (pendingApprovalsList.length === 0) {
+     pendingApprovalsList.push({ label: "No Pending Approvals", count: 0, amount: 0, tab: "approvals" });
+  }
 
   // Notifications Sidebar matching the screenshot
   const screenshotNotifications = [
@@ -154,13 +186,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
   ];
 
   // Recent system activities matching screenshot style
-  const recentActivities = [
-    { action: "Attendance Added", details: "Tower A - 24-Jun-2026", user: "Imran Khan", time: "10m ago" },
-    { action: "Bill Created", details: "Bill No: BILL-1425", user: "Shabana", time: "45m ago" },
-    { action: "Client Payment Received", details: "L&T Powai Tower - ₹2,00,000", user: "Tousif Reja", time: "1h ago" },
-    { action: "Expense Added", details: "Site Expense - ₹15,000", user: "Imran Khan", time: "2h ago" },
-    { action: "Worker Payment Approved", details: "June Payment - 20 Workers", user: "Shabana", time: "3h ago" }
-  ];
+  const recentActivities = (activityLogs || []).slice(0, 5).map((log: any) => {
+    // try to determine time ago
+    const timeAgo = (dateStr: string) => {
+      if (!dateStr) return "Just now";
+      const diff = new Date().getTime() - new Date(dateStr).getTime();
+      const minutes = Math.floor(diff / 60000);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      return `${Math.floor(hours / 24)}d ago`;
+    };
+    return {
+      action: log.action || "System Action",
+      details: log.details || "Details not available",
+      user: log.user || "System User",
+      time: timeAgo(log.timestamp)
+    };
+  });
+  
+  if (recentActivities.length === 0) {
+    recentActivities.push({
+      action: "System Initialized",
+      details: "No recent activities found.",
+      user: "System",
+      time: "Just now"
+    });
+  }
 
   const themeClasses: { [key: string]: { bg: string, text: string, border: string } } = {
     cyan: { bg: "bg-cyan-50", text: "text-cyan-500", border: "border-cyan-100" },
@@ -205,7 +257,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
 
           {/* Row of 7 Modern KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-            {mockKPIs.map((kpi, idx) => {
+            {dynamicKPIs.map((kpi, idx) => {
               const theme = themeClasses[kpi.theme] || themeClasses.blue;
               const Icon = kpi.icon;
               return (
@@ -285,7 +337,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {projectRows.map((p, idx) => (
+                      {dynamicProjectRows.map((p, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                           <td className="p-4 pl-6 font-bold text-slate-800">{p.name}</td>
                           <td className="p-4 text-slate-500 font-medium">{p.client}</td>
@@ -527,7 +579,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
                   <div>
                     <h4 className="text-xs font-bold text-slate-800 tracking-tight mb-4">Pending Approvals</h4>
                     <div className="space-y-4">
-                      {pendingApprovals.map((app, idx) => (
+                      {pendingApprovalsList.map((app, idx) => (
                         <div key={idx} className="flex items-center justify-between border-b border-slate-50 pb-2.5 last:border-0 last:pb-0">
                           <div className="min-w-0">
                             <span className="text-[11px] font-bold text-slate-800 block">{app.label}</span>

@@ -82,6 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       icon: <Users size={14} className="text-teal-600" />,
       items: [
         { id: 'dlr', label: 'Attendance (DLR)', icon: <ClipboardCheck size={11} /> },
+        { id: 'kharchi', label: 'Kharchi (Pocket Money)', icon: <FileText size={11} /> },
         { id: 'advance', label: 'Advance Registers', icon: <FileText size={11} /> },
         { id: 'worker-payment', label: 'Worker Payment', icon: <CreditCard size={11} /> },
         { id: 'worker-ledger', label: 'Worker Ledger', icon: <FileText size={11} /> }

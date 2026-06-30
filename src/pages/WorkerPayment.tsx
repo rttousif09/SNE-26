@@ -102,7 +102,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
   // Keep month field updated with month selector unless editing a different month
   useEffect(() => {
     if (!editingId) {
-      setFormData(prev => ({ ...prev, month: selectedMonth }));
+      setFormData(prev => {
+        if (prev.month === selectedMonth) return prev;
+        return { ...prev, month: selectedMonth };
+      });
     }
   }, [selectedMonth, editingId]);
 
@@ -245,7 +248,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
 
   const calculatedValues = useMemo(() => {
     let finalWorkAmount = Number(formData.workAmount) || 0;
-    let finalKharchi = autoCalculations.kharchi;
+    let finalKharchi = formData.manualKharchi !== '' 
+      ? Number(formData.manualKharchi) 
+      : autoCalculations.kharchi;
 
     if (selectedCategory === 'Monthly work') {
       const days = Number(formData.workDays) || 0;
@@ -255,8 +260,6 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       const allow = Number(formData.allowance) || 0;
       
       finalWorkAmount = (days * rate) + (otHours * otRate) + allow;
-      // manual kharchi
-      finalKharchi = Number(formData.manualKharchi) || 0;
     }
 
     const messDeduction = Number(formData.messDeduction) || 0;
@@ -821,19 +824,17 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   )}
                 </div>
               )}
-              {selectedCategory === 'Monthly work' && (
-                <div className="flex flex-col">
-                  <label className="font-semibold text-gray-600 mb-1">Manual Kharchi (INR):</label>
-                  <input 
-                    type="number" 
-                    step="any"
-                    className="sap-input font-bold text-red-650" 
-                    placeholder="Manual deduction"
-                    value={formData.manualKharchi} 
-                    onChange={e => setFormData({...formData, manualKharchi: e.target.value})} 
-                  />
-                </div>
-              )}
+              <div className="flex flex-col">
+                <label className="font-semibold text-gray-600 mb-1">Kharchi Deduction (INR):</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  className="sap-input font-bold text-red-650" 
+                  placeholder={autoCalculations.kharchi > 0 ? autoCalculations.kharchi.toString() : "0 (Auto-calculated)"}
+                  value={formData.manualKharchi} 
+                  onChange={e => setFormData({...formData, manualKharchi: e.target.value})} 
+                />
+              </div>
 
               <div className="flex flex-col">
                 <label className="font-semibold text-gray-600 mb-1">Mess Deduction (INR):</label>
@@ -1595,7 +1596,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             ratePerDay: String(record.ratePerDay || ''),
             overtimeHours: String(record.overtimeHours || ''),
             allowance: String(record.allowance || ''),
-            manualKharchi: '',
+            manualKharchi: String(record.kharchiDeduction || ''),
             messDeduction: String(record.messDeduction || ''),
             level: record.level || '',
             towerName: record.towerName || '',
