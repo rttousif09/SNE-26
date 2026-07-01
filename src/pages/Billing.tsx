@@ -55,6 +55,7 @@ export const Billing: React.FC = () => {
     workNature: '',
     prevAmount: '' as string | number,
     amount: '',
+    extraWorkAmount: '',
     cumulativeAmount: '' as string | number,
     month: '',
     certifyDate: '',
@@ -114,6 +115,7 @@ export const Billing: React.FC = () => {
       workNature: bill.workNature,
       prevAmount: bill.prevAmount || '',
       amount: billAmt.toString(),
+      extraWorkAmount: bill.extraWorkAmount ? bill.extraWorkAmount.toString() : '',
       cumulativeAmount: bill.cumulativeAmount || '',
       month: bill.month,
       certifyDate: bill.certifyDate,
@@ -155,6 +157,7 @@ export const Billing: React.FC = () => {
       workNature: '',
       prevAmount: '',
       amount: '',
+      extraWorkAmount: '',
       cumulativeAmount: '',
       month: '',
       certifyDate: '',
@@ -570,6 +573,7 @@ export const Billing: React.FC = () => {
       ...formData,
       prevAmount: Number(formData.prevAmount || 0),
       amount: Number(formData.amount),
+      extraWorkAmount: Number(formData.extraWorkAmount || 0),
       cumulativeAmount: Number(formData.cumulativeAmount || 0),
       tds: Number(formData.tds || 0),
       retention: Number(formData.retention || 0),
@@ -660,10 +664,11 @@ export const Billing: React.FC = () => {
     let net = 0;
     
     billings.forEach(b => {
-      if (b.month === currentMonth) monthly += b.amount;
-      if (b.month.startsWith(currentYear)) yearly += b.amount;
+      const extraWork = b.extraWorkAmount || 0;
+      if (b.month === currentMonth) monthly += (b.amount + extraWork);
+      if (b.month.startsWith(currentYear)) yearly += (b.amount + extraWork);
       
-      const bGross = b.amount || 0;
+      const bGross = b.amount + extraWork;
       const bTds = b.tds ?? 0;
       const bRetention = b.retention ?? 0;
       const bGst = b.gst ?? 0;
@@ -1227,19 +1232,20 @@ export const Billing: React.FC = () => {
 
     filteredBillings.forEach(b => {
       const g = b.amount || 0;
+      const ex = b.extraWorkAmount || 0;
       const t = b.tds ?? 0;
       const r = b.retention ?? 0;
       const gs = b.gst ?? 0;
       const d = b.debitAmount ?? 0;
       const h = b.holdAmount ?? 0;
 
-      gross += g;
+      gross += (g + ex);
       tds += t;
       retention += r;
       gst += gs;
       debit += d;
       hold += h;
-      net += (g - t - r + gs - d - h);
+      net += (g + ex - t - r + gs - d - h);
     });
 
     return { gross, tds, retention, gst, debit, hold, net };
@@ -1422,14 +1428,14 @@ export const Billing: React.FC = () => {
             title="Billing List Report"
             headers={['Bill No', 'Project', 'Work Nature', 'Month', 'Certify Date', 'Gross', 'TDS (-)', 'Retention (-)', 'GST (+)', 'Debit (-)', 'Hold (-)', 'Net Amount']}
             data={filteredBillings.map(b => {
-              const netAmount = b.amount - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0) - (b.debitAmount ?? 0) - (b.holdAmount ?? 0);
+              const netAmount = b.amount + (b.extraWorkAmount ?? 0) - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0) - (b.debitAmount ?? 0) - (b.holdAmount ?? 0);
               return [
                 b.billNo,
                 getProjectName(b.projectId),
                 b.workNature,
                 b.month,
                 b.certifyDate,
-                `Rs. ${b.amount.toLocaleString('en-IN')}`,
+                `Rs. ${(b.amount + (b.extraWorkAmount ?? 0)).toLocaleString('en-IN')}`,
                 `Rs. ${(b.tds ?? 0).toLocaleString('en-IN')}`,
                 `Rs. ${(b.retention ?? 0).toLocaleString('en-IN')}`,
                 `Rs. ${(b.gst ?? 0).toLocaleString('en-IN')}`,
@@ -1585,6 +1591,10 @@ export const Billing: React.FC = () => {
             <div className="flex items-center">
               <label className="w-32">This Bill Amount:</label>
               <input required type="number" step="any" className="sap-input flex-1" value={formData.amount} onChange={e => { handleAmountChange(e.target.value); setFormData(prev => ({...prev, cumulativeAmount: Number(prev.prevAmount || 0) + (parseFloat(e.target.value) || 0)})); }} />
+            </div>
+            <div className="flex items-center">
+              <label className="w-32">Extra Work Amount:</label>
+              <input type="number" step="any" className="sap-input flex-1" value={formData.extraWorkAmount} onChange={e => setFormData(prev => ({...prev, extraWorkAmount: e.target.value}))} placeholder="Amount not subject to TDS/GST" />
             </div>
             <div className="flex items-center">
               <label className="w-32">Cumulative Amount:</label>
@@ -2330,8 +2340,8 @@ export const Billing: React.FC = () => {
               const gstVal = bill.gst ?? 0;
               const debitVal = bill.debitAmount ?? 0;
               const holdVal = bill.holdAmount ?? 0;
-              const netAmount = bill.amount - tdsVal - retVal + gstVal - debitVal - holdVal;
-
+              const extraWorkVal = bill.extraWorkAmount ?? 0;
+              const netAmount = bill.amount + extraWorkVal - tdsVal - retVal + gstVal - debitVal - holdVal;
               return (
               <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} key={bill.id} className="hover:bg-[#e6f2ff] cursor-default">
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.srNo}</td>
@@ -2350,7 +2360,8 @@ export const Billing: React.FC = () => {
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.month}</td>
                 <td className="border border-[#8c9ba8] px-2 py-1">{bill.certifyDate}</td>
                 <td className="border border-[#8c9ba8] px-2 py-1 text-right font-sans">
-                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(bill.amount)}
+                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(bill.amount + extraWorkVal)}
+                  {extraWorkVal > 0 && <span className="block text-[8px] text-gray-500 italic mt-0.5">Includes {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(extraWorkVal)} Extra</span>}
                 </td>
                 <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600 font-sans">
                   {tdsVal > 0 ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(tdsVal) : '—'}
@@ -3398,6 +3409,14 @@ export const Billing: React.FC = () => {
                         {printingBill.gst ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(printingBill.gst) : '₹0.00'}
                       </span>
                     </div>
+                    {printingBill.extraWorkAmount ? (
+                      <div className="col-span-2 flex justify-between py-0.5 border-b border-gray-200/50">
+                        <span className="text-blue-700">Extra Work Amount (No Deductions) (+):</span>
+                        <span className="font-mono text-blue-700 font-medium">
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(printingBill.extraWorkAmount)}
+                        </span>
+                      </div>
+                    ) : null}
                     {printingBill.debitAmount ? (
                       <div className="col-span-2 flex justify-between py-0.5 border-b border-gray-200/50">
                         <span className="text-purple-700">Debit Deduction ({printingBill.debitReason || 'No Reason Specified'}) (-):</span>
@@ -3418,7 +3437,7 @@ export const Billing: React.FC = () => {
                       <span>Total Net Receivable Amount:</span>
                       <span className="font-mono text-green-800">
                         {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
-                          printingBill.amount - (printingBill.tds || 0) - (printingBill.retention || 0) + (printingBill.gst || 0) - (printingBill.debitAmount || 0) - (printingBill.holdAmount || 0)
+                          printingBill.amount + (printingBill.extraWorkAmount || 0) - (printingBill.tds || 0) - (printingBill.retention || 0) + (printingBill.gst || 0) - (printingBill.debitAmount || 0) - (printingBill.holdAmount || 0)
                         )}
                       </span>
                     </div>

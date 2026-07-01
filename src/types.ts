@@ -71,6 +71,7 @@ export interface Billing {
   debitReason?: string;
   holdAmount?: number;
   holdReason?: string;
+  extraWorkAmount?: number;
   billType?: string; // 'Running Account', 'Final Bill', 'Extra Item Bill', 'Additional Work Bill', 'Manpower Supply Bill'
   measurementItems?: MeasurementItem[];
   hardCopyFile?: string;
