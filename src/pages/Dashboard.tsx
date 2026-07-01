@@ -98,10 +98,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
   const activeWorkersCount = workers?.filter((w: any) => !w.exitDate).length || 0;
   const presentTodayCount = attendance?.filter((a: any) => a.date === today && (a.status === 'Present' || a.status === 'HalfDay')).length || 0;
   
-  const billingThisMonth = billings?.filter((b: any) => b.month === currentMonth).reduce((sum: number, b: any) => sum + (b.amount || 0), 0) || 0;
+  const billingThisMonth = billings?.filter((b: any) => b.month === currentMonth).reduce((sum: number, b: any) => {
+    const net = (b.amount || 0) - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0) - (b.debitAmount ?? 0) - (b.holdAmount ?? 0);
+    return sum + net;
+  }, 0) || 0;
   const collectionThisMonth = clientPayments?.filter((cp: any) => cp.date?.startsWith(currentMonth)).reduce((sum: number, cp: any) => sum + (cp.amountReceived || 0), 0) || 0;
   
-  const totalBilling = billings?.reduce((sum: number, b: any) => sum + (b.amount || 0), 0) || 0;
+  const totalBilling = billings?.reduce((sum: number, b: any) => {
+    const net = (b.amount || 0) - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0) - (b.debitAmount ?? 0) - (b.holdAmount ?? 0);
+    return sum + net;
+  }, 0) || 0;
   const totalCollection = clientPayments?.reduce((sum: number, cp: any) => sum + (cp.amountReceived || 0), 0) || 0;
   const totalOutstanding = Math.max(0, totalBilling - totalCollection);
 
@@ -135,7 +141,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
 
   const dynamicProjectRows = (projects || []).slice(0, 5).map((p: any) => {
     const pBillings = billings?.filter((b: any) => b.projectId === p.id) || [];
-    const pBillingAmount = pBillings.reduce((sum: number, b: any) => sum + (b.amount || 0), 0);
+    const pBillingAmount = pBillings.reduce((sum: number, b: any) => {
+      return sum + ((b.amount || 0) - (b.tds ?? 0) - (b.retention ?? 0) + (b.gst ?? 0) - (b.debitAmount ?? 0) - (b.holdAmount ?? 0));
+    }, 0);
     const pCollections = clientPayments?.filter((cp: any) => cp.projectId === p.id) || [];
     const pCollectionAmount = pCollections.reduce((sum: number, cp: any) => sum + (cp.amountReceived || 0), 0);
     const pWorkers = workers?.filter((w: any) => w.projectId === p.id && !w.exitDate).length || 0;
@@ -152,19 +160,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
     };
   });
 
-  const cashFlowSparkline = [
-    { value: 10 }, { value: 15 }, { value: 12 }, { value: 18 }, 
-    { value: 24 }, { value: 20 }, { value: 30 }, { value: 25 }, 
-    { value: 35 }, { value: 40 }
-  ];
+  const cashFlowSparkline = (clientPayments?.length > 0) ? clientPayments.slice(-10).map((cp: any) => ({ value: cp.amountReceived })) : [{ value: 10 }, { value: 15 }, { value: 12 }, { value: 18 }];
 
-  const aiInsights = [
-    { text: "L&T Powai Tower is the most profitable project.", icon: Star, color: "text-blue-500 bg-blue-50" },
-    { text: "Tata Housing Phase 2 has high expenses this month.", icon: AlertCircle, color: "text-amber-500 bg-amber-50" },
-    { text: "Outstanding from L&T is the highest.", icon: TrendingUp, color: "text-indigo-500 bg-indigo-50" },
-    { text: "Worker payment of ₹5,50,000 is due.", icon: Users, color: "text-purple-500 bg-purple-50" },
-    { text: "Cash flow will be positive this month.", icon: Sparkles, color: "text-emerald-500 bg-emerald-50" }
-  ];
+  const aiInsights = [];
+  if (totalOutstanding > 0) {
+    aiInsights.push({ text: `Outstanding collection is ${formatINR(totalOutstanding)}.`, icon: TrendingDown, color: "text-amber-500 bg-amber-50" });
+  }
+  if (activeProjectsCount > 0) {
+    aiInsights.push({ text: `${activeProjectsCount} ongoing projects currently active.`, icon: Star, color: "text-blue-500 bg-blue-50" });
+  }
+  if (collectionThisMonth > billingThisMonth) {
+    aiInsights.push({ text: "Cash flow is positive this month.", icon: Sparkles, color: "text-emerald-500 bg-emerald-50" });
+  }
+  if (totalPendingApprovals > 0) {
+    aiInsights.push({ text: `${totalPendingApprovals} pending approvals require your attention.`, icon: Shield, color: "text-purple-500 bg-purple-50" });
+  }
+  if (aiInsights.length === 0) {
+    aiInsights.push({ text: "System is operating smoothly.", icon: CheckCircle, color: "text-emerald-500 bg-emerald-50" });
+  }
 
   const pendingApprovalsList = [
     { label: "Worker Advances", count: approvals?.filter((a: any) => a.status === 'Pending').length || 0, amount: approvals?.filter((a: any) => a.status === 'Pending').reduce((s: number, a: any) => s + (a.requestAmount || a.amount), 0) || 0, tab: "approvals" },
@@ -177,13 +190,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
   }
 
   // Notifications Sidebar matching the screenshot
-  const screenshotNotifications = [
-    { title: "Client Payment Due", desc: "L&T Powai Tower - ₹5,00,000", time: "10m ago", theme: "red", icon: DollarSign },
-    { title: "Retention Release Due", desc: "Tata Housing Phase 2 - ₹2,50,000", time: "30m ago", theme: "blue", icon: Calendar },
-    { title: "Worker Payment Pending", desc: "June Payment - 25 Workers", time: "1h ago", theme: "green", icon: Users },
-    { title: "Expiring Documents", desc: "3 Documents Expiring in 7 Days", time: "2h ago", theme: "yellow", icon: FileText },
-    { title: "Pending Approvals", desc: "5 Approvals Pending", time: "3h ago", theme: "orange", icon: Shield }
-  ];
+  const screenshotNotifications = [];
+  if (totalOutstanding > 0) {
+    screenshotNotifications.push({ title: "Collections Due", desc: `Total ${formatINR(totalOutstanding)} pending`, time: "Action Required", theme: "red", icon: DollarSign });
+  }
+  if (totalPendingApprovals > 0) {
+    screenshotNotifications.push({ title: "Pending Approvals", desc: `${totalPendingApprovals} Requests Pending`, time: "Needs Review", theme: "orange", icon: Shield });
+  }
+  if (billingThisMonth > 0) {
+    screenshotNotifications.push({ title: "Monthly Billing", desc: `Billed ${formatINR(billingThisMonth)} this month`, time: "Ongoing", theme: "blue", icon: Receipt });
+  }
+  if (activeWorkersCount > 0) {
+    screenshotNotifications.push({ title: "Active Workforce", desc: `${activeWorkersCount} workers currently active`, time: "Today", theme: "green", icon: Users });
+  }
+  if (screenshotNotifications.length === 0) {
+    screenshotNotifications.push({ title: "All Good", desc: "No critical notifications", time: "Now", theme: "green", icon: CheckCircle });
+  }
 
   // Recent system activities matching screenshot style
   const recentActivities = (activityLogs || []).slice(0, 5).map((log: any) => {
