@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip, Printer, FileSpreadsheet, Eye, RefreshCw } from 'lucide-react';
+import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip, Printer, FileSpreadsheet, Eye, RefreshCw, History } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { checkBillingDuplicate, addOverrideLog } from '../lib/duplicateChecker';
@@ -30,6 +30,8 @@ export const Billing: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [recordsProjectId, setRecordsProjectId] = useState('');
+  const [recordsBillType, setRecordsBillType] = useState('');
   const [printingBill, setPrintingBill] = useState<BillingType | null>(null);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
 
@@ -51,7 +53,9 @@ export const Billing: React.FC = () => {
     projectId: '',
     billNo: '',
     workNature: '',
+    prevAmount: '' as string | number,
     amount: '',
+    cumulativeAmount: '' as string | number,
     month: '',
     certifyDate: '',
     tds: '',
@@ -108,7 +112,9 @@ export const Billing: React.FC = () => {
       projectId: bill.projectId,
       billNo: bill.billNo,
       workNature: bill.workNature,
+      prevAmount: bill.prevAmount || '',
       amount: billAmt.toString(),
+      cumulativeAmount: bill.cumulativeAmount || '',
       month: bill.month,
       certifyDate: bill.certifyDate,
       tds: tdsVal.toString(),
@@ -147,7 +153,9 @@ export const Billing: React.FC = () => {
       projectId: '',
       billNo: '',
       workNature: '',
+      prevAmount: '',
       amount: '',
+      cumulativeAmount: '',
       month: '',
       certifyDate: '',
       tds: '',
@@ -176,8 +184,81 @@ export const Billing: React.FC = () => {
     });
   };
 
-  const calculateTotalFromMeasurements = (items: MeasurementItem[]) => {
-    return items.reduce((sum, item) => sum + (Number(item.qtyExecuted || 0) * Number(item.rate || 0)), 0);
+  const calculateTotalsFromMeasurements = (items: MeasurementItem[]) => {
+    return items.reduce((totals, item) => {
+      const rt = Number(item.rate || 0);
+      const pr = Number(item.prevQty || 0);
+      const qty = Number(item.qtyExecuted || 0);
+      return {
+        prevAmount: totals.prevAmount + (pr * rt),
+        amount: totals.amount + (qty * rt),
+        cumulativeAmount: totals.cumulativeAmount + ((pr + qty) * rt)
+      };
+    }, { prevAmount: 0, amount: 0, cumulativeAmount: 0 });
+  };
+
+  const handleProjectOrTypeChange = (field: 'projectId' | 'billType', value: string) => {
+    setFormData(prev => {
+      const nextFormData = { ...prev, [field]: value };
+      
+      if (isAdding && nextFormData.projectId && nextFormData.billType === 'Running Account') {
+        const projectBills = billings
+          .filter(b => b.projectId === nextFormData.projectId && b.billType === 'Running Account')
+          .sort((a, b) => {
+             const dateA = new Date(a.certifyDate || a.month).getTime();
+             const dateB = new Date(b.certifyDate || b.month).getTime();
+             return dateA === dateB ? a.id.localeCompare(b.id) : dateA - dateB;
+          });
+          
+        if (projectBills.length > 0) {
+          const lastBill = projectBills[projectBills.length - 1];
+          let cumulativeAmt = 0;
+          let newMeasurementItems = [] as MeasurementItem[];
+          
+          if (lastBill.measurementItems && lastBill.measurementItems.length > 0) {
+            newMeasurementItems = lastBill.measurementItems.map(item => {
+               const prevQ = Number(item.cumulativeQty || 0);
+               const prevA = Number(item.cumulativeAmount || (prevQ * (item.rate || 0)));
+               return {
+                  ...item,
+                  id: Math.random().toString(36).substring(2, 9),
+                  qtyExecuted: 0,
+                  amount: 0,
+                  prevQty: prevQ,
+                  prevAmount: prevA,
+                  cumulativeQty: prevQ,
+                  cumulativeAmount: prevA
+               };
+            });
+            cumulativeAmt = newMeasurementItems.reduce((s, i) => s + (i.cumulativeAmount || 0), 0);
+          } else {
+            cumulativeAmt = Number(lastBill.cumulativeAmount || ((Number(lastBill.prevAmount) || 0) + (Number(lastBill.amount) || 0)));
+          }
+          
+          return {
+             ...nextFormData,
+             measurementItems: newMeasurementItems,
+             prevAmount: cumulativeAmt,
+             cumulativeAmount: cumulativeAmt,
+             amount: ''
+          };
+        } else {
+          return {
+             ...nextFormData,
+             prevAmount: 0,
+             cumulativeAmount: Number(nextFormData.amount) || 0,
+             measurementItems: nextFormData.measurementItems.map(item => ({
+                ...item,
+                prevQty: 0,
+                prevAmount: 0,
+                cumulativeQty: Number(item.qtyExecuted) || 0,
+                cumulativeAmount: Number(item.amount) || 0
+             }))
+          };
+        }
+      }
+      return nextFormData;
+    });
   };
 
   const handleAddMeasurementItem = () => {
@@ -189,13 +270,18 @@ export const Billing: React.FC = () => {
       rate: 0,
       amount: 0,
       prevQty: 0,
-      cumulativeQty: 0
+      cumulativeQty: 0,
+      prevAmount: 0,
+      cumulativeAmount: 0
     };
     const updatedItems = [...formData.measurementItems, newItem];
-    const newAmount = calculateTotalFromMeasurements(updatedItems);
+    const totals = calculateTotalsFromMeasurements(updatedItems);
     
     setFormData(prev => {
-      const amtStr = newAmount > 0 ? parseFloat(newAmount.toFixed(2)).toString() : prev.amount;
+      const amtStr = totals.amount > 0 ? parseFloat(totals.amount.toFixed(2)).toString() : prev.amount;
+      const prevAmtStr = totals.prevAmount > 0 ? parseFloat(totals.prevAmount.toFixed(2)).toString() : prev.prevAmount;
+      const cumulAmtStr = totals.cumulativeAmount > 0 ? parseFloat(totals.cumulativeAmount.toFixed(2)).toString() : prev.cumulativeAmount;
+      
       const amtNum = parseFloat(amtStr) || 0;
       const tPct = parseFloat(prev.tdsPercent) || 0;
       const rPct = parseFloat(prev.retentionPercent) || 0;
@@ -205,6 +291,8 @@ export const Billing: React.FC = () => {
         ...prev,
         measurementItems: updatedItems,
         amount: amtStr,
+        prevAmount: prevAmtStr,
+        cumulativeAmount: cumulAmtStr,
         tds: tPct > 0 ? parseFloat((amtNum * tPct / 100).toFixed(2)).toString() : prev.tds,
         retention: rPct > 0 ? parseFloat((amtNum * rPct / 100).toFixed(2)).toString() : prev.retention,
         gst: gPct > 0 ? parseFloat((amtNum * gPct / 100).toFixed(2)).toString() : prev.gst
@@ -221,14 +309,19 @@ export const Billing: React.FC = () => {
         const pr = Number(merged.prevQty || 0);
         merged.amount = Number((qty * rt).toFixed(2));
         merged.cumulativeQty = Number((pr + qty).toFixed(2));
+        merged.prevAmount = Number((pr * rt).toFixed(2));
+        merged.cumulativeAmount = Number((merged.cumulativeQty * rt).toFixed(2));
         return merged;
       }
       return item;
     });
 
-    const newAmount = calculateTotalFromMeasurements(updatedItems);
+    const totals = calculateTotalsFromMeasurements(updatedItems);
     setFormData(prev => {
-      const amtStr = newAmount > 0 ? parseFloat(newAmount.toFixed(2)).toString() : prev.amount;
+      const amtStr = totals.amount > 0 ? parseFloat(totals.amount.toFixed(2)).toString() : prev.amount;
+      const prevAmtStr = totals.prevAmount > 0 ? parseFloat(totals.prevAmount.toFixed(2)).toString() : prev.prevAmount;
+      const cumulAmtStr = totals.cumulativeAmount > 0 ? parseFloat(totals.cumulativeAmount.toFixed(2)).toString() : prev.cumulativeAmount;
+      
       const amtNum = parseFloat(amtStr) || 0;
       const tPct = parseFloat(prev.tdsPercent) || 0;
       const rPct = parseFloat(prev.retentionPercent) || 0;
@@ -238,6 +331,8 @@ export const Billing: React.FC = () => {
         ...prev,
         measurementItems: updatedItems,
         amount: amtStr,
+        prevAmount: prevAmtStr,
+        cumulativeAmount: cumulAmtStr,
         tds: tPct > 0 ? parseFloat((amtNum * tPct / 100).toFixed(2)).toString() : prev.tds,
         retention: rPct > 0 ? parseFloat((amtNum * rPct / 100).toFixed(2)).toString() : prev.retention,
         gst: gPct > 0 ? parseFloat((amtNum * gPct / 100).toFixed(2)).toString() : prev.gst
@@ -247,9 +342,12 @@ export const Billing: React.FC = () => {
 
   const handleDeleteMeasurementItem = (index: number) => {
     const updatedItems = formData.measurementItems.filter((_, idx) => idx !== index);
-    const newAmount = calculateTotalFromMeasurements(updatedItems);
+    const totals = calculateTotalsFromMeasurements(updatedItems);
     setFormData(prev => {
-      const amtStr = newAmount > 0 ? parseFloat(newAmount.toFixed(2)).toString() : (updatedItems.length === 0 ? '' : prev.amount);
+      const amtStr = totals.amount > 0 ? parseFloat(totals.amount.toFixed(2)).toString() : (updatedItems.length === 0 ? '' : prev.amount);
+      const prevAmtStr = totals.prevAmount > 0 ? parseFloat(totals.prevAmount.toFixed(2)).toString() : (updatedItems.length === 0 ? '' : prev.prevAmount);
+      const cumulAmtStr = totals.cumulativeAmount > 0 ? parseFloat(totals.cumulativeAmount.toFixed(2)).toString() : (updatedItems.length === 0 ? '' : prev.cumulativeAmount);
+      
       const amtNum = parseFloat(amtStr) || 0;
       const tPct = parseFloat(prev.tdsPercent) || 0;
       const rPct = parseFloat(prev.retentionPercent) || 0;
@@ -259,6 +357,8 @@ export const Billing: React.FC = () => {
         ...prev,
         measurementItems: updatedItems,
         amount: amtStr,
+        prevAmount: prevAmtStr,
+        cumulativeAmount: cumulAmtStr,
         tds: tPct > 0 ? parseFloat((amtNum * tPct / 100).toFixed(2)).toString() : prev.tds,
         retention: rPct > 0 ? parseFloat((amtNum * rPct / 100).toFixed(2)).toString() : prev.retention,
         gst: gPct > 0 ? parseFloat((amtNum * gPct / 100).toFixed(2)).toString() : prev.gst
@@ -468,7 +568,9 @@ export const Billing: React.FC = () => {
     e.preventDefault();
     const billingData = {
       ...formData,
+      prevAmount: Number(formData.prevAmount || 0),
       amount: Number(formData.amount),
+      cumulativeAmount: Number(formData.cumulativeAmount || 0),
       tds: Number(formData.tds || 0),
       retention: Number(formData.retention || 0),
       gst: Number(formData.gst || 0),
@@ -1086,15 +1188,33 @@ export const Billing: React.FC = () => {
   }, [gstBills]);
 
   const filteredBillings = useMemo(() => {
-    if (!searchQuery.trim()) return billings;
-    const query = searchQuery.toLowerCase();
+    let result = billings;
     
-    return billings.filter(b => 
-      b.billNo.toLowerCase().includes(query) ||
-      getProjectName(b.projectId).toLowerCase().includes(query) ||
-      b.workNature.toLowerCase().includes(query)
-    );
-  }, [billings, searchQuery, projects]);
+    if (activeTab === 'records') {
+      if (!recordsProjectId || !recordsBillType) {
+        return [];
+      }
+      result = result.filter(b => b.projectId === recordsProjectId && b.billType === recordsBillType);
+      
+      // Sort serial wise (by certifyDate)
+      result = [...result].sort((a, b) => {
+        const dateA = new Date(a.certifyDate || a.month).getTime();
+        const dateB = new Date(b.certifyDate || b.month).getTime();
+        return dateA === dateB ? a.id.localeCompare(b.id) : dateA - dateB;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(b => 
+        b.billNo.toLowerCase().includes(query) ||
+        getProjectName(b.projectId).toLowerCase().includes(query) ||
+        b.workNature.toLowerCase().includes(query)
+      );
+    }
+    
+    return result;
+  }, [billings, searchQuery, projects, recordsProjectId, recordsBillType, activeTab]);
 
   const displayedTotals = useMemo(() => {
     let gross = 0;
@@ -1259,11 +1379,38 @@ export const Billing: React.FC = () => {
           ) : (
             <div className="font-semibold text-gray-700 px-1 py-0.5">Billing Directory (Read Only)</div>
           )}
+          <div className="flex items-center space-x-2">
+            <select
+              className="sap-input text-[11px] w-48"
+              value={recordsProjectId}
+              onChange={e => setRecordsProjectId(e.target.value)}
+            >
+              <option value="">Select Project</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+
+            {recordsProjectId && (
+              <select
+                className="sap-input text-[11px] w-40"
+                value={recordsBillType}
+                onChange={e => setRecordsBillType(e.target.value)}
+              >
+                <option value="">Select Bill Type</option>
+                <option value="Running Account">Running Account</option>
+                <option value="Final Bill">Final Bill</option>
+                <option value="Extra Item Bill">Extra Item Bill</option>
+                <option value="Additional Work Bill">Additional Work Bill</option>
+                <option value="Manpower Supply Bill">Manpower Supply Bill</option>
+              </select>
+            )}
+          </div>
           
           <input
             type="text"
             className="sap-input w-48 text-[11px]"
-            placeholder="Filter by Bill No, Project, Nature..."
+            placeholder="Search by Bill No..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -1293,13 +1440,13 @@ export const Billing: React.FC = () => {
             })}
             totals={[
               '', '', '', '', 'Totals:', 
-              `Rs. ${overallTotals.gross.toLocaleString('en-IN')}`,
-              `Rs. ${overallTotals.tds.toLocaleString('en-IN')}`,
-              `Rs. ${overallTotals.retention.toLocaleString('en-IN')}`,
-              `Rs. ${overallTotals.gst.toLocaleString('en-IN')}`,
-              `Rs. ${overallTotals.debit.toLocaleString('en-IN')}`,
-              `Rs. ${overallTotals.hold.toLocaleString('en-IN')}`,
-              `Rs. ${overallTotals.net.toLocaleString('en-IN')}`
+              `Rs. ${displayedTotals.gross.toLocaleString('en-IN')}`,
+              `Rs. ${displayedTotals.tds.toLocaleString('en-IN')}`,
+              `Rs. ${displayedTotals.retention.toLocaleString('en-IN')}`,
+              `Rs. ${displayedTotals.gst.toLocaleString('en-IN')}`,
+              `Rs. ${displayedTotals.debit.toLocaleString('en-IN')}`,
+              `Rs. ${displayedTotals.hold.toLocaleString('en-IN')}`,
+              `Rs. ${displayedTotals.net.toLocaleString('en-IN')}`
             ]}
           />
         </div>
@@ -1321,43 +1468,43 @@ export const Billing: React.FC = () => {
         <div className="sap-panel p-1.5 flex flex-col bg-white border-l-4 border-l-blue-500">
           <span className="font-semibold text-blue-900 leading-tight">Total Work Gross</span>
           <span className="text-xs font-bold text-blue-900 mt-0.5">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.gross)}
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.gross)}
           </span>
         </div>
         <div className="sap-panel p-1.5 flex flex-col bg-red-50/45 border-l-4 border-l-red-500">
           <span className="font-semibold text-red-950 leading-tight">Total TDS Deducted</span>
           <span className="text-xs font-bold text-red-600 mt-0.5">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.tds)}
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.tds)}
           </span>
         </div>
         <div className="sap-panel p-1.5 flex flex-col bg-orange-50/45 border-l-4 border-l-orange-400">
           <span className="font-semibold text-orange-950 leading-tight">Total Retention</span>
           <span className="text-xs font-bold text-orange-600 mt-0.5">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.retention)}
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.retention)}
           </span>
         </div>
         <div className="sap-panel p-1.5 flex flex-col bg-green-50/45 border-l-4 border-l-green-500">
           <span className="font-semibold text-green-950 leading-tight">Total GST Amount</span>
           <span className="text-xs font-bold text-green-700 mt-0.5">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.gst)}
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.gst)}
           </span>
         </div>
         <div className="sap-panel p-1.5 flex flex-col bg-purple-50/45 border-l-4 border-l-purple-500">
           <span className="font-semibold text-purple-950 leading-tight">Total Debit Adjust.</span>
           <span className="text-xs font-bold text-purple-750 mt-0.5">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.debit)}
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.debit)}
           </span>
         </div>
         <div className="sap-panel p-1.5 flex flex-col bg-amber-50/45 border-l-4 border-l-amber-500">
           <span className="font-semibold text-amber-955 leading-tight">Total Hold Amount</span>
           <span className="text-xs font-bold text-amber-750 mt-0.5">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.hold)}
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.hold)}
           </span>
         </div>
         <div className="sap-panel p-1.5 flex flex-col bg-green-50/70 border-l-4 border-l-teal-600">
           <span className="font-semibold text-[#0056b3] leading-tight font-black">Net Receivable</span>
           <span className="text-xs font-bold text-[#0056b3] mt-0.5 font-sans">
-            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(overallTotals.net)}
+            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(displayedTotals.net)}
           </span>
         </div>
       </div>
@@ -1393,7 +1540,7 @@ export const Billing: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Project:</label>
-              <select required className="sap-input flex-1" value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
+              <select required className="sap-input flex-1" value={formData.projectId} onChange={e => handleProjectOrTypeChange('projectId', e.target.value)}>
                 <option value="">Select Project</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -1419,7 +1566,7 @@ export const Billing: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Bill Type:</label>
-              <select required className="sap-input flex-1" value={formData.billType} onChange={e => setFormData({...formData, billType: e.target.value})}>
+              <select required className="sap-input flex-1" value={formData.billType} onChange={e => handleProjectOrTypeChange('billType', e.target.value)}>
                 <option value="Running Account">Running Account</option>
                 <option value="Final Bill">Final Bill</option>
                 <option value="Extra Item Bill">Extra Item Bill</option>
@@ -1432,8 +1579,16 @@ export const Billing: React.FC = () => {
               <input required type="text" className="sap-input flex-1" value={formData.workNature} onChange={e => setFormData({...formData, workNature: e.target.value})} />
             </div>
             <div className="flex items-center">
-              <label className="w-32">Billing Amount:</label>
-              <input required type="number" step="any" className="sap-input flex-1" value={formData.amount} onChange={e => handleAmountChange(e.target.value)} />
+              <label className="w-32">Previous Amount:</label>
+              <input type="number" step="any" className="sap-input flex-1" value={formData.prevAmount || ''} onChange={e => setFormData({...formData, prevAmount: parseFloat(e.target.value) || 0, cumulativeAmount: (parseFloat(e.target.value) || 0) + (Number(formData.amount) || 0)})} />
+            </div>
+            <div className="flex items-center">
+              <label className="w-32">This Bill Amount:</label>
+              <input required type="number" step="any" className="sap-input flex-1" value={formData.amount} onChange={e => { handleAmountChange(e.target.value); setFormData(prev => ({...prev, cumulativeAmount: Number(prev.prevAmount || 0) + (parseFloat(e.target.value) || 0)})); }} />
+            </div>
+            <div className="flex items-center">
+              <label className="w-32">Cumulative Amount:</label>
+              <input readOnly type="number" step="any" className="sap-input flex-1 bg-gray-50 text-gray-500" value={formData.cumulativeAmount || ''} />
             </div>
             <div className="flex items-center">
               <label className="w-32">TDS Deducted:</label>
@@ -1627,11 +1782,9 @@ export const Billing: React.FC = () => {
                         <th className="p-1 w-6 text-center">#</th>
                         <th className="p-1 min-w-[200px]">Description</th>
                         <th className="p-1 w-12 text-center">Unit</th>
-                        <th className="p-1 w-16 text-right">Qty Exec</th>
                         <th className="p-1 w-20 text-right">Rate</th>
+                        <th className="p-1 w-16 text-right">Qty Executed</th>
                         <th className="p-1 w-20 text-right">Amount</th>
-                        <th className="p-1 w-14 text-right">Prev Qty</th>
-                        <th className="p-1 w-14 text-right">Cumul Qty</th>
                         <th className="p-1 w-6 text-center"></th>
                       </tr>
                     </thead>
@@ -1665,9 +1818,9 @@ export const Billing: React.FC = () => {
                               step="any"
                               required
                               className="sap-input w-full py-0.5 text-right text-[10px]"
-                              value={item.qtyExecuted || ''}
+                              value={item.rate || ''}
                               placeholder="0"
-                              onChange={e => handleUpdateMeasurementItem(idx, { qtyExecuted: parseFloat(e.target.value) || 0 })}
+                              onChange={e => handleUpdateMeasurementItem(idx, { rate: parseFloat(e.target.value) || 0 })}
                             />
                           </td>
                           <td className="p-1">
@@ -1676,26 +1829,13 @@ export const Billing: React.FC = () => {
                               step="any"
                               required
                               className="sap-input w-full py-0.5 text-right text-[10px]"
-                              value={item.rate || ''}
+                              value={item.qtyExecuted || ''}
                               placeholder="0"
-                              onChange={e => handleUpdateMeasurementItem(idx, { rate: parseFloat(e.target.value) || 0 })}
+                              onChange={e => handleUpdateMeasurementItem(idx, { qtyExecuted: parseFloat(e.target.value) || 0 })}
                             />
                           </td>
-                          <td className="p-1 text-right font-mono text-gray-600 pr-1 select-none text-[10px]">
+                          <td className="p-1 text-right font-mono text-gray-900 pr-1 select-none text-[10px]">
                             {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(item.amount || 0)}
-                          </td>
-                          <td className="p-1">
-                            <input
-                              type="number"
-                              step="any"
-                              className="sap-input w-full py-0.5 text-right text-[10px]"
-                              value={item.prevQty || ''}
-                              placeholder="0"
-                              onChange={e => handleUpdateMeasurementItem(idx, { prevQty: parseFloat(e.target.value) || 0 })}
-                            />
-                          </td>
-                          <td className="p-1 text-right font-bold font-mono text-blue-900 pr-1 select-none text-[10px]">
-                            {item.cumulativeQty}
                           </td>
                           <td className="p-1 text-center">
                             <button
@@ -1712,9 +1852,9 @@ export const Billing: React.FC = () => {
                       <tr className="bg-gray-50/70 font-semibold border-t border-gray-200 text-[10px]">
                         <td colSpan={5} className="p-1 text-right text-gray-500 pr-2">Subtotal Amount:</td>
                         <td className="p-1 text-right font-extrabold text-blue-950 font-mono pr-1 select-none text-[10px]">
-                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(calculateTotalFromMeasurements(formData.measurementItems))}
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(calculateTotalsFromMeasurements(formData.measurementItems).amount)}
                         </td>
-                        <td colSpan={3}></td>
+                        <td colSpan={1}></td>
                       </tr>
                     </tbody>
                   </table>
@@ -1944,6 +2084,50 @@ export const Billing: React.FC = () => {
               </button>
             </div>
           </form>
+
+          {formData.projectId && formData.billType === 'Running Account' && (
+            <details className="mt-4 border border-gray-200 rounded group bg-white shadow-sm">
+              <summary className="p-2 bg-gray-50 text-[10px] font-bold text-gray-700 cursor-pointer flex justify-between items-center group-open:border-b border-gray-200 uppercase tracking-wider select-none hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-1.5">
+                  <History size={13} className="text-indigo-600" />
+                  Previous RA Bills History
+                </div>
+                <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="p-2 max-h-[150px] overflow-y-auto">
+                <table className="w-full text-left text-[10px] border-collapse">
+                  <thead className="bg-gray-100 border-b border-gray-200 sticky top-0 z-10 text-[9px] uppercase tracking-wider text-gray-600 font-bold">
+                    <tr>
+                      <th className="p-1.5">Certify Date</th>
+                      <th className="p-1.5">Bill No</th>
+                      <th className="p-1.5 text-right">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {billings
+                      .filter(b => b.projectId === formData.projectId && b.billType === 'Running Account' && b.id !== editingId)
+                      .sort((a, b) => new Date(b.certifyDate || b.month).getTime() - new Date(a.certifyDate || a.month).getTime())
+                      .map(b => (
+                        <tr key={b.id} className="border-b border-gray-50 hover:bg-blue-50/30">
+                          <td className="p-1.5">{b.certifyDate ? new Date(b.certifyDate).toLocaleDateString('en-IN') : b.month}</td>
+                          <td className="p-1.5 font-mono">{b.billNo}</td>
+                          <td className="p-1.5 text-right font-mono text-gray-900 font-semibold">
+                            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(b.amount || 0)}
+                          </td>
+                        </tr>
+                      ))
+                    }
+                    {billings.filter(b => b.projectId === formData.projectId && b.billType === 'Running Account' && b.id !== editingId).length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="p-3 text-center text-gray-400 italic">No previous RA bills found for this project.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
+
         </motion.div>
         </div>
       )}
@@ -2136,7 +2320,7 @@ export const Billing: React.FC = () => {
           {filteredBillings.length === 0 ? (
             <tr>
               <td colSpan={15} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">
-                No billing records found.
+                {!recordsProjectId ? 'Please select a Project to view billing records.' : !recordsBillType ? 'Please select a Bill Type to view billing records.' : 'No billing records found.'}
               </td>
             </tr>
           ) : (
@@ -3258,11 +3442,9 @@ export const Billing: React.FC = () => {
                             <th className="p-1 border border-gray-300 w-6 text-center">#</th>
                             <th className="p-1 border border-gray-300 min-w-[150px]">Description of Item</th>
                             <th className="p-1 border border-gray-300 w-12 text-center">Unit</th>
-                            <th className="p-1 border border-gray-300 w-16 text-right">Qty Executed</th>
                             <th className="p-1 border border-gray-300 w-16 text-right">Rate (₹)</th>
+                            <th className="p-1 border border-gray-300 w-16 text-right">Qty Executed</th>
                             <th className="p-1 border border-gray-300 w-20 text-right">Amount (₹)</th>
-                            <th className="p-1 border border-gray-300 w-16 text-right">Prev Qty</th>
-                            <th className="p-1 border border-gray-300 w-16 text-right">Cumul Qty</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3271,15 +3453,13 @@ export const Billing: React.FC = () => {
                               <td className="p-1 border border-gray-300 text-center font-mono text-gray-500 text-[9px]">{imIdx + 1}</td>
                               <td className="p-1 border border-gray-300 font-medium text-gray-900">{item.description}</td>
                               <td className="p-1 border border-gray-300 text-center text-gray-600">{item.unit}</td>
-                              <td className="p-1 border border-gray-300 text-right font-mono text-gray-950">{item.qtyExecuted}</td>
                               <td className="p-1 border border-gray-300 text-right font-mono text-gray-900">
                                 {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 1 }).format(item.rate)}
                               </td>
+                              <td className="p-1 border border-gray-300 text-right font-mono text-gray-950">{item.qtyExecuted}</td>
                               <td className="p-1 border border-gray-300 text-right font-mono font-semibold text-gray-950">
                                 {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(item.amount)}
                               </td>
-                              <td className="p-1 border border-gray-300 text-right font-mono text-gray-500">{item.prevQty}</td>
-                              <td className="p-1 border border-gray-300 text-right font-mono font-bold text-indigo-900">{item.cumulativeQty}</td>
                             </tr>
                           ))}
                           <tr className="bg-gray-100/50 font-bold text-gray-900 border-t-2 border-gray-350">
@@ -3289,7 +3469,6 @@ export const Billing: React.FC = () => {
                                 printingBill.measurementItems.reduce((s: number, i: any) => s + (i.amount || 0), 0)
                               )}
                             </td>
-                            <td colSpan={2} className="border border-gray-300"></td>
                           </tr>
                         </tbody>
                       </table>

@@ -49,6 +49,8 @@ export interface MeasurementItem {
   amount: number; // qtyExecuted * rate
   prevQty: number;
   cumulativeQty: number; // prevQty + qtyExecuted
+  prevAmount?: number;
+  cumulativeAmount?: number;
 }
 
 export interface Billing {
@@ -57,7 +59,9 @@ export interface Billing {
   projectId: string;
   billNo: string;
   workNature: string;
+  prevAmount?: number;
   amount: number;
+  cumulativeAmount?: number;
   month: string; // YYYY-MM
   certifyDate: string;
   tds?: number;
