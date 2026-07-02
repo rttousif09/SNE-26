@@ -445,6 +445,240 @@ export const downloadPDF = (blobUrl: URL | string | Blob | MediaSource, filename
   link.click();
 };
 
+export const exportIndividualBillToPDF = (bill: any, projectName: string, userName: string = 'Admin') => {
+  const doc = new jsPDF('portrait', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.width || doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+  const generatedDate = new Date().toLocaleString('en-IN', { hour12: true });
+
+  // Top elegant primary color bar
+  doc.setFillColor(0, 47, 108); // Deep blue #002f6c
+  doc.rect(0, 0, pageWidth, 5, 'F');
+
+  // Title / Company Header
+  doc.setTextColor(0, 47, 108);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SN ENTERPRISES', 14, 18);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
+  doc.text('Construction Billing & Site Management ERP', 14, 23);
+
+  // Divider line
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.4);
+  doc.line(14, 26, pageWidth - 14, 26);
+
+  // Title of the Document
+  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('BILL PAYMENT CERTIFICATE', 14, 34);
+
+  // Right-aligned Bill reference and date
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Ref No: ${bill.billNo}`, pageWidth - 14, 32, { align: 'right' });
+  doc.text(`Generated: ${generatedDate}`, pageWidth - 14, 37, { align: 'right' });
+
+  // 1. Bill Details Section (2-column layout)
+  doc.setFillColor(248, 249, 250); // Light gray background
+  doc.rect(14, 42, pageWidth - 28, 28, 'F');
+  doc.setDrawColor(220, 220, 220);
+  doc.rect(14, 42, pageWidth - 28, 28, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.text('PROJECT & BILL INFORMATION', 18, 48);
+  doc.line(18, 50, pageWidth - 18, 50);
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(50, 50, 50);
+  
+  // Column 1
+  doc.setFont('helvetica', 'normal'); doc.text('Project Name:', 18, 55);
+  doc.setFont('helvetica', 'bold'); doc.text(projectName, 42, 55);
+
+  doc.setFont('helvetica', 'normal'); doc.text('Bill Number:', 18, 60);
+  doc.setFont('helvetica', 'bold'); doc.text(bill.billNo || 'N/A', 42, 60);
+
+  doc.setFont('helvetica', 'normal'); doc.text('Bill Type:', 18, 65);
+  doc.setFont('helvetica', 'bold'); doc.text(bill.billType || 'Running Account', 42, 65);
+
+  // Column 2
+  const col2X = pageWidth / 2 + 10;
+  doc.setFont('helvetica', 'normal'); doc.text('Period/Month:', col2X, 55);
+  doc.setFont('helvetica', 'bold'); doc.text(bill.month || 'N/A', col2X + 25, 55);
+
+  doc.setFont('helvetica', 'normal'); doc.text('Certify Date:', col2X, 60);
+  doc.setFont('helvetica', 'bold'); doc.text(bill.certifyDate || 'N/A', col2X + 25, 60);
+
+  doc.setFont('helvetica', 'normal'); doc.text('Work Nature:', col2X, 65);
+  doc.setFont('helvetica', 'bold'); 
+  const workNatureTruncated = (bill.workNature || '').length > 28 
+    ? (bill.workNature || '').substring(0, 25) + '...' 
+    : (bill.workNature || 'N/A');
+  doc.text(workNatureTruncated, col2X + 25, 65);
+
+  // 2. Financial Summary Section
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(0, 47, 108);
+  doc.text('FINANCIAL SUMMARY STATEMENT', 14, 78);
+
+  const summaryHeaders = ['Transaction Item Description', 'Factor', 'Amount (INR)'];
+  
+  const tdsVal = bill.tds ?? 0;
+  const retVal = bill.retention ?? 0;
+  const gstVal = bill.gst ?? 0;
+  const extraVal = bill.extraWorkAmount ?? 0;
+  const debitVal = bill.debitAmount ?? 0;
+  const holdVal = bill.holdAmount ?? 0;
+  const netAmount = bill.amount + extraVal - tdsVal - retVal + gstVal - debitVal - holdVal;
+
+  const summaryRows = [
+    ['Gross Billing Amount', 'Base Work', 'Rs. ' + bill.amount.toLocaleString('en-IN')],
+    ['TDS Deducted', 'Deduction (-)', tdsVal > 0 ? 'Rs. ' + tdsVal.toLocaleString('en-IN') : 'N/A'],
+    ['Retention Deducted', 'Deduction (-)', retVal > 0 ? 'Rs. ' + retVal.toLocaleString('en-IN') : 'N/A'],
+    ['GST Added', 'Tax Addition (+)', gstVal > 0 ? 'Rs. ' + gstVal.toLocaleString('en-IN') : 'N/A']
+  ];
+
+  if (extraVal > 0) {
+    summaryRows.push(['Extra Work Amount', 'Addition (+)', 'Rs. ' + extraVal.toLocaleString('en-IN')]);
+  }
+  if (debitVal > 0) {
+    summaryRows.push([`Debit Deduction (${bill.debitReason || 'Debit'})`, 'Deduction (-)', 'Rs. ' + debitVal.toLocaleString('en-IN')]);
+  }
+  if (holdVal > 0) {
+    summaryRows.push([`Hold Amount (${bill.holdReason || 'Withheld'})`, 'Deduction (-)', 'Rs. ' + holdVal.toLocaleString('en-IN')]);
+  }
+
+  summaryRows.push(['TOTAL NET RECEIVABLE AMOUNT', 'Net Payable', 'Rs. ' + netAmount.toLocaleString('en-IN')]);
+
+  autoTable(doc, {
+    startY: 81,
+    head: [summaryHeaders],
+    body: summaryRows,
+    theme: 'grid',
+    styles: { fontSize: 8.5, cellPadding: 2, font: 'helvetica' },
+    headStyles: { fillColor: [0, 47, 108], textColor: [255, 255, 255], fontStyle: 'bold' },
+    columnStyles: {
+      0: { cellWidth: 100 },
+      1: { cellWidth: 40, halign: 'center' },
+      2: { cellWidth: 42, halign: 'right', fontStyle: 'bold' }
+    },
+    willDrawCell: (data) => {
+      if (data.row.index === summaryRows.length - 1) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFillColor(230, 245, 233); // light green background for net receivable
+      }
+    }
+  });
+
+  // Calculate next table position
+  // @ts-ignore
+  let currentY = doc.lastAutoTable.finalY + 10;
+
+  // 3. Measurement Items Section
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(0, 47, 108);
+  doc.text('MEASUREMENT SHEET SCHEDULE', 14, currentY);
+  currentY += 4;
+
+  if (!bill.measurementItems || bill.measurementItems.length === 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text('No matching measurement items sheet recorded for this bill.', 14, currentY + 3);
+    currentY += 8;
+  } else {
+    const measureHeaders = ['#', 'Description of Item', 'Unit', 'Rate (Rs.)', 'Qty Executed', 'Amount (Rs.)'];
+    const measureRows = bill.measurementItems.map((item: any, idx: number) => [
+      (idx + 1).toString(),
+      item.description || 'N/A',
+      item.unit || 'N/A',
+      item.rate ? item.rate.toLocaleString('en-IN', { minimumFractionDigits: 1 }) : '0.0',
+      item.qtyExecuted ? item.qtyExecuted.toString() : '0',
+      item.amount ? item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'
+    ]);
+
+    const totalMeasured = bill.measurementItems.reduce((s: number, i: any) => s + (i.amount || 0), 0);
+    measureRows.push([
+      '', 'TOTAL MEASURED WORK AMOUNT', '', '', '', 'Rs. ' + totalMeasured.toLocaleString('en-IN')
+    ]);
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [measureHeaders],
+      body: measureRows,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 1.8, font: 'helvetica' },
+      headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' }, // indigo header
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 95 },
+        2: { cellWidth: 15, halign: 'center' },
+        3: { cellWidth: 20, halign: 'right' },
+        4: { cellWidth: 20, halign: 'right' },
+        5: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }
+      },
+      willDrawCell: (data) => {
+        if (data.row.index === measureRows.length - 1) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFillColor(240, 240, 240);
+        }
+      }
+    });
+
+    // @ts-ignore
+    currentY = doc.lastAutoTable.finalY + 15;
+  }
+
+  // Ensure signatures fit, or put them on next page if space is low
+  if (currentY > pageHeight - 35) {
+    doc.addPage();
+    currentY = 25;
+  }
+
+  // Draw elegant separator line for signatures
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.4);
+  doc.line(14, currentY, pageWidth - 14, currentY);
+  currentY += 10;
+
+  // Signatures block
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 100, 100);
+  
+  doc.text('Prepared By: Billing Engineer', 14, currentY);
+  doc.setFont('helvetica', 'normal');
+  doc.text('________________________________', 14, currentY - 5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Checked & Approved By: Authorized Signatory', pageWidth - 14, currentY, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.text('________________________________', pageWidth - 14, currentY - 5, { align: 'right' });
+
+  // Add small page footer to all pages
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Page ${i} of ${totalPages} | SN Enterprises ERP Billing System`, pageWidth - 14, pageHeight - 6, { align: 'right' });
+    doc.text(`Authenticated Document Copy | Prepared for project: ${projectName}`, 14, pageHeight - 6);
+  }
+
+  return doc.output('bloburl');
+};
+
 export const formatCurrency = (val: number | string) => {
   const num = typeof val === 'string' ? parseFloat(val) : val;
   if (isNaN(num)) return val;

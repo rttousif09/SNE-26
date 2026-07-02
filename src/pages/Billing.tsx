@@ -7,6 +7,7 @@ import { BulkUploadModal } from '../components/BulkUploadModal';
 import { checkBillingDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
+import { exportIndividualBillToPDF, downloadPDF } from '../lib/pdfGenerator';
 import { MeasurementItem, Billing as BillingType } from '../types';
 import {
   ResponsiveContainer,
@@ -31,7 +32,6 @@ export const Billing: React.FC = () => {
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [recordsProjectId, setRecordsProjectId] = useState('');
-  const [recordsBillType, setRecordsBillType] = useState('');
   const [printingBill, setPrintingBill] = useState<BillingType | null>(null);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
 
@@ -204,9 +204,9 @@ export const Billing: React.FC = () => {
     setFormData(prev => {
       const nextFormData = { ...prev, [field]: value };
       
-      if (isAdding && nextFormData.projectId && nextFormData.billType === 'Running Account') {
+      if (isAdding && nextFormData.projectId && (nextFormData.billType || 'Running Account') === 'Running Account') {
         const projectBills = billings
-          .filter(b => b.projectId === nextFormData.projectId && b.billType === 'Running Account')
+          .filter(b => b.projectId === nextFormData.projectId && (b.billType || 'Running Account') === 'Running Account')
           .sort((a, b) => {
              const dateA = new Date(a.certifyDate || a.month).getTime();
              const dateB = new Date(b.certifyDate || b.month).getTime();
@@ -1196,10 +1196,10 @@ export const Billing: React.FC = () => {
     let result = billings;
     
     if (activeTab === 'records') {
-      if (!recordsProjectId || !recordsBillType) {
+      if (!recordsProjectId) {
         return [];
       }
-      result = result.filter(b => b.projectId === recordsProjectId && b.billType === recordsBillType);
+      result = result.filter(b => b.projectId === recordsProjectId);
       
       // Sort serial wise (by certifyDate)
       result = [...result].sort((a, b) => {
@@ -1219,7 +1219,18 @@ export const Billing: React.FC = () => {
     }
     
     return result;
-  }, [billings, searchQuery, projects, recordsProjectId, recordsBillType, activeTab]);
+  }, [billings, searchQuery, projects, recordsProjectId, activeTab]);
+
+  React.useEffect(() => {
+    console.log('[Billing Category State Update]', {
+      activeTab,
+      recordsProjectId,
+      searchQuery,
+      totalBillings: billings.length,
+      filteredBillings: filteredBillings.length,
+      billingsList: billings.map(b => ({ id: b.id, billNo: b.billNo, billType: b.billType, projectId: b.projectId }))
+    });
+  }, [activeTab, recordsProjectId, searchQuery, billings, filteredBillings]);
 
   const displayedTotals = useMemo(() => {
     let gross = 0;
@@ -1301,7 +1312,10 @@ export const Billing: React.FC = () => {
       <div className="flex flex-wrap border-b border-[#8c9ba8] gap-1 mb-3 print:hidden bg-[#eef2f6]/50 p-1 rounded-t">
         <button
           type="button"
-          onClick={() => setActiveTab('records')}
+          onClick={() => {
+            console.log('[Tab Selection Changed] -> records');
+            setActiveTab('records');
+          }}
           className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
             activeTab === 'records'
               ? 'bg-white text-[#0056b3] translate-y-[1px] z-10 font-extrabold'
@@ -1312,7 +1326,10 @@ export const Billing: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('retention')}
+          onClick={() => {
+            console.log('[Tab Selection Changed] -> retention');
+            setActiveTab('retention');
+          }}
           className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
             activeTab === 'retention'
               ? 'bg-white text-orange-600 translate-y-[1px] z-10 font-extrabold'
@@ -1323,7 +1340,10 @@ export const Billing: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('tds')}
+          onClick={() => {
+            console.log('[Tab Selection Changed] -> tds');
+            setActiveTab('tds');
+          }}
           className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
             activeTab === 'tds'
               ? 'bg-white text-red-600 translate-y-[1px] z-10 font-extrabold'
@@ -1334,7 +1354,10 @@ export const Billing: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('debit')}
+          onClick={() => {
+            console.log('[Tab Selection Changed] -> debit');
+            setActiveTab('debit');
+          }}
           className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
             activeTab === 'debit'
               ? 'bg-white text-purple-600 translate-y-[1px] z-10 font-extrabold'
@@ -1345,7 +1368,10 @@ export const Billing: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('hold')}
+          onClick={() => {
+            console.log('[Tab Selection Changed] -> hold');
+            setActiveTab('hold');
+          }}
           className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
             activeTab === 'hold'
               ? 'bg-white text-amber-600 translate-y-[1px] z-10 font-extrabold'
@@ -1356,7 +1382,10 @@ export const Billing: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('gst')}
+          onClick={() => {
+            console.log('[Tab Selection Changed] -> gst');
+            setActiveTab('gst');
+          }}
           className={`px-2.5 py-1 text-[10px] uppercase font-sans tracking-wide transition-all duration-150 border border-[#8c9ba8] border-b-0 rounded-t cursor-pointer ${
             activeTab === 'gst'
               ? 'bg-white text-emerald-600 translate-y-[1px] z-10 font-extrabold'
@@ -1389,28 +1418,16 @@ export const Billing: React.FC = () => {
             <select
               className="sap-input text-[11px] w-48"
               value={recordsProjectId}
-              onChange={e => setRecordsProjectId(e.target.value)}
+              onChange={e => {
+                console.log('[Records Project Selection Changed] ->', e.target.value);
+                setRecordsProjectId(e.target.value);
+              }}
             >
               <option value="">Select Project</option>
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-
-            {recordsProjectId && (
-              <select
-                className="sap-input text-[11px] w-40"
-                value={recordsBillType}
-                onChange={e => setRecordsBillType(e.target.value)}
-              >
-                <option value="">Select Bill Type</option>
-                <option value="Running Account">Running Account</option>
-                <option value="Final Bill">Final Bill</option>
-                <option value="Extra Item Bill">Extra Item Bill</option>
-                <option value="Additional Work Bill">Additional Work Bill</option>
-                <option value="Manpower Supply Bill">Manpower Supply Bill</option>
-              </select>
-            )}
           </div>
           
           <input
@@ -2115,7 +2132,7 @@ export const Billing: React.FC = () => {
                   </thead>
                   <tbody>
                     {billings
-                      .filter(b => b.projectId === formData.projectId && b.billType === 'Running Account' && b.id !== editingId)
+                      .filter(b => b.projectId === formData.projectId && (b.billType || 'Running Account') === 'Running Account' && b.id !== editingId)
                       .sort((a, b) => new Date(b.certifyDate || b.month).getTime() - new Date(a.certifyDate || a.month).getTime())
                       .map(b => (
                         <tr key={b.id} className="border-b border-gray-50 hover:bg-blue-50/30">
@@ -2127,7 +2144,7 @@ export const Billing: React.FC = () => {
                         </tr>
                       ))
                     }
-                    {billings.filter(b => b.projectId === formData.projectId && b.billType === 'Running Account' && b.id !== editingId).length === 0 && (
+                    {billings.filter(b => b.projectId === formData.projectId && (b.billType || 'Running Account') === 'Running Account' && b.id !== editingId).length === 0 && (
                       <tr>
                         <td colSpan={3} className="p-3 text-center text-gray-400 italic">No previous RA bills found for this project.</td>
                       </tr>
@@ -2330,7 +2347,7 @@ export const Billing: React.FC = () => {
           {filteredBillings.length === 0 ? (
             <tr>
               <td colSpan={15} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-500">
-                {!recordsProjectId ? 'Please select a Project to view billing records.' : !recordsBillType ? 'Please select a Bill Type to view billing records.' : 'No billing records found.'}
+                {!recordsProjectId ? 'Please select a Project to view billing records.' : 'No billing records found.'}
               </td>
             </tr>
           ) : (
@@ -3318,6 +3335,13 @@ export const Billing: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto no-print-backdrop">
           <style dangerouslySetInnerHTML={{__html: `
             @media print {
+              body {
+                background: white !important;
+                color: black !important;
+                font-family: 'Inter', -apple-system, sans-serif !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
               body * {
                 visibility: hidden !important;
               }
@@ -3331,10 +3355,38 @@ export const Billing: React.FC = () => {
                 width: 100% !important;
                 background: white !important;
                 color: black !important;
-                padding: 10px !important;
+                padding: 15mm 10mm !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
               }
-              .no-print {
+              .no-print, .no-print-backdrop {
                 display: none !important;
+              }
+              table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                page-break-inside: auto !important;
+              }
+              tr {
+                page-break-inside: avoid !important;
+                page-break-after: auto !important;
+              }
+              thead {
+                display: table-header-group !important;
+              }
+              tfoot {
+                display: table-footer-group !important;
+              }
+              th, td {
+                border: 1px solid #cbd5e1 !important;
+                padding: 6px 8px !important;
+                font-size: 10pt !important;
+              }
+              th {
+                background-color: #f1f5f9 !important;
+                font-weight: bold !important;
+                color: #000 !important;
               }
             }
           `}} />
@@ -3513,6 +3565,20 @@ export const Billing: React.FC = () => {
                 className="sap-btn-secondary py-1 px-3 cursor-pointer text-[11px]"
               >
                 Close
+              </button>
+              <button
+                onClick={() => {
+                  const url = exportIndividualBillToPDF(
+                    printingBill,
+                    getProjectName(printingBill.projectId),
+                    user?.name || user?.username || 'Admin'
+                  );
+                  downloadPDF(url, `Bill_${printingBill.billNo || 'Certificate'}.pdf`);
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-sm flex items-center space-x-1 cursor-pointer shadow-xs transition-colors"
+              >
+                <Download size={12} />
+                <span>Export Pristine PDF</span>
               </button>
               <button
                 onClick={() => window.print()}
