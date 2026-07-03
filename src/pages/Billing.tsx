@@ -208,9 +208,9 @@ export const Billing: React.FC = () => {
         const projectBills = billings
           .filter(b => b.projectId === nextFormData.projectId && (b.billType || 'Running Account') === 'Running Account')
           .sort((a, b) => {
-             const dateA = new Date(a.certifyDate || a.month).getTime();
-             const dateB = new Date(b.certifyDate || b.month).getTime();
-             return dateA === dateB ? a.id.localeCompare(b.id) : dateA - dateB;
+             const srA = String(a.srNo || '').trim();
+             const srB = String(b.srNo || '').trim();
+             return srA.localeCompare(srB, undefined, { numeric: true, sensitivity: 'base' });
           });
           
         if (projectBills.length > 0) {
@@ -1201,11 +1201,11 @@ export const Billing: React.FC = () => {
       }
       result = result.filter(b => b.projectId === recordsProjectId);
       
-      // Sort serial wise (by certifyDate)
+      // Sort serial wise (by srNo naturally)
       result = [...result].sort((a, b) => {
-        const dateA = new Date(a.certifyDate || a.month).getTime();
-        const dateB = new Date(b.certifyDate || b.month).getTime();
-        return dateA === dateB ? a.id.localeCompare(b.id) : dateA - dateB;
+        const srA = String(a.srNo || '').trim();
+        const srB = String(b.srNo || '').trim();
+        return srA.localeCompare(srB, undefined, { numeric: true, sensitivity: 'base' });
       });
     }
 
@@ -2133,7 +2133,11 @@ export const Billing: React.FC = () => {
                   <tbody>
                     {billings
                       .filter(b => b.projectId === formData.projectId && (b.billType || 'Running Account') === 'Running Account' && b.id !== editingId)
-                      .sort((a, b) => new Date(b.certifyDate || b.month).getTime() - new Date(a.certifyDate || a.month).getTime())
+                      .sort((a, b) => {
+                        const srA = String(a.srNo || '').trim();
+                        const srB = String(b.srNo || '').trim();
+                        return srB.localeCompare(srA, undefined, { numeric: true, sensitivity: 'base' });
+                      })
                       .map(b => (
                         <tr key={b.id} className="border-b border-gray-50 hover:bg-blue-50/30">
                           <td className="p-1.5">{b.certifyDate ? new Date(b.certifyDate).toLocaleDateString('en-IN') : b.month}</td>

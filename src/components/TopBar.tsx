@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Play, Square, Pause, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy, Settings } from 'lucide-react';
+import { Download, Upload, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy, Settings } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 import { useAppContext } from '../store';
 import { exportConsolidatedSitesReportToPDF, downloadPDF } from '../lib/pdfGenerator';
@@ -12,9 +12,25 @@ interface TopBarProps {
   showFKeysBar?: boolean;
   onNavigate?: (tab: string) => void;
   onLock?: () => void;
+  onGoBack?: () => void;
+  onGoForward?: () => void;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onToggleFKeysBar, showFKeysBar = true, onNavigate, onLock }) => {
+export const TopBar: React.FC<TopBarProps> = ({ 
+  user, 
+  onLogout, 
+  onShowHelp, 
+  onToggleFKeysBar, 
+  showFKeysBar = true, 
+  onNavigate, 
+  onLock,
+  onGoBack,
+  onGoForward,
+  canGoBack = false,
+  canGoForward = false
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isMsgOpen, setIsMsgOpen] = useState(false);
@@ -25,6 +41,95 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
+
+  // Database Backup Import/Export Refs & Handlers
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBackupDatabase = () => {
+    try {
+      const backupData = {
+        projects: erpStore.projects,
+        workers: erpStore.workers,
+        billings: erpStore.billings,
+        clientPayments: erpStore.clientPayments,
+        kharchis: erpStore.kharchis,
+        advances: erpStore.advances,
+        workerPayments: erpStore.workerPayments,
+        approvals: erpStore.approvals,
+        kharchiApprovals: erpStore.kharchiApprovals,
+        paymentSheetApprovals: erpStore.paymentSheetApprovals,
+        advanceSheetApprovals: erpStore.advanceSheetApprovals,
+        expensesLedger: erpStore.expensesLedger,
+        messBookings: erpStore.messBookings,
+        dlrs: erpStore.dlrs,
+        materialItems: erpStore.materialItems,
+        materialIssues: erpStore.materialIssues,
+        materialReturns: erpStore.materialReturns,
+        materialPurchases: erpStore.materialPurchases,
+        labourPlannings: erpStore.labourPlannings,
+        workerTransfers: erpStore.workerTransfers,
+        assets: erpStore.assets,
+        assetTransfers: erpStore.assetTransfers,
+        assetMaintenances: erpStore.assetMaintenances,
+        workerLedger: erpStore.workerLedger,
+        workerHolds: erpStore.workerHolds,
+        workerRecoveryAuditTrail: erpStore.workerRecoveryAuditTrail,
+        attendance: erpStore.attendance,
+        trackedBills: erpStore.trackedBills,
+        billTimelines: erpStore.billTimelines,
+        financialYears: erpStore.financialYears,
+        staff: erpStore.staff,
+        floorAbstracts: erpStore.floorAbstracts,
+        activityLogs: erpStore.activityLogs,
+        numberingSettings: erpStore.numberingSettings,
+        numberingAuditLogs: erpStore.numberingAuditLogs,
+        boqs: erpStore.boqs,
+        boqAuditLogs: erpStore.boqAuditLogs
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `SN_Enterprise_ERP_Backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      
+      window.dispatchEvent(new CustomEvent('show-success-toast', { 
+        detail: { message: "Database Backup saved successfully (JSON)!" } 
+      }));
+    } catch (e) {
+      console.error(e);
+      alert("Error generating backup: " + e);
+    }
+  };
+
+  const handleImportBackupClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      
+      const success = await erpStore.importBackup(parsed);
+      if (success) {
+        window.dispatchEvent(new CustomEvent('show-success-toast', { 
+          detail: { message: "Database Backup imported successfully!" } 
+        }));
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        alert("Failed to import database. Please verify JSON schema.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error parsing backup JSON file. Ensure file is a valid JSON backup.");
+    }
+  };
 
   const [showMyProfile, setShowMyProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -1155,22 +1260,85 @@ export const TopBar: React.FC<TopBarProps> = ({ user, onLogout, onShowHelp, onTo
         </div>
 
         <div className="flex items-center space-x-1 border-r border-[#8c9ba8] pr-1 mr-1">
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><File size={14} className="text-[#0056b3]" /></button>
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><FolderOpen size={14} className="text-yellow-500" /></button>
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Save size={14} className="text-[#0056b3]" /></button>
+          {/* File input for JSON backup import */}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept=".json" 
+            onChange={handleFileChange} 
+          />
+          <button 
+            title="Go to Projects screen (Quick Add)" 
+            onClick={() => onNavigate && onNavigate('projects')}
+            className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm cursor-pointer"
+          >
+            <File size={14} className="text-[#0056b3]" />
+          </button>
+          <button 
+            title="Open DMS Document Center" 
+            onClick={() => onNavigate && onNavigate('dms')}
+            className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm cursor-pointer"
+          >
+            <FolderOpen size={14} className="text-yellow-500" />
+          </button>
+          <button 
+            title="Download Complete Database Backup (JSON)" 
+            onClick={handleBackupDatabase}
+            className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm cursor-pointer"
+          >
+            <Save size={14} className="text-[#0056b3]" />
+          </button>
         </div>
         <div className="flex items-center space-x-1 border-r border-[#8c9ba8] pr-1 mr-1">
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowLeft size={14} className="text-green-700" /></button>
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><ArrowRight size={14} className="text-green-700" /></button>
-          <button title="Print view" onClick={() => window.print()} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Printer size={14} className="text-gray-700" /></button>
-          <button title={darkMode ? "Switch to Default SAP Blue Theme" : "Switch to High-Contrast Dark Theme (Optimized for Long-Duration Data Entry)"} onClick={toggleDarkMode} className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm">
+          <button 
+            title="Go Back in Tab History" 
+            onClick={onGoBack}
+            disabled={!canGoBack}
+            className={`p-1 border border-transparent rounded-sm ${canGoBack ? 'hover:bg-[#d9e4f1] hover:border-[#8c9ba8] cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
+          >
+            <ArrowLeft size={14} className="text-green-700" />
+          </button>
+          <button 
+            title="Go Forward in Tab History" 
+            onClick={onGoForward}
+            disabled={!canGoForward}
+            className={`p-1 border border-transparent rounded-sm ${canGoForward ? 'hover:bg-[#d9e4f1] hover:border-[#8c9ba8] cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
+          >
+            <ArrowRight size={14} className="text-green-700" />
+          </button>
+          <button 
+            title="Print view" 
+            onClick={() => window.print()} 
+            className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm cursor-pointer"
+          >
+            <Printer size={14} className="text-gray-700" />
+          </button>
+          <button 
+            title={darkMode ? "Switch to Default SAP Blue Theme" : "Switch to High-Contrast Dark Theme (Optimized for Long-Duration Data Entry)"} 
+            onClick={toggleDarkMode} 
+            className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm cursor-pointer"
+          >
             {darkMode ? <Sun size={14} className="text-amber-500" /> : <Moon size={14} className="text-gray-700" />}
           </button>
         </div>
         <div className="flex items-center space-x-1">
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Play size={14} className="text-green-600" /></button>
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Pause size={14} className="text-yellow-600" /></button>
-          <button className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm"><Square size={14} className="text-red-600" /></button>
+          <button 
+            title="Import Database JSON Backup" 
+            onClick={handleImportBackupClick}
+            className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm cursor-pointer flex items-center gap-1 px-1.5"
+          >
+            <Upload size={14} className="text-blue-600" />
+            <span className="font-mono text-[9px] font-bold text-blue-700 uppercase tracking-tight">Import</span>
+          </button>
+          <button 
+            title="Download Consolidated Sites PDF Report" 
+            onClick={handleDirectDownload}
+            className="p-1 hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent rounded-sm cursor-pointer flex items-center gap-1 px-1.5"
+          >
+            <Download size={14} className="text-green-600" />
+            <span className="font-mono text-[9px] font-bold text-green-700 uppercase tracking-tight">Export PDF</span>
+          </button>
         </div>
       </div>
     </div>

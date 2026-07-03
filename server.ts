@@ -2958,6 +2958,14 @@ async function startServer() {
       try {
         dlrs = db.prepare("SELECT * FROM dlrs").all();
       } catch(e) {}
+      let trackedBills = [];
+      try {
+        trackedBills = db.prepare("SELECT * FROM tracked_bills").all();
+      } catch(e) {}
+      let billTimelines = [];
+      try {
+        billTimelines = db.prepare("SELECT * FROM bill_timeline").all();
+      } catch(e) {}
  
        res.json({
          projects,
@@ -2979,12 +2987,14 @@ async function startServer() {
           paymentSheetApprovals,
           expensesLedger,
           messBookings,
-          dlrs
+          dlrs,
+          trackedBills,
+          billTimelines
        });
-     } catch (err: any) {
-       res.status(500).json({ error: err.message });
-     }
-   });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
 
   app.post("/api/backup/import", (req, res) => {
     const backup = req.body;
@@ -3028,22 +3038,45 @@ async function startServer() {
 
       if (backup.billings && Array.isArray(backup.billings)) {
         const insert = db.prepare(`
-          INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO billings (
+            id, srNo, projectId, billNo, workNature, amount, month, certifyDate, 
+            tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, 
+            billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType, 
+            tdsCertificateReceived, tdsCertificatePending, gstStatus
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const b of backup.billings) {
+          let mItemsStr = null;
+          if (b.measurementItems) {
+            mItemsStr = typeof b.measurementItems === 'string' 
+              ? b.measurementItems 
+              : JSON.stringify(b.measurementItems);
+          }
           insert.run(
             b.id,
             b.srNo || null,
             b.projectId,
             b.billNo,
             b.workNature,
-            parseFloat(b.amount),
+            parseFloat(b.amount || 0),
             b.month,
             b.certifyDate,
             parseFloat(b.tds || 0),
             parseFloat(b.retention || 0),
-            parseFloat(b.gst || 0)
+            parseFloat(b.gst || 0),
+            parseFloat(b.debitAmount || 0),
+            b.debitReason || null,
+            parseFloat(b.holdAmount || 0),
+            b.holdReason || null,
+            b.billType || null,
+            mItemsStr,
+            b.hardCopyFile || null,
+            b.hardCopyFileName || null,
+            b.hardCopyFileType || null,
+            b.tdsCertificateReceived !== undefined ? b.tdsCertificateReceived : 0,
+            b.tdsCertificatePending !== undefined ? b.tdsCertificatePending : 1,
+            b.gstStatus || null
           );
         }
       }

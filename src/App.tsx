@@ -56,6 +56,44 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   const [tabProps, setTabProps] = useState<any>({});
   const [isMobile, setIsMobile] = useState(false);
 
+  // Navigation tab history
+  const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
+  const [historyIndex, setHistoryIndex] = useState<number>(0);
+  const [isNavigatingHistory, setIsNavigatingHistory] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isNavigatingHistory) return;
+    setTabHistory(prevHistory => {
+      const nextHistory = prevHistory.slice(0, historyIndex + 1);
+      if (nextHistory[nextHistory.length - 1] === currentTab) {
+        return prevHistory;
+      }
+      const updated = [...nextHistory, currentTab];
+      setHistoryIndex(updated.length - 1);
+      return updated;
+    });
+  }, [currentTab, isNavigatingHistory, historyIndex]);
+
+  const handleGoBack = () => {
+    if (historyIndex > 0) {
+      setIsNavigatingHistory(true);
+      const newIdx = historyIndex - 1;
+      setHistoryIndex(newIdx);
+      setCurrentTab(tabHistory[newIdx]);
+      setTimeout(() => setIsNavigatingHistory(false), 50);
+    }
+  };
+
+  const handleGoForward = () => {
+    if (historyIndex < tabHistory.length - 1) {
+      setIsNavigatingHistory(true);
+      const newIdx = historyIndex + 1;
+      setHistoryIndex(newIdx);
+      setCurrentTab(tabHistory[newIdx]);
+      setTimeout(() => setIsNavigatingHistory(false), 50);
+    }
+  };
+
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
@@ -176,13 +214,43 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       }
 
       const backupData = {
-        projects: erp.projects,
-        workers: erp.workers,
-        billings: erp.billings,
-        clientPayments: erp.clientPayments,
-        kharchis: erp.kharchis,
-        advances: erp.advances,
-        workerPayments: erp.workerPayments
+        projects: erp.projects || [],
+        workers: erp.workers || [],
+        billings: erp.billings || [],
+        clientPayments: erp.clientPayments || [],
+        kharchis: erp.kharchis || [],
+        advances: erp.advances || [],
+        workerPayments: erp.workerPayments || [],
+        approvals: erp.approvals || [],
+        kharchiApprovals: erp.kharchiApprovals || [],
+        paymentSheetApprovals: erp.paymentSheetApprovals || [],
+        advanceSheetApprovals: erp.advanceSheetApprovals || [],
+        expensesLedger: erp.expensesLedger || [],
+        messBookings: erp.messBookings || [],
+        dlrs: erp.dlrs || [],
+        materialItems: erp.materialItems || [],
+        materialIssues: erp.materialIssues || [],
+        materialReturns: erp.materialReturns || [],
+        materialPurchases: erp.materialPurchases || [],
+        labourPlannings: erp.labourPlannings || [],
+        workerTransfers: erp.workerTransfers || [],
+        assets: erp.assets || [],
+        assetTransfers: erp.assetTransfers || [],
+        assetMaintenances: erp.assetMaintenances || [],
+        workerLedger: erp.workerLedger || [],
+        workerHolds: erp.workerHolds || [],
+        workerRecoveryAuditTrail: erp.workerRecoveryAuditTrail || [],
+        attendance: erp.attendance || [],
+        trackedBills: erp.trackedBills || [],
+        billTimelines: erp.billTimelines || [],
+        financialYears: erp.financialYears || [],
+        staff: erp.staff || [],
+        floorAbstracts: erp.floorAbstracts || [],
+        activityLogs: erp.activityLogs || [],
+        numberingSettings: erp.numberingSettings || [],
+        numberingAuditLogs: erp.numberingAuditLogs || [],
+        boqs: erp.boqs || [],
+        boqAuditLogs: erp.boqAuditLogs || []
       };
       
       const metadata = {
@@ -490,6 +558,10 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           showFKeysBar={showFKeysBar}
           onNavigate={setCurrentTab}
           onLock={() => setIsSessionLocked(true)}
+          onGoBack={handleGoBack}
+          onGoForward={handleGoForward}
+          canGoBack={historyIndex > 0}
+          canGoForward={historyIndex < tabHistory.length - 1}
         />
       </motion.div>
       <div className="flex flex-1 overflow-hidden">
@@ -777,13 +849,43 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
                       <button
                         onClick={() => {
                           const backupData = {
-                            projects: erp.projects,
-                            workers: erp.workers,
-                            billings: erp.billings,
-                            clientPayments: erp.clientPayments,
-                            kharchis: erp.kharchis,
-                            advances: erp.advances,
-                            workerPayments: erp.workerPayments
+                            projects: erp.projects || [],
+                            workers: erp.workers || [],
+                            billings: erp.billings || [],
+                            clientPayments: erp.clientPayments || [],
+                            kharchis: erp.kharchis || [],
+                            advances: erp.advances || [],
+                            workerPayments: erp.workerPayments || [],
+                            approvals: erp.approvals || [],
+                            kharchiApprovals: erp.kharchiApprovals || [],
+                            paymentSheetApprovals: erp.paymentSheetApprovals || [],
+                            advanceSheetApprovals: erp.advanceSheetApprovals || [],
+                            expensesLedger: erp.expensesLedger || [],
+                            messBookings: erp.messBookings || [],
+                            dlrs: erp.dlrs || [],
+                            materialItems: erp.materialItems || [],
+                            materialIssues: erp.materialIssues || [],
+                            materialReturns: erp.materialReturns || [],
+                            materialPurchases: erp.materialPurchases || [],
+                            labourPlannings: erp.labourPlannings || [],
+                            workerTransfers: erp.workerTransfers || [],
+                            assets: erp.assets || [],
+                            assetTransfers: erp.assetTransfers || [],
+                            assetMaintenances: erp.assetMaintenances || [],
+                            workerLedger: erp.workerLedger || [],
+                            workerHolds: erp.workerHolds || [],
+                            workerRecoveryAuditTrail: erp.workerRecoveryAuditTrail || [],
+                            attendance: erp.attendance || [],
+                            trackedBills: erp.trackedBills || [],
+                            billTimelines: erp.billTimelines || [],
+                            financialYears: erp.financialYears || [],
+                            staff: erp.staff || [],
+                            floorAbstracts: erp.floorAbstracts || [],
+                            activityLogs: erp.activityLogs || [],
+                            numberingSettings: erp.numberingSettings || [],
+                            numberingAuditLogs: erp.numberingAuditLogs || [],
+                            boqs: erp.boqs || [],
+                            boqAuditLogs: erp.boqAuditLogs || []
                           };
                           const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backupData, null, 2))}`;
                           const a = document.createElement('a');
