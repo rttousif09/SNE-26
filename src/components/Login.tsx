@@ -35,7 +35,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-b from-[#f2f6fa] to-[#cbd8e6] font-sans text-xs">
+    <div className="min-h-screen flex flex-col justify-between bg-[#f2f6fa] font-sans text-[11px]">
       
       {/* Brand Header */}
       <header className="bg-[#002f6c] text-white px-6 py-2.5 flex items-center justify-between border-b-2 border-[#8c9ba8] shadow-md">
@@ -53,80 +53,60 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       </header>
 
       {/* Main Login Window */}
-      <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-[420px] bg-[#eef2f6] border border-[#8c9ba8] p-1 shadow-2xl rounded-sm">
-          {/* SAP Window Title Bar */}
-          <div className="bg-gradient-to-r from-[#0056b3] to-[#002f6c] text-white px-2 py-1.5 flex items-center justify-between select-none">
-            <span className="font-bold flex items-center space-x-1.5 text-[11px]">
-              <Server size={12} className="text-blue-200" />
-              <span>SN Enterprise - SAP Logon (ERP_PRD)</span>
-            </span>
+      <main className="flex-1 flex flex-col p-4 max-w-4xl mx-auto w-full space-y-4">
+        {error && (
+          <div className="p-2 border border-red-500 bg-red-50 text-red-700 flex items-start space-x-2 text-[11px] font-bold shadow-sm">
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <div>{error}</div>
           </div>
+        )}
 
-          <form onSubmit={handleSubmit} className="p-4 bg-white border border-[#8c9ba8] border-t-0 space-y-4">
-            <div className="text-center pb-2 border-b border-gray-200">
-              <span className="font-bold text-[#002f6c] text-sm uppercase tracking-wide">User Identification</span>
-              <p className="text-[10px] text-gray-500 mt-0.5">Please enter your system access credentials.</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="border border-[#8baac7] bg-[#f9fbfd]">
+            <div className="bg-[#d9eaf7] border-b border-[#8baac7] px-3 py-1.5 font-bold text-black text-[12px]">
+              System Logon
             </div>
-
-            {error && (
-              <div className="p-2 border border-red-500 bg-red-50 text-red-700 flex items-start space-x-2 animate-pulse text-[11px]">
-                <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                <div className="font-semibold">{error}</div>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div className="flex flex-col space-y-1">
-                <label className="font-semibold text-[#002f6c]">User ID:</label>
-                <div className="relative">
-                  <User size={13} className="absolute left-2.5 top-2 text-gray-500" />
+            
+            <div className="p-4">
+              <div className="grid grid-cols-[200px_1fr] items-center gap-y-3">
+                <label className="font-bold text-black text-[12px]">
+                  Enter User Id / Login Id:<span className="text-red-700">*</span>
+                </label>
+                <div className="flex items-center space-x-2">
                   <input
                     required
                     type="text"
                     id="login_userid"
-                    className="sap-input w-full pl-7.5 py-1 text-[11px] font-mono placeholder-gray-400"
-                    placeholder="Enter User ID"
+                    className="border border-[#8baac7] bg-[#dae8f5] px-2 py-1 focus:outline-none focus:border-black focus:bg-white text-[12px] w-[250px]"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                   />
                 </div>
-              </div>
 
-              <div className="flex flex-col space-y-1">
-                <label className="font-semibold text-[#002f6c]">Password:</label>
-                <div className="relative">
-                  <Lock size={13} className="absolute left-2.5 top-2 text-gray-500" />
+                <label className="font-bold text-black text-[12px]">
+                  Provide Password:<span className="text-red-700">*</span>
+                </label>
+                <div className="flex items-center space-x-2">
                   <input
                     required
                     type="password"
                     id="login_password"
-                    className="sap-input w-full pl-7.5 py-1 text-[11px] font-mono placeholder-gray-400"
-                    placeholder="Enter Password"
+                    className="border border-[#8baac7] bg-[#fceb8d] px-2 py-1 focus:outline-none focus:border-black text-[12px] w-[250px]"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                  <button type="submit" className="sap-btn bg-gradient-to-b from-[#fbf8e8] to-[#f4e2a1] font-bold px-4 py-1 text-black">
+                    Proceed
+                  </button>
+                </div>
+                
+                <div className="col-span-2 text-red-700 italic mt-2 text-[12px]">
+                  Fields marked with an asterisk (*) are required
                 </div>
               </div>
             </div>
-
-            <div className="pt-3 flex justify-end space-x-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => { setUsername(''); setPassword(''); setError(null); }}
-                className="sap-btn font-normal text-gray-700 hover:text-black py-1 px-4 text-[11px]"
-              >
-                Reset Fields
-              </button>
-              <button
-                type="submit"
-                className="sap-btn font-semibold text-[#002f6c] bg-blue-50 border-[#0056b3] hover:bg-blue-100 py-1 px-5 text-[11px]"
-              >
-                Logon
-              </button>
-            </div>
-          </form>
-        </div>
+          </div>
+        </form>
       </main>
 
       {/* Footer bar */}

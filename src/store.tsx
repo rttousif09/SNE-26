@@ -224,14 +224,7 @@ const initialState: AppState = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUserState] = useState<AppContextType['user']>(() => {
-    try {
-      const saved = localStorage.getItem('erp_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [user, setUserState] = useState<AppContextType['user']>(null);
 
   const setUser = (usr: AppContextType['user']) => {
     if (usr) {
