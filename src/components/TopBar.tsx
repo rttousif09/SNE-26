@@ -1,11 +1,22 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Download, Upload, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy, Settings } from 'lucide-react';
+import { Download, Upload, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy, Settings, Star, ShieldAlert } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 import { useAppContext } from '../store';
 import { exportConsolidatedSitesReportToPDF, downloadPDF } from '../lib/pdfGenerator';
+import { 
+  getTCodeList, 
+  addRecentTCode, 
+  removeRecentTCode, 
+  getRecentTCodes, 
+  getFavoriteTCodes, 
+  toggleFavoriteTCode, 
+  logTCodeExecution, 
+  checkUserPrivilege, 
+  TCode 
+} from '../lib/tcodeService';
 
 interface TopBarProps {
-  user: { username: string; name: string } | null;
+  user: { username: string; name: string; role?: string } | null;
   onLogout: () => void;
   onShowHelp?: () => void;
   onToggleFKeysBar?: () => void;
@@ -202,6 +213,15 @@ export const TopBar: React.FC<TopBarProps> = ({
   const searchDropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // SAP T-Code System States
+  const [favorites, setFavorites] = useState<string[]>(() => getFavoriteTCodes());
+  const [recents, setRecents] = useState<string[]>(() => getRecentTCodes());
+  const [unauthorizedTCode, setUnauthorizedTCode] = useState<string | null>(null);
+  const [invalidTCode, setInvalidTCode] = useState<string | null>(null);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(0);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [tempTypedCommand, setTempTypedCommand] = useState<string>('');
+
   const [commandHistory, setCommandHistory] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('sap-command-history');
@@ -210,9 +230,6 @@ export const TopBar: React.FC<TopBarProps> = ({
       return [];
     }
   });
-
-  const [historyIndex, setHistoryIndex] = useState<number>(-1);
-  const [tempTypedCommand, setTempTypedCommand] = useState<string>('');
 
   const addToHistory = (cmdText: string) => {
     if (!cmdText || !cmdText.trim()) return;
@@ -233,8 +250,8 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   useEffect(() => {
     const handleShortcut = (e: KeyboardEvent) => {
-      // Focus command field on Ctrl+K, Cmd+K, or F11
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      // Focus command field on Ctrl+K, Ctrl+/, Cmd+K, or F11
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || e.key === '/')) {
         e.preventDefault();
         inputRef.current?.focus();
         setIsSearchFocused(true);
@@ -250,148 +267,201 @@ export const TopBar: React.FC<TopBarProps> = ({
     };
   }, []);
 
-  // Compute matching results across projects, workers, bills
-  const searchResults = useMemo(() => {
-    if (!command.trim()) return { projects: [], workers: [], bills: [], restrictTab: '' };
+  // Compute unified autocomplete suggestions (T-Codes + Live Records)
+  const suggestions = useMemo(() => {
+    const q = command.trim().toLowerCase();
+    const tcodes = getTCodeList().filter(t => t.isActive);
 
-    let lookupQuery = command.trim();
-    let restrictTab = '';
+    if (!q) return [];
 
-    // Handle SAP command /n prefix
-    if (lookupQuery.startsWith('/n')) {
-      const parts = lookupQuery.slice(2).trim().split(/\s+/);
-      const mod = parts[0]?.toLowerCase() || '';
-      if (mod) {
-        if (mod.startsWith('proj')) restrictTab = 'projects';
-        else if (mod.startsWith('work')) restrictTab = 'workers';
-        else if (mod.startsWith('bill') || mod === 'billing') restrictTab = 'bill-tracking';
-        else if (mod.startsWith('dash') || mod === 'home') restrictTab = 'dashboard';
-        else if (mod.startsWith('appv') || mod === 'approv') restrictTab = 'approvals';
-        else if (mod.startsWith('exp')) restrictTab = 'expenses';
-        else if (mod === 'dlr') restrictTab = 'dlr';
-        else if (mod.startsWith('mat')) restrictTab = 'materials';
-        
-        lookupQuery = parts.slice(1).join(' ').trim();
-      }
+    let searchVal = q;
+    if (q.startsWith('/n')) {
+      searchVal = q.slice(2).trim();
     }
 
-    if (!lookupQuery) {
-      if (restrictTab === 'projects') {
-        return { projects: (projects || []).slice(0, 5), workers: [], bills: [], restrictTab };
-      }
-      if (restrictTab === 'workers') {
-        return { projects: [], workers: (workers || []).slice(0, 5), bills: [], restrictTab };
-      }
-      if (restrictTab === 'bill-tracking') {
-        return { projects: [], workers: [], bills: (trackedBills || []).slice(0, 5), restrictTab };
-      }
-      return { projects: [], workers: [], bills: [], restrictTab };
+    if (!searchVal) {
+      // Just "/n" typed, list all active T-Codes
+      return tcodes.map(t => ({
+        type: 'tcode' as const,
+        code: t.code,
+        name: t.name,
+        description: t.description,
+        tab: t.tab,
+        props: t.props
+      }));
     }
 
-    const q = lookupQuery.toLowerCase();
+    const matches: {
+      type: 'tcode' | 'project' | 'worker' | 'bill';
+      code?: string;
+      name: string;
+      description?: string;
+      tab?: string;
+      props?: any;
+      recordId?: string;
+    }[] = [];
 
-    const matchedProjects = (projects || []).filter(p => 
-      p.name.toLowerCase().includes(q) || 
-      (p.clientName || '').toLowerCase().includes(q) ||
-      p.address.toLowerCase().includes(q)
-    ).slice(0, 5);
+    // Match T-Codes
+    tcodes.forEach(t => {
+      if (
+        t.code.toLowerCase().includes(searchVal) ||
+        t.name.toLowerCase().includes(searchVal) ||
+        t.description.toLowerCase().includes(searchVal) ||
+        t.module.toLowerCase().includes(searchVal)
+      ) {
+        matches.push({
+          type: 'tcode',
+          code: t.code,
+          name: t.name,
+          description: t.description,
+          tab: t.tab,
+          props: t.props
+        });
+      }
+    });
 
-    const matchedWorkers = (workers || []).filter(w => 
-      w.name.toLowerCase().includes(q) || 
-      w.workerId.toLowerCase().includes(q) || 
-      w.designation.toLowerCase().includes(q)
-    ).slice(0, 5);
+    // Match Projects
+    (projects || []).forEach(p => {
+      if (p.name.toLowerCase().includes(searchVal) || (p.clientName || '').toLowerCase().includes(searchVal)) {
+        matches.push({
+          type: 'project',
+          recordId: p.id,
+          name: p.name,
+          description: `Project: ${p.name} (Client: ${p.clientName || 'N/A'})`,
+          tab: 'projects',
+          props: { searchQuery: p.name }
+        });
+      }
+    });
 
-    const matchedBills = (trackedBills || []).filter(b => 
-      b.billNo.toLowerCase().includes(q) || 
-      b.clientName.toLowerCase().includes(q) || 
-      (b.remarks || '').toLowerCase().includes(q)
-    ).slice(0, 5);
+    // Match Workers
+    (workers || []).forEach(w => {
+      if (w.name.toLowerCase().includes(searchVal) || w.workerId.toLowerCase().includes(searchVal)) {
+        matches.push({
+          type: 'worker',
+          recordId: w.id,
+          name: w.name,
+          description: `Worker: ${w.name} (${w.designation || 'Labour'}) - ID: ${w.workerId}`,
+          tab: 'workers',
+          props: { initialWorkerId: w.id, initialView: 'list' }
+        });
+      }
+    });
 
-    return {
-      projects: restrictTab && restrictTab !== 'projects' ? [] : matchedProjects,
-      workers: restrictTab && restrictTab !== 'workers' ? [] : matchedWorkers,
-      bills: restrictTab && restrictTab !== 'bill-tracking' ? [] : matchedBills,
-      restrictTab
-    };
+    // Match Bills
+    (trackedBills || []).forEach(b => {
+      if (b.billNo.toLowerCase().includes(searchVal) || b.clientName.toLowerCase().includes(searchVal)) {
+        matches.push({
+          type: 'bill',
+          recordId: b.id,
+          name: `Bill: #${b.billNo}`,
+          description: `RA Bill Amount: ₹${b.billAmount || 0} - Status: ${b.currentStatus}`,
+          tab: 'bill-tracking',
+          props: { searchQuery: b.billNo }
+        });
+      }
+    });
+
+    return matches.slice(0, 15);
   }, [command, projects, workers, trackedBills]);
 
-  const handleExecute = (targetTab?: string, searchQueryToApply?: string) => {
-    if (targetTab && searchQueryToApply !== undefined) {
-      if (searchQueryToApply) {
-        addToHistory(`/n ${targetTab} ${searchQueryToApply}`);
-      } else {
-        addToHistory(`/n ${targetTab}`);
-      }
+  // Execute T-Code directly with privilege check and audit trail logging
+  const handleExecuteTCodeDirect = (code: string) => {
+    const tcodes = getTCodeList();
+    const matched = tcodes.find(t => t.code.toUpperCase() === code.toUpperCase());
+    if (!matched) return;
 
-      (window as any).__pendingGlobalSearch = { tab: targetTab, query: searchQueryToApply };
-      if (onNavigate) {
-        onNavigate(targetTab);
-      }
-      window.dispatchEvent(new CustomEvent('apply-global-search', { 
-        detail: { tab: targetTab, query: searchQueryToApply } 
-      }));
+    const userRole = user?.role || (user?.username === 'saddamsne' || user?.username === 'rejatousifsne' ? 'admin' : 'staff');
+    if (!checkUserPrivilege(matched, userRole)) {
+      setUnauthorizedTCode(matched.code);
       setIsSearchFocused(false);
-      setCommand('');
-      setHistoryIndex(-1);
       return;
     }
 
+    // Add to recents
+    addRecentTCode(matched.code);
+    setRecents(getRecentTCodes());
+
+    // Log Execution Audit Trail
+    logTCodeExecution(matched.code, user?.username || 'Guest', 'Executed Transaction Code via Global Command Bar');
+
+    // Route tab
+    if ((window as any).openWorkspaceTab) {
+      (window as any).openWorkspaceTab(matched.tab, matched.name, matched.props);
+    } else if (onNavigate) {
+      onNavigate(matched.tab);
+    }
+
+    setCommand('');
+    setIsSearchFocused(false);
+    setHistoryIndex(-1);
+    setSelectedSuggestionIndex(0);
+  };
+
+  // Main input Enter / submit router
+  const handleExecute = () => {
     const raw = command.trim();
     if (!raw) return;
 
     addToHistory(raw);
 
-    if (raw.startsWith('/n')) {
-      const parts = raw.slice(2).trim().split(/\s+/);
-      const mod = parts[0]?.toLowerCase() || '';
-      const filterTerm = parts.slice(1).join(' ').trim();
+    // Check for exact match T-Code first
+    let targetCode = raw.toUpperCase();
+    let isExplicitTCode = false;
+    if (targetCode.startsWith('/N')) {
+      targetCode = targetCode.slice(2).trim();
+      isExplicitTCode = true;
+    }
 
-      if (mod) {
-        let dest = '';
-        if (mod.startsWith('proj')) dest = 'projects';
-        else if (mod.startsWith('work')) dest = 'workers';
-        else if (mod.startsWith('bill') || mod === 'billing') dest = 'bill-tracking';
-        else if (mod.startsWith('dash') || mod === 'home') dest = 'dashboard';
-        else if (mod.startsWith('appv') || mod === 'approv') dest = 'approvals';
-        else if (mod.startsWith('exp')) dest = 'expenses';
-        else if (mod === 'dlr') dest = 'dlr';
-        else if (mod.startsWith('mat')) dest = 'materials';
-
-        if (dest) {
-          (window as any).__pendingGlobalSearch = { tab: dest, query: filterTerm };
-          if (onNavigate) {
-            onNavigate(dest);
-          }
-          window.dispatchEvent(new CustomEvent('apply-global-search', { 
-            detail: { tab: dest, query: filterTerm } 
-          }));
-          setIsSearchFocused(false);
-          setCommand('');
-          setHistoryIndex(-1);
-          return;
-        }
-      }
-    } else if (raw === '/h' || raw === '/help') {
-      if (onShowHelp) onShowHelp();
-      setCommand('');
-      setIsSearchFocused(false);
-      setHistoryIndex(-1);
+    const tcodes = getTCodeList();
+    const matched = tcodes.find(t => t.code.toUpperCase() === targetCode);
+    if (matched) {
+      handleExecuteTCodeDirect(matched.code);
       return;
     }
 
-    // Default search fallback
-    const { projects: pList, workers: wList, bills: bList } = searchResults;
-    if (pList.length > 0) {
-      handleExecute('projects', pList[0].name);
-    } else if (wList.length > 0) {
-      handleExecute('workers', wList[0].name);
-    } else if (bList.length > 0) {
-      handleExecute('bill-tracking', bList[0].billNo);
-    } else {
-      // Just search "projects" by default
-      handleExecute('projects', raw);
+    // If they explicitly used "/n" prefix or entered something matching the T-Code pattern (e.g. 3-8 letters followed by 2 numbers) but no match was found
+    const tcodePattern = /^[A-Z]{3,8}\d{2}$/;
+    const isPatternTCode = tcodePattern.test(targetCode);
+
+    if (isExplicitTCode || isPatternTCode) {
+      setInvalidTCode(targetCode || 'Unknown');
+      setIsSearchFocused(false);
+      return;
     }
+
+    // If suggestions are active and a highlighted suggestion is active
+    if (suggestions.length > 0) {
+      const selected = suggestions[selectedSuggestionIndex] || suggestions[0];
+      if (selected.type === 'tcode' && selected.code) {
+        handleExecuteTCodeDirect(selected.code);
+      } else {
+        if ((window as any).openWorkspaceTab) {
+          (window as any).openWorkspaceTab(selected.tab, selected.name, selected.props);
+        } else if (onNavigate && selected.tab) {
+          onNavigate(selected.tab);
+        }
+        setCommand('');
+        setIsSearchFocused(false);
+      }
+      return;
+    }
+
+    // Fallback general search
+    const q = raw.toLowerCase();
+    const matchedProj = (projects || []).find(p => p.name.toLowerCase().includes(q));
+    if (matchedProj) {
+      if ((window as any).openWorkspaceTab) {
+        (window as any).openWorkspaceTab('projects', matchedProj.name, { searchQuery: matchedProj.name });
+      } else if (onNavigate) {
+        onNavigate('projects');
+      }
+    } else {
+      if (onNavigate) onNavigate('dashboard');
+    }
+
+    setCommand('');
+    setIsSearchFocused(false);
   };
 
   // Notification generation logic
@@ -1007,29 +1077,47 @@ export const TopBar: React.FC<TopBarProps> = ({
                   setCommand(val);
                   setTempTypedCommand(val);
                   setHistoryIndex(-1);
+                  setSelectedSuggestionIndex(0);
                 }}
-                onFocus={() => setIsSearchFocused(true)}
+                onFocus={() => {
+                  setIsSearchFocused(true);
+                  setFavorites(getFavoriteTCodes());
+                  setRecents(getRecentTCodes());
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleExecute();
                   } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
-                    if (commandHistory.length === 0) return;
-                    const nextIdx = historyIndex + 1;
-                    if (nextIdx < commandHistory.length) {
-                      setHistoryIndex(nextIdx);
-                      setCommand(commandHistory[nextIdx]);
+                    if (command.trim()) {
+                      if (suggestions.length > 0) {
+                        setSelectedSuggestionIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+                      }
+                    } else if (commandHistory.length > 0) {
+                      const nextIdx = historyIndex + 1;
+                      if (nextIdx < commandHistory.length) {
+                        setHistoryIndex(nextIdx);
+                        setCommand(commandHistory[nextIdx]);
+                      }
                     }
                   } else if (e.key === 'ArrowDown') {
                     e.preventDefault();
-                    const nextIdx = historyIndex - 1;
-                    if (nextIdx >= 0) {
-                      setHistoryIndex(nextIdx);
-                      setCommand(commandHistory[nextIdx]);
-                    } else if (nextIdx === -1) {
-                      setHistoryIndex(-1);
-                      setCommand(tempTypedCommand);
+                    if (command.trim()) {
+                      if (suggestions.length > 0) {
+                        setSelectedSuggestionIndex(prev => (prev + 1) % suggestions.length);
+                      }
+                    } else {
+                      const nextIdx = historyIndex - 1;
+                      if (nextIdx >= 0) {
+                        setHistoryIndex(nextIdx);
+                        setCommand(commandHistory[nextIdx]);
+                      } else if (nextIdx === -1) {
+                        setHistoryIndex(-1);
+                        setCommand(tempTypedCommand);
+                      }
                     }
+                  } else if (e.key === 'Escape') {
+                    setIsSearchFocused(false);
                   }
                 }}
                 placeholder="Command or Search... [Ctrl+K]"
@@ -1049,209 +1137,209 @@ export const TopBar: React.FC<TopBarProps> = ({
               </button>
             </div>
 
-            {/* Suggestions Popover */}
+            {/* Fiori-styled Suggestions Popover */}
             {isSearchFocused && (
-              <div className="absolute left-0 mt-1.5 w-[380px] bg-[#f5f8fb] border-2 border-[#002f6c] shadow-[0_15px_30px_rgba(0,0,0,0.3)] rounded-sm z-[99999] text-black animate-fade-in divide-y divide-gray-200">
+              <div className="absolute left-0 mt-1.5 w-[420px] bg-[#f5f8fb] border-2 border-[#002f6c] shadow-[0_15px_30px_rgba(0,0,0,0.3)] rounded-sm z-[99999] text-black animate-fade-in divide-y divide-gray-200">
                 {/* SAP style status line */}
                 <div className="bg-[#002f6c] text-white px-2 py-0.5 flex items-center justify-between text-[8px] font-bold uppercase font-mono tracking-wider">
                   <div className="flex items-center space-x-1">
                     <Search size={10} className="text-amber-400" />
-                    <span>SAP ERP Enterprise Search Engine</span>
+                    <span>SAP ERP Enterprise Command Hub (Client: 100)</span>
                   </div>
-                  <span className="text-blue-200 font-mono">SYS_DEV</span>
+                  <span className="text-blue-200 font-mono">SYS_PROD</span>
                 </div>
 
-                <div className="max-h-72 overflow-y-auto divide-y divide-gray-150 bg-white">
-                  {/* Command shortcuts */}
-                  {(!command || command.startsWith('/')) && (
-                    <div className="bg-[#eef2f6] p-1.5">
-                      <div className="text-[8px] uppercase font-mono font-bold text-blue-900 px-1 border-b border-blue-200 mb-1 pb-0.5">📟 Transaction Commands</div>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px]">
-                        <button 
-                          onClick={() => { setCommand('/n projects'); handleExecute('projects', ''); }}
-                          className="text-left hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded font-mono truncate"
-                        >
-                          <span className="font-bold text-[#0056b3] hover:text-inherit">/n projects</span> <span className="text-[8px] text-gray-500 hover:text-inherit">(Goto Projects)</span>
-                        </button>
-                        <button 
-                          onClick={() => { setCommand('/n workers'); handleExecute('workers', ''); }}
-                          className="text-left hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded font-mono truncate"
-                        >
-                          <span className="font-bold text-[#0056b3] hover:text-inherit">/n workers</span> <span className="text-[8px] text-gray-500 hover:text-inherit">(Goto Workers)</span>
-                        </button>
-                        <button 
-                          onClick={() => { setCommand('/n bills'); handleExecute('bill-tracking', ''); }}
-                          className="text-left hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded font-mono truncate"
-                        >
-                          <span className="font-bold text-[#0056b3] hover:text-inherit">/n bills</span> <span className="text-[8px] text-gray-500 hover:text-inherit">(Goto Bill Tracker)</span>
-                        </button>
-                        <button 
-                          onClick={() => { setCommand('/n help'); handleExecute(); }}
-                          className="text-left hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded font-mono truncate"
-                        >
-                          <span className="font-bold text-[#0056b3] hover:text-inherit">/n help</span> <span className="text-[8px] text-gray-500 hover:text-inherit">(Show keyboard help)</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recent History Segment */}
-                  {commandHistory.length > 0 && !command.trim() && (
-                    <div className="bg-slate-50 p-1.5 font-sans">
-                      <div className="flex items-center justify-between text-[8px] uppercase font-mono font-bold text-slate-700 px-1 border-b border-slate-200 mb-1 pb-0.5">
-                        <span className="flex items-center space-x-1">
-                          <Clock size={9} className="text-slate-500" />
-                          <span>⌛ Recent Command History</span>
-                        </span>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); clearHistory(); }}
-                          className="text-red-600 hover:text-red-800 text-[8px] flex items-center space-x-0.5 uppercase tracking-wide font-bold focus:outline-none cursor-pointer"
-                          title="Clear Command History"
-                        >
-                          <Trash2 size={8} />
-                          <span>Clear</span>
-                        </button>
-                      </div>
-                      <div className="max-h-32 overflow-y-auto space-y-0.5 bg-gray-50 p-1 rounded-sm border border-gray-200">
-                        {commandHistory.map((hist, idx) => (
-                          <div key={idx} className="flex items-center justify-between hover:bg-slate-200 rounded px-1 py-0.5 text-[9px] group/item">
-                            <button
-                              onClick={() => { setCommand(hist); setTempTypedCommand(hist); }}
-                              className="text-left font-mono truncate text-[#0056b3] hover:text-blue-900 flex-1 pr-1.5"
-                              title="Click to load command"
-                            >
-                              {hist}
-                            </button>
-                            <button 
-                              onClick={() => {
-                                setCommand(hist);
-                                // Execute immediately
-                                setTimeout(() => {
-                                  const parts = hist.trim().split(/\s+/);
-                                  if (hist.startsWith('/n')) {
-                                    const mod = parts[0]?.slice(2).toLowerCase() || '';
-                                    const filterTerm = parts.slice(1).join(' ').trim();
-                                    let dest = '';
-                                    if (mod.startsWith('proj')) dest = 'projects';
-                                    else if (mod.startsWith('work')) dest = 'workers';
-                                    else if (mod.startsWith('bill') || mod === 'billing') dest = 'bill-tracking';
-                                    else if (mod.startsWith('dash') || mod === 'home') dest = 'dashboard';
-                                    else if (mod.startsWith('appv') || mod === 'approv') dest = 'approvals';
-                                    else if (mod.startsWith('exp')) dest = 'expenses';
-                                    else if (mod === 'dlr') dest = 'dlr';
-                                    else if (mod.startsWith('mat')) dest = 'materials';
-                                    
-                                    if (dest) {
-                                      handleExecute(dest, filterTerm);
-                                      return;
-                                    }
-                                  }
-                                  handleExecute(undefined, hist);
-                                }, 50);
-                              }}
-                              className="text-[8px] bg-[#eef2f6] border border-gray-300 hover:bg-[#0056b3] hover:text-white px-1 rounded shrink-0 text-slate-600 font-mono scale-95 cursor-pointer uppercase font-bold"
-                              title="Execute immediately"
-                            >
-                              Run
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Empty state overview */}
+                <div className="max-h-80 overflow-y-auto divide-y divide-gray-150 bg-white">
+                  {/* Empty Command Input Mode - show Favorites and Recents */}
                   {!command.trim() && (
-                    <div className="p-3 text-center text-gray-500 select-none text-[10px]">
-                      <p className="font-semibold text-gray-700">🔍 Global SAP Command Line & Search</p>
-                      <p className="text-[9px] mt-1 text-gray-400">Type a project name, worker name, designation, or bill number. Use `/n [tab_command]` to switch modules instantly.</p>
-                      <p className="text-[8px] text-slate-400 mt-1.5 font-mono">Shortcuts: Arrow Up/Down to cycle history. Ctrl+K to focus.</p>
+                    <div className="p-0 select-none animate-fade-in">
+                      {/* Favorites Segment */}
+                      <div className="bg-amber-50/50 p-2 border-b border-gray-100">
+                        <div className="flex items-center justify-between text-[8px] uppercase font-mono font-bold text-amber-800 px-1 border-b border-amber-200 mb-1.5 pb-0.5">
+                          <span className="flex items-center space-x-1">
+                            <Star size={10} className="fill-amber-400 text-amber-500" />
+                            <span>⭐ Pinned Favorites (DASHBOARD WIDGETS)</span>
+                          </span>
+                        </div>
+                        {favorites.length === 0 ? (
+                          <p className="text-[9px] text-gray-400 italic px-1">No favorited transactions. Type a T-Code and click the star icon to pin.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-1 max-h-32 overflow-y-auto">
+                            {favorites.map(favCode => {
+                              const tcodeObj = getTCodeList().find(t => t.code === favCode);
+                              if (!tcodeObj) return null;
+                              return (
+                                <div key={favCode} className="flex items-center justify-between hover:bg-amber-50 p-1 rounded border border-amber-100/40 text-[9px]">
+                                  <button
+                                    onClick={() => handleExecuteTCodeDirect(favCode)}
+                                    className="text-left font-mono truncate text-[#0056b3] hover:text-blue-900 flex-1 flex items-center space-x-2"
+                                  >
+                                    <span className="font-bold bg-amber-100 px-1 text-[8px] rounded">{favCode}</span>
+                                    <span className="font-sans font-medium text-gray-800">{tcodeObj.name}</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFavoriteTCode(favCode);
+                                      setFavorites(getFavoriteTCodes());
+                                    }}
+                                    title="Unpin Favorite"
+                                    className="p-0.5 hover:bg-amber-200 rounded text-amber-600"
+                                  >
+                                    <Star size={10} className="fill-amber-400 text-amber-500" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Recents Segment */}
+                      <div className="bg-slate-50 p-2">
+                        <div className="flex items-center justify-between text-[8px] uppercase font-mono font-bold text-slate-700 px-1 border-b border-slate-200 mb-1.5 pb-0.5">
+                          <span className="flex items-center space-x-1">
+                            <Clock size={10} className="text-slate-500" />
+                            <span>⌛ Recently Executed Transactions</span>
+                          </span>
+                          {recents.length > 0 && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                localStorage.removeItem('sap-tcode-recents');
+                                setRecents([]);
+                              }}
+                              className="text-red-600 hover:text-red-800 text-[8px] flex items-center space-x-0.5 uppercase tracking-wide font-bold focus:outline-none cursor-pointer"
+                            >
+                              <Trash2 size={8} />
+                              <span>Clear</span>
+                            </button>
+                          )}
+                        </div>
+                        {recents.length === 0 ? (
+                          <p className="text-[9px] text-gray-400 italic px-1">No recently used transactions. Execute a T-Code to view your history.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-1 max-h-36 overflow-y-auto">
+                            {recents.map(recCode => {
+                              const tcodeObj = getTCodeList().find(t => t.code === recCode);
+                              if (!tcodeObj) return null;
+                              const isFav = favorites.includes(recCode);
+                              return (
+                                <div key={recCode} className="flex items-center justify-between hover:bg-slate-200 p-1 rounded border border-gray-100 text-[9px]">
+                                  <button
+                                    onClick={() => handleExecuteTCodeDirect(recCode)}
+                                    className="text-left font-mono truncate text-[#0056b3] hover:text-blue-900 flex-1 flex items-center space-x-2"
+                                  >
+                                    <span className="font-bold bg-gray-200 px-1 text-[8px] rounded">{recCode}</span>
+                                    <span className="font-sans font-medium text-gray-800">{tcodeObj.name}</span>
+                                  </button>
+                                  <div className="flex items-center space-x-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleFavoriteTCode(recCode);
+                                        setFavorites(getFavoriteTCodes());
+                                      }}
+                                      title={isFav ? "Unpin Favorite" : "Pin Favorite"}
+                                      className="p-0.5 hover:bg-amber-100 rounded text-amber-500"
+                                    >
+                                      <Star size={10} className={isFav ? "fill-amber-400 text-amber-500" : "text-gray-400"} />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        removeRecentTCode(recCode);
+                                        setRecents(getRecentTCodes());
+                                      }}
+                                      title="Remove from history"
+                                      className="p-0.5 hover:bg-red-100 hover:text-red-600 rounded text-gray-400"
+                                    >
+                                      <Trash2 size={9} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
+                  {/* Active Autocomplete suggestions */}
                   {command.trim() && (
-                    <>
-                      {/* Projects */}
-                      {searchResults.projects.length > 0 && (
-                        <div>
-                          <div className="bg-amber-50 text-amber-900 border-b border-amber-200 font-bold font-mono text-[8px] px-2 py-0.5 uppercase tracking-wider">📁 Matching Sites / Projects ({searchResults.projects.length})</div>
-                          <div className="p-0.5 divide-y divide-gray-100">
-                            {searchResults.projects.map((proj) => (
-                              <button
-                                key={proj.id}
-                                onClick={() => handleExecute('projects', proj.name)}
-                                className="w-full text-left p-1.5 hover:bg-blue-600 hover:text-white transition-colors block text-[10px]"
+                    <div className="p-0 animate-fade-in">
+                      <div className="bg-[#eef2f6] text-blue-900 font-bold font-mono text-[8px] px-2 py-1 uppercase tracking-wider border-b border-blue-200 flex justify-between items-center select-none">
+                        <span>🔍 Smart Matches & Navigation shortcuts</span>
+                        <span className="text-gray-400 lowercase normal-case font-normal text-[8px]">Use arrow keys ⇅ & Enter</span>
+                      </div>
+                      
+                      {suggestions.length === 0 ? (
+                        <div className="p-4 text-center text-gray-500 text-[10px] select-none">
+                          <p>⚠️ No matching T-Codes or ERP Records found.</p>
+                          <p className="text-[9px] text-gray-400 mt-1">Press Enter to search site projects for "{command}".</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {suggestions.map((sug, idx) => {
+                            const isSelected = selectedSuggestionIndex === idx;
+                            const isFav = sug.type === 'tcode' && favorites.includes(sug.code || '');
+                            return (
+                              <div
+                                key={idx}
+                                onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                                onClick={() => {
+                                  if (sug.type === 'tcode' && sug.code) {
+                                    handleExecuteTCodeDirect(sug.code);
+                                  } else {
+                                    if ((window as any).openWorkspaceTab) {
+                                      (window as any).openWorkspaceTab(sug.tab, sug.name, sug.props);
+                                    } else if (onNavigate && sug.tab) {
+                                      onNavigate(sug.tab);
+                                    }
+                                    setCommand('');
+                                    setIsSearchFocused(false);
+                                  }
+                                }}
+                                className={`p-2 transition-colors duration-100 flex items-center justify-between cursor-pointer text-left text-[10px] ${
+                                  isSelected ? 'bg-[#e5f1ff] border-l-4 border-[#0056b3]' : 'hover:bg-gray-50'
+                                }`}
                               >
-                                <div className="font-bold text-[10px] text-[#002f6c] hover:text-inherit truncate">{proj.name}</div>
-                                <div className="text-[9px] text-gray-500 hover:text-inherit flex justify-between">
-                                  <span>Client: {proj.clientName || 'N/A'}</span>
-                                  <span>Start: {proj.startDate}</span>
+                                <div className="flex-1 pr-4 min-w-0">
+                                  <div className="flex items-center space-x-2">
+                                    {sug.type === 'tcode' ? (
+                                      <span className="bg-blue-100 text-blue-800 font-mono font-bold text-[8px] px-1 py-0.5 rounded shrink-0">
+                                        {sug.code}
+                                      </span>
+                                    ) : (
+                                      <span className="bg-emerald-100 text-emerald-800 font-mono font-bold text-[8px] px-1 py-0.5 rounded shrink-0 uppercase">
+                                        {sug.type}
+                                      </span>
+                                    )}
+                                    <span className="font-bold text-gray-900 truncate">{sug.name}</span>
+                                  </div>
+                                  <p className="text-[9px] text-gray-500 truncate mt-0.5">{sug.description}</p>
                                 </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
 
-                      {/* Workers */}
-                      {searchResults.workers.length > 0 && (
-                        <div>
-                          <div className="bg-teal-50 text-teal-900 border-b border-teal-200 font-bold font-mono text-[8px] px-2 py-0.5 uppercase tracking-wider">👷 Workers HQ Matches ({searchResults.workers.length})</div>
-                          <div className="p-0.5 divide-y divide-gray-100">
-                            {searchResults.workers.map((worker) => {
-                              const projName = projects.find(p => p.id === worker.projectId)?.name || 'Unassigned';
-                              return (
-                                <button
-                                  key={worker.id}
-                                  onClick={() => handleExecute('workers', worker.name)}
-                                  className="w-full text-left p-1.5 hover:bg-blue-600 hover:text-white transition-colors block text-[10px]"
-                                >
-                                  <div className="font-bold text-[10px] text-[#002f6c] hover:text-inherit truncate">{worker.name} ({worker.workerId})</div>
-                                  <div className="text-[9px] text-gray-500 hover:text-inherit flex justify-between">
-                                    <span>Role: {worker.designation}</span>
-                                    <span className="truncate max-w-[150px]">Site: {projName}</span>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
+                                {sug.type === 'tcode' && sug.code && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFavoriteTCode(sug.code || '');
+                                      setFavorites(getFavoriteTCodes());
+                                    }}
+                                    className="p-1 hover:bg-amber-100 rounded text-amber-500 shrink-0"
+                                    title={isFav ? "Unpin Favorite" : "Pin Favorite"}
+                                  >
+                                    <Star size={11} className={isFav ? "fill-amber-400 text-amber-500" : "text-gray-300"} />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
-
-                      {/* Tracked Bills */}
-                      {searchResults.bills.length > 0 && (
-                        <div>
-                          <div className="bg-blue-50 text-blue-900 border-b border-blue-200 font-bold font-mono text-[8px] px-2 py-0.5 uppercase tracking-wider">📄 Bill Tracking Matches ({searchResults.bills.length})</div>
-                          <div className="p-0.5 divide-y divide-gray-100">
-                            {searchResults.bills.map((bill) => {
-                              const projName = projects.find(p => p.id === bill.projectId)?.name || 'Unassigned';
-                              return (
-                                <button
-                                  key={bill.id}
-                                  onClick={() => handleExecute('bill-tracking', bill.billNo)}
-                                  className="w-full text-left p-1.5 hover:bg-blue-600 hover:text-white transition-colors block text-[10px]"
-                                >
-                                  <div className="font-bold text-[10px] text-[#002f6c] hover:text-inherit truncate">Bill #{bill.billNo} ({bill.billType})</div>
-                                  <div className="text-[9px] text-gray-500 hover:text-inherit flex justify-between">
-                                    <span>Amt: ₹{(bill.billAmount || 0).toLocaleString('en-IN')}</span>
-                                    <span>Status: {bill.currentStatus}</span>
-                                  </div>
-                                  <div className="text-[8px] text-gray-400 font-mono hover:text-inherit italic max-w-full truncate">Site: {projName}</div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* No matches */}
-                      {searchResults.projects.length === 0 && searchResults.workers.length === 0 && searchResults.bills.length === 0 && (
-                        <div className="p-4 text-center text-gray-500 select-none text-[10px]">
-                          <p>⚠️ No matching records found.</p>
-                          <p className="text-[9px] text-gray-400 mt-1">Press Enter to run default raw search on Projects page.</p>
-                        </div>
-                      )}
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1341,6 +1429,83 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         </div>
       </div>
+      
+      {unauthorizedTCode && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[999999] backdrop-blur-sm">
+          <div className="bg-white border-2 border-red-600 rounded-lg shadow-2xl w-[450px] overflow-hidden">
+            {/* Title Bar */}
+            <div className="bg-red-600 text-white px-4 py-2.5 flex items-center space-x-2 font-mono font-bold text-xs tracking-wide">
+              <ShieldAlert size={14} />
+              <span>SAP System - Access Authorization Check Failed</span>
+            </div>
+            
+            {/* Content */}
+            <div className="p-5 font-sans">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle size={36} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="text-black">
+                  <h4 className="font-bold text-gray-900 text-xs">No authorization for transaction {unauthorizedTCode}</h4>
+                  <p className="text-[11px] text-gray-600 mt-2 leading-relaxed">
+                    You do not have the required structural roles or profile privileges to execute this transaction code in client <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-800">SN_ERP_CLNT_100</span>.
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-3 font-mono">
+                    Role Required: ADMIN / EXECUTIVE MANAGER<br />
+                    Audit Log registered under user: {user?.username || 'Guest'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="bg-gray-50 px-4 py-3 flex justify-end space-x-2 border-t border-gray-200">
+              <button
+                onClick={() => setUnauthorizedTCode(null)}
+                className="px-4 py-1 bg-[#002f6c] text-white hover:bg-blue-800 border border-[#002f6c] text-[10px] font-semibold rounded shadow-sm focus:outline-none transition duration-150 cursor-pointer"
+              >
+                Acknowledge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {invalidTCode && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[999999] backdrop-blur-sm">
+          <div className="bg-white border-2 border-amber-600 rounded-lg shadow-2xl w-[450px] overflow-hidden">
+            {/* Title Bar */}
+            <div className="bg-amber-600 text-white px-4 py-2.5 flex items-center space-x-2 font-mono font-bold text-xs tracking-wide">
+              <AlertCircle size={14} />
+              <span>SAP System - Invalid Transaction Code</span>
+            </div>
+            
+            {/* Content */}
+            <div className="p-5 font-sans">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle size={36} className="text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-black">
+                  <h4 className="font-bold text-gray-900 text-xs">Transaction code {invalidTCode} does not exist</h4>
+                  <p className="text-[11px] text-gray-600 mt-2 leading-relaxed">
+                    The transaction code you entered is not registered in the active T-Code directory of client <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-800">SN_ERP_CLNT_100</span>.
+                  </p>
+                  <p className="text-[11px] text-gray-600 mt-2 leading-relaxed">
+                    Please verify the syntax or check the <span className="font-semibold text-[#002f6c]">SAP T-Code Registry</span> in Settings to view the list of all available commands.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="bg-gray-50 px-4 py-3 flex justify-end space-x-2 border-t border-gray-200">
+              <button
+                onClick={() => setInvalidTCode(null)}
+                className="px-4 py-1 bg-[#002f6c] text-white hover:bg-blue-800 border border-[#002f6c] text-[10px] font-semibold rounded shadow-sm focus:outline-none transition duration-150 cursor-pointer"
+              >
+                Acknowledge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

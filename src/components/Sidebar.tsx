@@ -162,6 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       icon: <Settings size={14} className="text-slate-600" />,
       items: [
         { id: 'numbering-settings', label: 'Numbering Settings', icon: <Settings size={11} /> },
+        { id: 'tcode-master', label: 'SAP T-Code Registry', icon: <Settings size={11} /> },
         ...(isAdmin ? [{ id: 'staff-management', label: 'Staff Management', icon: <Users size={11} /> }] : []),
         { id: 'activity-log', label: 'Activity Log', icon: <Activity size={11} /> }
       ]

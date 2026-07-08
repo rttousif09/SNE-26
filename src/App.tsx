@@ -35,6 +35,7 @@ import ActivityLog from './pages/ActivityLog';
 import { NumberingSettingsPage } from './pages/NumberingSettings';
 import { Subcontractors } from './pages/subcontractors';
 import { DMSPage } from './pages/DMSPage';
+import { TCodeMaster } from './pages/TCodeMaster';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud, Pin, FolderMinus, RefreshCw, Copy, Plus, Trash2, Clock, ChevronLeft, ChevronRight, Undo, AlertCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
@@ -135,6 +136,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'subcontractors-audit': return 'Subcontractor Security Audit Trails';
       case 'numbering-settings': return 'Document Numbering Settings';
       case 'staff-management': return 'Staff & Access Management';
+      case 'tcode-master': return 'SAP T-Code Registry';
       default: return 'Workspace Home';
     }
   };
@@ -469,6 +471,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'subcontractors-ledger': return <Subcontractors key={key} initialTab="ledger" />;
       case 'subcontractors-audit': return <Subcontractors key={key} initialTab="audit" />;
       case 'numbering-settings': return <NumberingSettingsPage key={key} />;
+      case 'tcode-master': return <TCodeMaster key={key} />;
       case 'staff-management':
         if (user?.username === 'saddamsne' || user?.username === 'rejatousifsne') {
           return <StaffManagement key={key} />;
@@ -538,6 +541,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         return ['Settings', 'Numbering Settings'];
       case 'staff-management':
         return ['Settings', 'Staff Management'];
+      case 'tcode-master':
+        return ['Settings', 'Transaction Code Registry (T-Codes)'];
       case 'activity-log':
         return ['Settings', 'Activity Log'];
       case 'approvals':
