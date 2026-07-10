@@ -47,7 +47,7 @@ interface AppContextType extends AppState {
   isDbLoaded: boolean;
   user: { username: string; name: string; role?: string; allowedModules?: string[]; allowedProjects?: string[] } | null;
   setUser: (user: { username: string; name: string; role?: string; allowedModules?: string[]; allowedProjects?: string[] } | null) => void;
-  importBackup: (backupState: AppState) => Promise<boolean>;
+  importBackup: (backupState: any) => Promise<boolean>;
   refreshActivityLogs: () => Promise<void>;
   fetchNumberingSettings: () => Promise<void>;
   fetchNumberingAuditLogs: () => Promise<void>;
@@ -503,9 +503,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadAllData();
   }, []);
 
-  const importBackup = async (backupState: AppState): Promise<boolean> => {
+  const importBackup = async (rawBackupState: any): Promise<boolean> => {
     try {
-      if (!backupState || !Array.isArray(backupState.projects) || !Array.isArray(backupState.workers)) {
+      const backupState = (rawBackupState && rawBackupState.backupData) ? rawBackupState.backupData : rawBackupState;
+      if (!backupState || (!Array.isArray(backupState.projects) && !Array.isArray(backupState.workers))) {
         throw new Error('Invalid backup format');
       }
       

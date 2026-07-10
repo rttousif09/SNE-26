@@ -54,8 +54,8 @@ const customFetch = async function(this: any, input: RequestInfo | URL, init?: R
     const response = await originalFetch.apply(this || window, [input, init]);
     const contentType = response.headers.get("content-type") || "";
     
-    // On static hosting like Vercel, requests to non-existent /api/* return 404 or index.html (SPA routing fallback)
-    if (!response.ok && (response.status === 404 || response.status >= 500)) {
+    // On static hosting like Vercel, requests to non-existent /api/* can return 404, 405, or index.html (SPA routing fallback)
+    if (!response.ok) {
       console.warn(`API ${url} returned status ${response.status}. Switching to local Client-Side Database Fallback.`);
       window.__useClientSideFallback = true;
       return simulateFetch(url, init);
