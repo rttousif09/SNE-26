@@ -333,8 +333,8 @@ export async function simulateFetch(url: string, init?: RequestInit): Promise<Re
 
     // 2. Backup Import
     if (pathname === "/api/backup/import" && method === "POST") {
-      const { backupData } = bodyData || {};
-      if (backupData) {
+      const backupData = (bodyData && bodyData.backupData) ? bodyData.backupData : bodyData;
+      if (backupData && (Array.isArray(backupData.projects) || Array.isArray(backupData.workers))) {
         Object.keys(backupData).forEach(key => {
           setLocalStorage(key, backupData[key]);
         });
