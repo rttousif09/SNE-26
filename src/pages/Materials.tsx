@@ -18,6 +18,7 @@ import {
 } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { exportToPDF, downloadPDF, formatCurrency } from '../lib/pdfGenerator';
+import { ReportPreviewModal } from '../components/ReportPreviewModal';
 
 // Reusable standard lists
 const ITEM_CATEGORIES = [
@@ -91,6 +92,7 @@ export const Materials: React.FC = () => {
 
   // Active ERP Workspace Tab
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'receipt' | 'return' | 'reconciliation' | 'transfer' | 'loss_damage' | 'company_purchase' | 'equipment' | 'supplier_ledger' | 'reports'>('dashboard');
+  const [materialsReportPreview, setMaterialsReportPreview] = useState<{title: string, headers: string[], data: any[][]} | null>(null);
 
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
 
@@ -768,15 +770,11 @@ export const Materials: React.FC = () => {
       });
     }
 
-    const blobUrl = exportToPDF({
+    setMaterialsReportPreview({
       title: reportType,
       headers,
-      data: rows,
-      userName: user?.name,
-      filename: `${reportType.replace(/\s+/g, '_').toLowerCase()}.pdf`
+      data: rows
     });
-    
-    downloadPDF(blobUrl, `${reportType.replace(/\s+/g, '_').toLowerCase()}.pdf`);
   };
 
   // Specific supplier chronological log data source
@@ -2443,6 +2441,17 @@ export const Materials: React.FC = () => {
           window.location.reload();
         }}
       />
+      {materialsReportPreview && (
+        <ReportPreviewModal
+          title={materialsReportPreview.title}
+          subtitle="Material Logistics Division Registry"
+          headers={materialsReportPreview.headers}
+          data={materialsReportPreview.data}
+          filename={materialsReportPreview.title}
+          isOpen={!!materialsReportPreview}
+          onClose={() => setMaterialsReportPreview(null)}
+        />
+      )}
     </div>
   );
 };

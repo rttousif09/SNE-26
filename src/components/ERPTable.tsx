@@ -10,6 +10,7 @@ import {
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { ReportPreviewModal } from './ReportPreviewModal';
 
 // Type definitions
 export interface ERPColumn<T> {
@@ -99,6 +100,8 @@ export function ERPTable<T extends Record<string, any>>({
   const [currentPage, setCurrentPage] = useState(1);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(columns.map(c => c.key));
   const [showColumnConfig, setShowColumnConfig] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
     columns.forEach(col => {
@@ -234,6 +237,39 @@ export function ERPTable<T extends Record<string, any>>({
     });
   }, [filteredData, sortConfig]);
 
+  // Mapped props for the SAP Enterprise Report Engine
+  const reportColumns = useMemo(() => {
+    return columns.filter(c => visibleColumns.includes(c.key));
+  }, [columns, visibleColumns]);
+
+  const reportHeaders = useMemo(() => {
+    return reportColumns.map(c => c.header);
+  }, [reportColumns]);
+
+  const reportData = useMemo(() => {
+    return sortedData.map(row => {
+      return reportColumns.map(c => {
+        const val = row[c.key];
+        if (typeof val === 'number') return val;
+        return val === null || val === undefined ? '' : String(val);
+      });
+    });
+  }, [sortedData, reportColumns]);
+
+  const reportTotals = useMemo(() => {
+    return reportColumns.map((c, colIdx) => {
+      if (colIdx === 0) return 'GRAND TOTALS';
+      if (c.isNumeric) {
+        const sum = sortedData.reduce((acc, row) => {
+          const val = Number(row[c.key]);
+          return acc + (isNaN(val) ? 0 : val);
+        }, 0);
+        return sum;
+      }
+      return '';
+    });
+  }, [sortedData, reportColumns]);
+
   // Pagination Logic
   const paginatedData = useMemo(() => {
     if (pageSize === 'all') return sortedData;
@@ -328,146 +364,17 @@ export function ERPTable<T extends Record<string, any>>({
     document.body.removeChild(link);
   };
 
-  // 2. Export Excel (Real workbook using xlsx)
+  // 2. Open Enterprise Report Preview & Export engine
   const handleExportExcel = () => {
-    const exportColumns = columns.filter(c => visibleColumns.includes(c.key));
-    const excelData = sortedData.map(row => {
-      const obj: Record<string, any> = {};
-      exportColumns.forEach(c => {
-        obj[c.header] = row[c.key];
-      });
-      return obj;
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
-    
-    // Auto-fit column widths
-    const maxLens = exportColumns.map(c => {
-      const headerLen = c.header.length;
-      const dataLens = sortedData.map(row => String(row[c.key] || '').length);
-      return Math.max(headerLen, ...dataLens, 10) * 1.2;
-    });
-    worksheet['!cols'] = maxLens.map(len => ({ wch: len }));
-
-    XLSX.writeFile(workbook, `${exportFilename}_${Date.now()}.xlsx`);
+    setIsReportModalOpen(true);
   };
 
-  // 3. Export PDF (Real multi-page tabular PDF using jsPDF and jspdf-autotable)
   const handleExportPDF = () => {
-    const doc = new jsPDF('landscape', 'pt', 'a4');
-    
-    // ERP Branding Header
-    doc.setFillColor(30, 41, 59); // Slate-800
-    doc.rect(40, 30, 762, 50, 'F');
-    doc.setTextColor(245, 158, 11); // Amber-500
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SN ENTERPRISES - ERP ARCHIVE REPORT', 55, 52);
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Document Type: ${exportFilename.toUpperCase()} | Generated: ${finalLastUpdated}`, 55, 68);
-
-    const exportColumns = columns.filter(c => visibleColumns.includes(c.key));
-    const tableHeaders = exportColumns.map(c => c.header);
-    const tableBody = sortedData.map(row => {
-      return exportColumns.map(c => {
-        const val = row[c.key];
-        return val === null || val === undefined ? '' : String(val);
-      });
-    });
-
-    // Generate table layout
-    (doc as any).autoTable({
-      head: [tableHeaders],
-      body: tableBody,
-      startY: 95,
-      margin: { left: 40, right: 40 },
-      styles: {
-        fontSize: 8,
-        cellPadding: 4,
-        overflow: 'linebreak',
-        halign: 'left'
-      },
-      headStyles: {
-        fillColor: [51, 65, 85], // Slate-700
-        textColor: [255, 255, 255],
-        fontStyle: 'bold'
-      },
-      alternateRowStyles: {
-        fillColor: [248, 250, 252] // Slate-50
-      },
-      footerStyles: {
-        fillColor: [241, 245, 249],
-        textColor: [15, 23, 42],
-        fontStyle: 'bold'
-      },
-      didDrawPage: (data: any) => {
-        // Page footer count
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.text(`Page ${data.pageNumber} | Confidential construction ledger report for SN Enterprises`, 40, 565);
-      }
-    });
-
-    doc.save(`${exportFilename}_${Date.now()}.pdf`);
+    setIsReportModalOpen(true);
   };
 
-  // 4. Print Table View
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const exportColumns = columns.filter(c => visibleColumns.includes(c.key));
-    
-    const html = `
-      <html>
-        <head>
-          <title>Print Ledger | SN Enterprises</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 25px; color: #1e293b; }
-            h1 { font-size: 18px; color: #1e293b; border-bottom: 2px solid #f59e0b; padding-bottom: 8px; margin-bottom: 20px; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
-            th { background-color: #334155; color: white; text-align: left; padding: 8px 10px; font-weight: bold; border: 1px solid #e2e8f0; }
-            td { padding: 7px 10px; border: 1px solid #e2e8f0; text-align: left; }
-            tr:nth-child(even) { background-color: #f8fafc; }
-            .meta { font-size: 10px; color: #64748b; margin-top: -10px; margin-bottom: 15px; font-weight: 500; }
-            .footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
-          </style>
-        </head>
-        <body>
-          <h1>SN Enterprises construction audit registry - ${exportFilename.toUpperCase()}</h1>
-          <div class="meta">Generated: ${finalLastUpdated} | Filtered Records: ${sortedData.length} of ${data.length} total</div>
-          <table>
-            <thead>
-              <tr>
-                ${exportColumns.map(c => `<th>${c.header}</th>`).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${sortedData.map(row => `
-                <tr>
-                  ${exportColumns.map(c => `<td>${row[c.key] === null || row[c.key] === undefined ? '' : row[c.key]}</td>`).join('')}
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div class="footer">
-            <span>Prepared on Construction ERP Terminal</span>
-            <span>Page 1 of 1</span>
-          </div>
-          <script>
-            window.onload = function() { window.print(); window.close(); }
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
+    setIsReportModalOpen(true);
   };
 
   return (
@@ -1210,6 +1117,19 @@ export function ERPTable<T extends Record<string, any>>({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isReportModalOpen && (
+        <ReportPreviewModal
+          title={exportFilename || 'ERP Registry Report'}
+          subtitle="System Audit Ledger Registry"
+          headers={reportHeaders}
+          data={reportData}
+          totals={reportTotals}
+          filename={exportFilename}
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+        />
+      )}
 
     </div>
   );
