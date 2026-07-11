@@ -1,6 +1,38 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog, BOQ, BOQItem, BOQRevision, BOQExtraItem, BOQAuditLog } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
+
+class GlobalEventBus {
+  private listeners: Record<string, Array<(data?: any) => void>> = {};
+
+  on(event: string, callback: (data?: any) => void) {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(callback);
+    return () => this.off(event, callback);
+  }
+
+  off(event: string, callback: (data?: any) => void) {
+    if (!this.listeners[event]) return;
+    this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+  }
+
+  emit(event: string, data?: any) {
+    if (this.listeners[event]) {
+      this.listeners[event].forEach(callback => {
+        try {
+          callback(data);
+        } catch (e) {
+          console.error(`Error in event listener for ${event}:`, e);
+        }
+      });
+    }
+    window.dispatchEvent(new CustomEvent(event, { detail: data }));
+  }
+}
+
+export const globalEventBus = new GlobalEventBus();
 
 interface AppState {
   projects: Project[];
@@ -49,6 +81,8 @@ interface AppContextType extends AppState {
   setUser: (user: { username: string; name: string; role?: string; allowedModules?: string[]; allowedProjects?: string[] } | null) => void;
   importBackup: (backupState: any) => Promise<boolean>;
   refreshActivityLogs: () => Promise<void>;
+  refreshBillings: () => Promise<void>;
+  refreshClientPayments: () => Promise<void>;
   fetchNumberingSettings: () => Promise<void>;
   fetchNumberingAuditLogs: () => Promise<void>;
   updateNumberingSetting: (moduleKey: string, payload: any) => Promise<boolean>;
@@ -275,6 +309,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     boqAuditLogs: [],
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
+
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -503,6 +540,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadAllData();
   }, []);
 
+  useEffect(() => {
+    const handleBillCreated = (data?: any) => {
+      console.log('Event received: bill-create. Synchronizing state...', data);
+      refreshClientPayments();
+      refreshBillings();
+    };
+
+    const handleBillUpdated = (data?: any) => {
+      console.log('Event received: bill-update. Synchronizing state...', data);
+      refreshClientPayments();
+      refreshBillings();
+    };
+
+    const handleBillDeleted = (data?: any) => {
+      console.log('Event received: bill-delete. Synchronizing state...', data);
+      refreshClientPayments();
+      refreshBillings();
+    };
+
+    const unsubscribeCreate = globalEventBus.on('bill-create', handleBillCreated);
+    const unsubscribeUpdate = globalEventBus.on('bill-update', handleBillUpdated);
+    const unsubscribeDelete = globalEventBus.on('bill-delete', handleBillDeleted);
+
+    window.addEventListener('bill-create', handleBillCreated as EventListener);
+    window.addEventListener('bill-update', handleBillUpdated as EventListener);
+    window.addEventListener('bill-delete', handleBillDeleted as EventListener);
+
+    return () => {
+      unsubscribeCreate();
+      unsubscribeUpdate();
+      unsubscribeDelete();
+      window.removeEventListener('bill-create', handleBillCreated as EventListener);
+      window.removeEventListener('bill-update', handleBillUpdated as EventListener);
+      window.removeEventListener('bill-delete', handleBillDeleted as EventListener);
+    };
+  }, []);
+
   const importBackup = async (rawBackupState: any): Promise<boolean> => {
     try {
       const backupState = (rawBackupState && rawBackupState.backupData) ? rawBackupState.backupData : rawBackupState;
@@ -580,6 +654,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (e) {
       console.error('Failed to load activity logs:', e);
+    }
+  };
+
+  const refreshBillings = async () => {
+    try {
+      const res = await fetch('/api/billings');
+      if (res.ok) {
+        const data = await res.json();
+        setState(s => ({ ...s, billings: data }));
+        await saveAllToStore('billings', data).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Failed to refresh billings:', e);
+    }
+  };
+
+  const refreshClientPayments = async () => {
+    try {
+      const res = await fetch('/api/client-payments');
+      if (res.ok) {
+        const data = await res.json();
+        setState(s => ({ ...s, clientPayments: data }));
+        await saveAllToStore('clientPayments', data).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Failed to refresh client payments:', e);
     }
   };
 
@@ -890,7 +990,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addBilling = async (billing: Omit<Billing, 'id'>) => {
     const newBilling = { ...billing, id: generateId() };
-    setState(s => ({ ...s, billings: [...s.billings, newBilling] }));
+    const updated = [...stateRef.current.billings, newBilling];
+    setState(s => ({ ...s, billings: updated }));
     triggerSuccess('Billing entry logged successfully: ' + newBilling.billNo);
     try {
       await fetch('/api/billings', {
@@ -898,37 +999,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newBilling)
       });
-      await saveAllToStore('billings', [...state.billings, newBilling]);
+      await saveAllToStore('billings', updated);
+      await refreshBillings();
+      await refreshClientPayments();
+      globalEventBus.emit('bill-create', newBilling);
     } catch (e) {
       console.error(e);
     }
   };
 
   const updateBilling = async (id: string, billing: Partial<Billing>) => {
-    setState(s => ({ ...s, billings: s.billings.map(b => b.id === id ? { ...b, ...billing } : b) }));
-    triggerSuccess('Billing invoice record updated.');
-    try {
-      const existing = state.billings.find(b => b.id === id);
-      if (existing) {
-        const merged = { ...existing, ...billing };
+    const currentBillings = stateRef.current.billings;
+    const existing = currentBillings.find(b => b.id === id);
+    if (existing) {
+      const merged = { ...existing, ...billing };
+      const updated = currentBillings.map(b => b.id === id ? merged : b);
+      setState(s => ({ ...s, billings: updated }));
+      triggerSuccess('Billing invoice record updated.');
+      try {
         await fetch(`/api/billings/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(merged)
         });
-        await saveAllToStore('billings', state.billings.map(b => b.id === id ? merged : b));
+        await saveAllToStore('billings', updated);
+        await refreshBillings();
+        await refreshClientPayments();
+        globalEventBus.emit('bill-update', merged);
+      } catch (e) {
+        console.error(e);
       }
-    } catch (e) {
-      console.error(e);
     }
   };
 
   const deleteBilling = async (id: string) => {
-    setState(s => ({ ...s, billings: s.billings.filter(b => b.id !== id) }));
+    const updated = stateRef.current.billings.filter(b => b.id !== id);
+    setState(s => ({ ...s, billings: updated }));
     triggerSuccess('Billing entry deleted from records.');
     try {
       await fetch(`/api/billings/${id}`, { method: 'DELETE' });
-      await saveAllToStore('billings', state.billings.filter(b => b.id !== id));
+      await saveAllToStore('billings', updated);
+      await refreshBillings();
+      await refreshClientPayments();
+      globalEventBus.emit('bill-delete', { id });
     } catch (e) {
       console.error(e);
     }
@@ -936,7 +1049,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addClientPayment = async (payment: Omit<ClientPayment, 'id'>) => {
     const newPayment = { ...payment, id: generateId() };
-    setState(s => ({ ...s, clientPayments: [...s.clientPayments, newPayment] }));
+    const updated = [...stateRef.current.clientPayments, newPayment];
+    setState(s => ({ ...s, clientPayments: updated }));
     try {
       await fetch('/api/client-payments', {
         method: 'POST',
@@ -946,7 +1060,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
         body: JSON.stringify(newPayment)
       });
-      await saveAllToStore('clientPayments', [...state.clientPayments, newPayment]);
+      await saveAllToStore('clientPayments', updated);
       refreshActivityLogs();
     } catch (e) {
       console.error(e);
@@ -954,11 +1068,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateClientPayment = async (id: string, payment: Partial<ClientPayment>) => {
-    setState(s => ({ ...s, clientPayments: s.clientPayments.map(cp => cp.id === id ? { ...cp, ...payment } : cp) }));
-    try {
-      const existing = state.clientPayments.find(cp => cp.id === id);
-      if (existing) {
-        const merged = { ...existing, ...payment };
+    const currentPayments = stateRef.current.clientPayments;
+    const existing = currentPayments.find(cp => cp.id === id);
+    if (existing) {
+      const merged = { ...existing, ...payment };
+      const updated = currentPayments.map(cp => cp.id === id ? merged : cp);
+      setState(s => ({ ...s, clientPayments: updated }));
+      try {
         await fetch(`/api/client-payments/${id}`, {
           method: 'PUT',
           headers: { 
@@ -967,16 +1083,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           body: JSON.stringify(merged)
         });
-        await saveAllToStore('clientPayments', state.clientPayments.map(cp => cp.id === id ? merged : cp));
+        await saveAllToStore('clientPayments', updated);
         refreshActivityLogs();
+      } catch (e) {
+        console.error(e);
       }
-    } catch (e) {
-      console.error(e);
     }
   };
 
   const deleteClientPayment = async (id: string) => {
-    setState(s => ({ ...s, clientPayments: s.clientPayments.filter(cp => cp.id !== id) }));
+    const updated = stateRef.current.clientPayments.filter(cp => cp.id !== id);
+    setState(s => ({ ...s, clientPayments: updated }));
     try {
       await fetch(`/api/client-payments/${id}`, { 
         method: 'DELETE',
@@ -984,7 +1101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'X-User-Username': user?.username || 'Admin'
         }
       });
-      await saveAllToStore('clientPayments', state.clientPayments.filter(cp => cp.id !== id));
+      await saveAllToStore('clientPayments', updated);
       refreshActivityLogs();
     } catch (e) {
       console.error(e);
@@ -2291,6 +2408,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUser,
       importBackup,
       refreshActivityLogs,
+      refreshBillings,
+      refreshClientPayments,
       fetchNumberingSettings,
       fetchNumberingAuditLogs,
       updateNumberingSetting,
