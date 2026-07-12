@@ -92,6 +92,7 @@ function initDbSchema() {
       hardCopyFileType TEXT,
       holdAmount REAL DEFAULT 0,
       holdReason TEXT,
+      extraWorkAmount REAL DEFAULT 0,
       FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
 
@@ -798,6 +799,7 @@ function initDbSchema() {
   try { db.exec("ALTER TABLE billings ADD COLUMN tdsCertificateReceived INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE billings ADD COLUMN tdsCertificatePending INTEGER DEFAULT 1"); } catch(e) {}
   try { db.exec("ALTER TABLE billings ADD COLUMN gstStatus TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE billings ADD COLUMN extraWorkAmount REAL DEFAULT 0"); } catch(e) {}
 
   // Create numbering tables
   db.exec(`
@@ -1448,11 +1450,11 @@ async function startServer() {
 
   app.post("/api/billings", (req, res) => {
     try {
-      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
+      const { id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, extraWorkAmount, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
       const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
-        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType, tdsCertificateReceived, tdsCertificatePending, gstStatus)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO billings (id, srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, extraWorkAmount, billType, measurementItems, hardCopyFile, hardCopyFileName, hardCopyFileType, tdsCertificateReceived, tdsCertificatePending, gstStatus)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         srNo || null,
@@ -1469,6 +1471,7 @@ async function startServer() {
         debitReason || null,
         parseFloat(holdAmount || 0),
         holdReason || null,
+        parseFloat(extraWorkAmount || 0),
         billType || null,
         mItemsStr,
         hardCopyFile || null,
@@ -1487,11 +1490,11 @@ async function startServer() {
   app.put("/api/billings/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
+      const { srNo, projectId, billNo, workNature, amount, month, certifyDate, tds, retention, gst, debitAmount, debitReason, holdAmount, holdReason, extraWorkAmount, hardCopyFile, hardCopyFileName, hardCopyFileType, billType, measurementItems, tdsCertificateReceived, tdsCertificatePending, gstStatus } = req.body;
       const mItemsStr = measurementItems ? (typeof measurementItems === 'string' ? measurementItems : JSON.stringify(measurementItems)) : null;
       db.prepare(`
         UPDATE billings
-        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, debitAmount = ?, debitReason = ?, holdAmount = ?, holdReason = ?, billType = ?, measurementItems = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?, tdsCertificateReceived = ?, tdsCertificatePending = ?, gstStatus = ?
+        SET srNo = ?, projectId = ?, billNo = ?, workNature = ?, amount = ?, month = ?, certifyDate = ?, tds = ?, retention = ?, gst = ?, debitAmount = ?, debitReason = ?, holdAmount = ?, holdReason = ?, extraWorkAmount = ?, billType = ?, measurementItems = ?, hardCopyFile = ?, hardCopyFileName = ?, hardCopyFileType = ?, tdsCertificateReceived = ?, tdsCertificatePending = ?, gstStatus = ?
         WHERE id = ?
       `).run(
         srNo || null,
@@ -1508,6 +1511,7 @@ async function startServer() {
         debitReason || null,
         parseFloat(holdAmount || 0),
         holdReason || null,
+        parseFloat(extraWorkAmount || 0),
         billType || null,
         mItemsStr,
         hardCopyFile || null,

@@ -100,10 +100,13 @@ export const ClientPayment = () => {
 
       projectBills.forEach((bill) => {
         const gross = bill.amount || 0;
+        const extraWork = bill.extraWorkAmount || 0;
         const gst = bill.gst || 0;
         const tds = bill.tds || 0;
         const retention = bill.retention || 0;
-        const billingAmount = (gross - tds - retention) + gst;
+        const debit = bill.debitAmount || 0;
+        const hold = bill.holdAmount || 0;
+        const billingAmount = (gross + extraWork - tds - retention - debit - hold) + gst;
 
         if (remainingPayment <= 0) {
           billStatusMap[bill.id] = 'Pending';
@@ -120,10 +123,13 @@ export const ClientPayment = () => {
     return billings.map((bill) => {
       const project = projects.find((p) => p.id === bill.projectId);
       const gross = bill.amount || 0;
+      const extraWork = bill.extraWorkAmount || 0;
       const gst = bill.gst || 0;
       const tds = bill.tds || 0;
       const retention = bill.retention || 0;
-      const netReceivable = (gross - tds - retention) + gst;
+      const debit = bill.debitAmount || 0;
+      const hold = bill.holdAmount || 0;
+      const netReceivable = (gross + extraWork - tds - retention - debit - hold) + gst;
       const status = billStatusMap[bill.id] || 'Pending';
 
       return {
@@ -131,6 +137,9 @@ export const ClientPayment = () => {
         projectName: project?.name || 'Unknown Project',
         clientName: project?.clientName || 'Unknown Client',
         gross,
+        extraWork,
+        debit,
+        hold,
         gst,
         tds,
         retention,
@@ -220,6 +229,9 @@ export const ClientPayment = () => {
     const scopePayments = processedPayments.filter(p => selectedProjectId === 'all' || p.projectId === selectedProjectId);
 
     const totalWorkAmount = scopeBills.reduce((acc, b) => acc + b.gross, 0);
+    const totalExtraWorkAmount = scopeBills.reduce((acc, b) => acc + (b.extraWork || 0), 0);
+    const totalDebitAmount = scopeBills.reduce((acc, b) => acc + (b.debit || 0), 0);
+    const totalHoldAmount = scopeBills.reduce((acc, b) => acc + (b.hold || 0), 0);
     const totalGST = scopeBills.reduce((acc, b) => acc + b.gst, 0);
     const totalTDS = scopeBills.reduce((acc, b) => acc + b.tds, 0);
     const totalRetention = scopeBills.reduce((acc, b) => acc + b.retention, 0);
@@ -230,6 +242,9 @@ export const ClientPayment = () => {
 
     return {
       totalWorkAmount,
+      totalExtraWorkAmount,
+      totalDebitAmount,
+      totalHoldAmount,
       totalBillingAmount,
       totalGST,
       totalTDS,
@@ -398,16 +413,16 @@ export const ClientPayment = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-3 bg-gray-50 p-2 border border-[#8c9ba8] print:hidden">
         {/* Total Work Amount */}
         <div className="sap-panel p-2 flex flex-col bg-white border-l-2 border-l-gray-500 shadow-sm">
-          <span className="font-semibold text-gray-500 uppercase tracking-tight text-[8px] leading-none">Total Work Amount</span>
-          <span className="text-sm font-black text-gray-800 mt-1 font-mono">{fmt(metrics.totalWorkAmount)}</span>
-          <span className="text-[8px] text-gray-400 mt-0.5">Base Value Executed</span>
+          <span className="font-semibold text-gray-500 uppercase tracking-tight text-[8px] leading-none">Total Work Executed</span>
+          <span className="text-sm font-black text-gray-800 mt-1 font-mono">{fmt(metrics.totalWorkAmount + metrics.totalExtraWorkAmount)}</span>
+          <span className="text-[8px] text-gray-400 mt-0.5">Base: {fmt(metrics.totalWorkAmount)} | Extra: {fmt(metrics.totalExtraWorkAmount)}</span>
         </div>
 
         {/* Total Billing Amount */}
         <div className="sap-panel p-2 flex flex-col bg-white border-l-2 border-l-blue-500 shadow-sm">
           <span className="font-semibold text-blue-900 uppercase tracking-tight text-[8px] leading-none">Total Billing Amount</span>
           <span className="text-sm font-black text-blue-800 mt-1 font-mono">{fmt(metrics.totalBillingAmount)}</span>
-          <span className="text-[8px] text-blue-400 mt-0.5">Payable by Client</span>
+          <span className="text-[8px] text-blue-400 mt-0.5">Debits: {fmt(metrics.totalDebitAmount)} | Holds: {fmt(metrics.totalHoldAmount)}</span>
         </div>
 
         {/* Total GST Amount */}
@@ -467,6 +482,74 @@ export const ClientPayment = () => {
               ? 'Fully Paid' 
               : 'Advance / Excess Amount Received'}
           </span>
+        </div>
+      </div>
+
+      {/* -----------------------------------------------------------------
+          Validation Step / Reconciliation Discrepancy Highlight
+          ----------------------------------------------------------------- */}
+      <div className="mb-3 p-3 bg-white border border-[#8c9ba8] shadow-xs rounded-sm">
+        <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-gray-200">
+          <div className="flex items-center space-x-2">
+            <ShieldCheck size={14} className="text-[#002f6c]" />
+            <h3 className="font-bold text-xs uppercase text-[#002f6c] tracking-wide">Ledger Reconciliation & Validation</h3>
+          </div>
+          <span className="text-[9px] bg-slate-100 px-2 py-0.5 rounded-full font-mono text-slate-600 font-bold">
+            {selectedProjectId === 'all' ? 'All Consolidated Accounts' : `Project: ${projects.find(p => p.id === selectedProjectId)?.name || 'Selected Project'}`}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div className="md:col-span-8 flex flex-col space-y-1.5">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+              {Math.abs(metrics.balanceAmount) < 0.01 ? (
+                <div className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-sm font-bold text-[9px] uppercase tracking-wider flex items-center space-x-1">
+                  <CheckCircle2 size={11} />
+                  <span>RECONCILED</span>
+                </div>
+              ) : metrics.balanceAmount > 0 ? (
+                <div className="bg-red-100 text-red-800 px-2 py-0.5 rounded-sm font-bold text-[9px] uppercase tracking-wider flex items-center space-x-1">
+                  <AlertCircle size={11} className="text-red-600 animate-pulse" />
+                  <span>PAYMENT SHORTFALL</span>
+                </div>
+              ) : (
+                <div className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded-sm font-bold text-[9px] uppercase tracking-wider flex items-center space-x-1">
+                  <CheckCircle2 size={11} className="text-teal-600" />
+                  <span>EXCESS / ADVANCE RECOVERY</span>
+                </div>
+              )}
+              <span className="text-xs font-bold text-gray-800">
+                {Math.abs(metrics.balanceAmount) < 0.01 ? (
+                  "The net billings perfectly match received payments with 100% precision."
+                ) : metrics.balanceAmount > 0 ? (
+                  `Billed amount exceeds received payments by ${fmt(metrics.balanceAmount)}.`
+                ) : (
+                  `Payments received exceed net billed amount by ${fmt(Math.abs(metrics.balanceAmount))}.`
+                )}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              This validation checks all certified bills, combining base contract value (<strong>{fmt(metrics.totalWorkAmount)}</strong>) and extra work items (<strong>{fmt(metrics.totalExtraWorkAmount)}</strong>), minus deductions (TDS, Retention, Debits, Holds), resulting in a net receivable of <strong>{fmt(metrics.totalBillingAmount)}</strong> versus client-cleared payments of <strong>{fmt(metrics.totalAmountReceived)}</strong>.
+            </p>
+          </div>
+
+          <div className="md:col-span-4 bg-gray-50 p-2 border border-gray-200 rounded-sm font-mono text-[11px] flex flex-col space-y-1">
+            <div className="flex justify-between">
+              <span className="text-gray-500 text-[9px] font-sans">TOTAL NET BILLED (W/ EXTRA WORK):</span>
+              <span className="font-bold text-[#002f6c]">{fmt(metrics.totalBillingAmount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500 text-[9px] font-sans">TOTAL AMOUNT RECEIVED:</span>
+              <span className="font-bold text-green-700">{fmt(metrics.totalAmountReceived)}</span>
+            </div>
+            <div className="border-t border-dashed border-gray-300 my-1"></div>
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-[9px] text-gray-600 font-sans">RECONCILIATION VARIANCE:</span>
+              <span className={`font-black text-xs ${Math.abs(metrics.balanceAmount) < 0.01 ? 'text-green-600' : metrics.balanceAmount > 0 ? 'text-red-600' : 'text-teal-600'}`}>
+                {metrics.balanceAmount > 0 ? `+${fmt(metrics.balanceAmount)}` : fmt(metrics.balanceAmount)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -610,9 +693,12 @@ export const ClientPayment = () => {
                   <th className="p-2 border-r border-gray-200">Bill Date</th>
                   <th className="p-2 border-r border-gray-200">Work Description</th>
                   <th className="p-2 border-r border-gray-200 text-right">Work Amount</th>
+                  <th className="p-2 border-r border-gray-200 text-right text-emerald-700">Extra Work</th>
                   <th className="p-2 border-r border-gray-200 text-right">GST Amount</th>
                   <th className="p-2 border-r border-gray-200 text-right">TDS Amount</th>
                   <th className="p-2 border-r border-gray-200 text-right">Retention Amount</th>
+                  <th className="p-2 border-r border-gray-200 text-right text-red-700">Debits</th>
+                  <th className="p-2 border-r border-gray-200 text-right text-amber-700">Holds</th>
                   <th className="p-2 border-r border-gray-200 text-right font-black text-[#002f6c]">Billing Amount</th>
                   <th className="p-2 text-center">Status</th>
                 </tr>
@@ -620,7 +706,7 @@ export const ClientPayment = () => {
               <tbody className="divide-y divide-gray-200 font-mono">
                 {filteredBills.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-gray-400 font-sans italic">
+                    <td colSpan={13} className="p-8 text-center text-gray-400 font-sans italic">
                       No certified billing entries match the selected filters or project.
                     </td>
                   </tr>
@@ -635,9 +721,12 @@ export const ClientPayment = () => {
                           {b.workNature}
                         </td>
                         <td className="p-2 border-r border-gray-200 text-right">{b.gross.toLocaleString('en-IN')}</td>
+                        <td className="p-2 border-r border-gray-200 text-right text-emerald-600">{b.extraWork.toLocaleString('en-IN')}</td>
                         <td className="p-2 border-r border-gray-200 text-right text-purple-600">{b.gst.toLocaleString('en-IN')}</td>
                         <td className="p-2 border-r border-gray-200 text-right text-red-600">({b.tds.toLocaleString('en-IN')})</td>
                         <td className="p-2 border-r border-gray-200 text-right text-teal-700">({b.retention.toLocaleString('en-IN')})</td>
+                        <td className="p-2 border-r border-gray-200 text-right text-red-500">({b.debit.toLocaleString('en-IN')})</td>
+                        <td className="p-2 border-r border-gray-200 text-right text-amber-600">({b.hold.toLocaleString('en-IN')})</td>
                         <td className="p-2 border-r border-gray-200 text-right font-black text-[#002f6c] bg-gray-50/50">
                           {b.netReceivable.toLocaleString('en-IN')}
                         </td>
@@ -670,6 +759,9 @@ export const ClientPayment = () => {
                     <td className="p-2.5 border-r border-gray-300">
                       {filteredBills.reduce((acc, b) => acc + b.gross, 0).toLocaleString('en-IN')}
                     </td>
+                    <td className="p-2.5 border-r border-gray-300 text-emerald-700">
+                      {filteredBills.reduce((acc, b) => acc + b.extraWork, 0).toLocaleString('en-IN')}
+                    </td>
                     <td className="p-2.5 border-r border-gray-300 text-purple-700">
                       {filteredBills.reduce((acc, b) => acc + b.gst, 0).toLocaleString('en-IN')}
                     </td>
@@ -678,6 +770,12 @@ export const ClientPayment = () => {
                     </td>
                     <td className="p-2.5 border-r border-gray-300 text-teal-800">
                       ({filteredBills.reduce((acc, b) => acc + b.retention, 0).toLocaleString('en-IN')})
+                    </td>
+                    <td className="p-2.5 border-r border-gray-300 text-red-600">
+                      ({filteredBills.reduce((acc, b) => acc + b.debit, 0).toLocaleString('en-IN')})
+                    </td>
+                    <td className="p-2.5 border-r border-gray-300 text-amber-700">
+                      ({filteredBills.reduce((acc, b) => acc + b.hold, 0).toLocaleString('en-IN')})
                     </td>
                     <td className="p-2.5 border-r border-gray-300 text-[#002f6c] font-black bg-gray-200">
                       {filteredBills.reduce((acc, b) => acc + b.netReceivable, 0).toLocaleString('en-IN')}
