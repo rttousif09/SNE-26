@@ -25,7 +25,7 @@ const ITEM_CATEGORIES = [
   'Consumables', 'Safety Items', 'Tools', 'Equipment', 'Machinery', 'Office Supplies', 
   'Civil', 'Structural', 'Electrical', 'Plumbing', 'Finishing', 'Other'
 ];
-const ITEM_UNITS = ['Nos', 'Kg', 'Ton', 'Sqm', 'Cum', 'Meter', 'Bundle', 'Bag', 'Roll', 'Litre'];
+const ITEM_UNITS = ['Nos', 'Kg', 'Ton', 'Sqm', 'Cum', 'Meter', 'Bundle', 'Bag', 'Roll', 'Litre', 'Sq.ft', 'Cu.ft', 'Rft', 'Lumpsum', 'Bags', 'Pcs', 'Brass', 'Trips', 'Days', 'Months'];
 const ASSET_STATUSES = ['Available', 'In Use', 'Under Maintenance', 'Damaged', 'Lost', 'Disposed'];
 
 interface MaterialTransfer {

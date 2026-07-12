@@ -1361,6 +1361,17 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                         <option value="kg">kg</option>
                         <option value="mt">mt</option>
                         <option value="nos">nos</option>
+                        <option value="Sq.ft">Sq.ft</option>
+                        <option value="Cu.ft">Cu.ft</option>
+                        <option value="Rft">Rft</option>
+                        <option value="Lumpsum">Lumpsum</option>
+                        <option value="Bags">Bags</option>
+                        <option value="Ltr">Ltr</option>
+                        <option value="Pcs">Pcs</option>
+                        <option value="Brass">Brass</option>
+                        <option value="Trips">Trips</option>
+                        <option value="Days">Days</option>
+                        <option value="Months">Months</option>
                       </select>
                     </div>
                     <div>
@@ -1551,6 +1562,17 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                     <option value="kg">kg</option>
                     <option value="mt">mt</option>
                     <option value="nos">nos</option>
+                    <option value="Sq.ft">Sq.ft</option>
+                    <option value="Cu.ft">Cu.ft</option>
+                    <option value="Rft">Rft</option>
+                    <option value="Lumpsum">Lumpsum</option>
+                    <option value="Bags">Bags</option>
+                    <option value="Ltr">Ltr</option>
+                    <option value="Pcs">Pcs</option>
+                    <option value="Brass">Brass</option>
+                    <option value="Trips">Trips</option>
+                    <option value="Days">Days</option>
+                    <option value="Months">Months</option>
                   </select>
                 </div>
 
