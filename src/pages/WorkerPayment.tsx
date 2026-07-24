@@ -237,7 +237,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
 
     const totalRecovered = workerPayments
       .filter(p => p.workerId === formData.workerId && p.id !== editingId)
-      .reduce((sum, p) => sum + (p.recoveryAmount || 0), 0);
+      .reduce((sum, p) => sum + (p.recoveryAmount || 0) + (p.advanceDeduction || 0), 0);
 
     const manualBalanceContribution = workerLedger
       .filter(l => l.workerId === formData.workerId)
@@ -259,7 +259,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       const otRate = rate / 12;
       const allow = Number(formData.allowance) || 0;
       
-      finalWorkAmount = (days * rate) + (otHours * otRate) + allow;
+      const abstractAmount = formData.selectedFloorAbstracts?.reduce((sum, fa) => sum + (fa.amount || 0), 0) || 0;
+      
+      finalWorkAmount = (days * rate) + (otHours * otRate) + allow + abstractAmount;
     }
 
     const messDeduction = Number(formData.messDeduction) || 0;
@@ -356,7 +358,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
         'ID No': w.idNo || '',
         'Worker Name': w.name,
         'Tower/Block': p.towerName || '-',
-        'Work Area': p.level || '-',
+        'Work Area': p.level ? p.level : (p.floorAbstractsJson ? Array.from(new Set(JSON.parse(p.floorAbstractsJson).map((x: any) => x.level))).join(', ') : '-'),
         'Month': p.month,
         'Gross Wages (INR)': p.workAmount,
         'Supply Amt (INR)': p.supplyAmount || 0,
@@ -701,49 +703,95 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             </div>
 
             {selectedCategory === 'Monthly work' && (
-              <div className="grid grid-cols-4 gap-3 bg-blue-50/50 p-2 border border-blue-100 rounded-sm mb-3 mt-1">
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-700">Work Days:</label>
-                  <input
-                    required
-                    type="number"
-                    step="any"
-                    className="sap-input font-bold"
-                    value={formData.workDays}
-                    onChange={e => setFormData({...formData, workDays: e.target.value})}
-                  />
+              <div className="bg-blue-50/50 p-2 border border-blue-100 rounded-sm mb-3 mt-1">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[11px] font-bold text-[#002f6c] uppercase">Monthly Work Details</span>
+                  {formData.workerId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                        setFloorFilterLevel('');
+                        setShowFloorAbstractPopup(true);
+                      }}
+                      className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] font-bold py-1 px-2.5 rounded border border-blue-700 transition"
+                    >
+                      Import From Floor Abstract
+                    </button>
+                  )}
                 </div>
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-700">Rate / Day (INR):</label>
-                  <input
-                    required
-                    type="number"
-                    step="any"
-                    className="sap-input font-bold"
-                    value={formData.ratePerDay}
-                    onChange={e => setFormData({...formData, ratePerDay: e.target.value})}
-                  />
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-700">Work Days:</label>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      className="sap-input font-bold"
+                      value={formData.workDays}
+                      onChange={e => setFormData({...formData, workDays: e.target.value})}
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-700">Rate / Day (INR):</label>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      className="sap-input font-bold"
+                      value={formData.ratePerDay}
+                      onChange={e => setFormData({...formData, ratePerDay: e.target.value})}
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-700">OT (Hours):</label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="sap-input font-bold"
+                      value={formData.overtimeHours}
+                      onChange={e => setFormData({...formData, overtimeHours: e.target.value})}
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-700">Allowance (INR):</label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="sap-input font-bold text-green-700"
+                      value={formData.allowance}
+                      onChange={e => setFormData({...formData, allowance: e.target.value})}
+                    />
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-700">OT (Hours):</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input font-bold"
-                    value={formData.overtimeHours}
-                    onChange={e => setFormData({...formData, overtimeHours: e.target.value})}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-700">Allowance (INR):</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input font-bold text-green-700"
-                    value={formData.allowance}
-                    onChange={e => setFormData({...formData, allowance: e.target.value})}
-                  />
-                </div>
+                {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 && (
+                  <div className="bg-white border border-blue-200 rounded p-2 text-[10px] space-y-1.5 mt-2">
+                    <div className="flex justify-between items-center font-bold text-blue-800 border-b border-blue-200 pb-1">
+                      <span>Linked Floor Abstracts ({formData.selectedFloorAbstracts.length})</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                          setFloorFilterLevel('');
+                          setShowFloorAbstractPopup(true);
+                        }}
+                        className="text-blue-700 hover:underline font-semibold"
+                      >
+                        + Add/Edit
+                      </button>
+                    </div>
+                    <div className="max-h-24 overflow-y-auto pr-1 space-y-1">
+                      {formData.selectedFloorAbstracts.map(fa => (
+                        <div key={fa.floorAbstractId} className="flex justify-between items-center bg-blue-50 p-1.5 rounded">
+                          <span className="font-mono text-[9px] text-gray-600 truncate mr-2">
+                            Lvl: {fa.level} | Flat: {fa.flatNo}
+                          </span>
+                          <span className="font-bold text-green-700">₹{fa.amount} ({fa.hajira} Hajira)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1022,7 +1070,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                     w.idNo,
                     w.name,
                     p.towerName || '-',
-                    p.level || '-',
+                    p.level ? p.level : (p.floorAbstractsJson ? Array.from(new Set(JSON.parse(p.floorAbstractsJson).map((x: any) => x.level))).join(', ') : '-'),
                     `Rs. ${p.workAmount.toLocaleString('en-IN')}`,
                     `Rs. ${totalDed.toLocaleString('en-IN')}`,
                     `Rs. ${p.netPayment.toLocaleString('en-IN')}`,
@@ -1133,7 +1181,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                     <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.idNo}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{worker.name}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-indigo-900 font-semibold bg-indigo-50/10">{payment.towerName || <span className="text-gray-400 italic font-normal font-sans font-mono">-</span>}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700">{payment.level || <span className="text-gray-400 italic">None</span>}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700">
+                      {payment.level ? payment.level : (payment.floorAbstractsJson ? Array.from(new Set(JSON.parse(payment.floorAbstractsJson).map((x: any) => x.level))).join(', ') : <span className="text-gray-400 italic">None</span>)}
+                    </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono">{payment.month}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{payment.workAmount.toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700 font-semibold bg-green-50/25">₹{(payment.supplyAmount || 0).toLocaleString('en-IN')}</td>
@@ -1421,7 +1471,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-gray-700 font-bold text-center">{worker.srNo || '-'}</td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-gray-700 font-bold">{worker.idNo}</td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 font-sans font-semibold text-gray-900">{worker.name}</td>
-                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 font-sans text-gray-800">{payment.level || <span className="text-gray-400 italic">None</span>}</td>
+                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 font-sans text-gray-800">
+                          {payment.level ? payment.level : (payment.floorAbstractsJson ? Array.from(new Set(JSON.parse(payment.floorAbstractsJson).map((x: any) => x.level))).join(', ') : <span className="text-gray-400 italic">None</span>)}
+                        </td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5">{payment.month}</td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right font-medium">₹{payment.workAmount.toLocaleString('en-IN')}</td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-green-800 font-semibold">₹{(payment.supplyAmount || 0).toLocaleString('en-IN')}</td>
@@ -1743,10 +1795,12 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 <button
                   type="button"
                   onClick={() => {
+                    const isMonthly = selectedCategory === 'Monthly work';
                     setFormData({
                       ...formData,
                       selectedFloorAbstracts: tempFloorSelections,
-                      workAmount: popupSummary.totalAmount.toString()
+                      workAmount: popupSummary.totalAmount.toString(),
+                      ...(isMonthly && { workDays: popupSummary.totalHajira.toString() })
                     });
                     setShowFloorAbstractPopup(false);
                   }}

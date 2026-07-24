@@ -253,8 +253,8 @@ export const WorkerLedger: React.FC = () => {
         date: p.date || `${p.month}-28`,
         type: 'Work Entry',
         project: projectMap[p.projectId] || 'Unregistered Site',
-        description: p.workCategory ? `Work payroll: ${p.workCategory} (${p.workDays || 0} days @ ₹${p.ratePerDay || 0}/day)` : `Payroll wage execution for ${p.month}`,
-        workAmount: p.workAmount || 0,
+        description: p.workCategory ? `Work payroll: ${p.workCategory} (${p.workDays || 0} days @ ₹${p.ratePerDay || 0}/day)${p.supplyAmount ? ' + Material Supply' : ''}` : `Payroll wage execution for ${p.month}`,
+        workAmount: (p.workAmount || 0) + (Number(p.supplyAmount) || 0),
         advance: 0,
         kharchi: 0,
         messDeduction: 0,
@@ -365,7 +365,7 @@ export const WorkerLedger: React.FC = () => {
   }, [activeWorker, filteredAdvances, filteredKharchis, filteredPayments, filteredManualLedger, filterTxType, filterProject, filterDateStart, filterDateEnd, filterFinYear, filterMonth, projectMap]);
 
   // KPI Calculations
-  const totalGrossEarned = useMemo(() => filteredPayments.reduce((s, p) => s + (p.workAmount || 0), 0), [filteredPayments]);
+  const totalGrossEarned = useMemo(() => filteredPayments.reduce((s, p) => s + (p.workAmount || 0) + (Number(p.supplyAmount) || 0), 0), [filteredPayments]);
   const totalAdvanceTaken = useMemo(() => {
     let sum = filteredAdvances.reduce((s, a) => s + (a.amount || 0), 0) + filteredManualLedger.reduce((s, l) => s + (l.debit || 0), 0);
     // Add opening if included in filters
