@@ -124,7 +124,7 @@ export const FinancialYearArchive: React.FC = () => {
     <div className="h-full flex flex-col p-2 space-y-2 overflow-y-auto bg-gray-50 text-[11px]">
       <div className="flex items-center justify-between bg-white p-2 rounded shadow-sm border border-gray-200">
         <div className="flex flex-col">
-          <h2 className="text-sm font-black text-[#002f6c] flex items-center gap-1.5">
+          <h2 className="text-sm font-black text-[var(--color-sap-blue-val)] flex items-center gap-1.5">
             <Archive size={16} /> Financial Year Archive & Closing
           </h2>
           <span className="text-gray-500 font-medium">Manage, close, and archive financial records.</span>
@@ -132,19 +132,19 @@ export const FinancialYearArchive: React.FC = () => {
         <div className="flex space-x-1">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`sap-btn px-3 py-1 ${activeTab === 'dashboard' ? 'bg-[#002f6c] text-white' : 'bg-white text-gray-700'}`}
+            className={`sap-btn px-3 py-1 ${activeTab === 'dashboard' ? 'bg-[var(--color-sap-blue-val)] text-white' : 'bg-white text-gray-700'}`}
           >
             Dashboard
           </button>
           <button 
             onClick={() => setActiveTab('manage')}
-            className={`sap-btn px-3 py-1 ${activeTab === 'manage' ? 'bg-[#002f6c] text-white' : 'bg-white text-gray-700'}`}
+            className={`sap-btn px-3 py-1 ${activeTab === 'manage' ? 'bg-[var(--color-sap-blue-val)] text-white' : 'bg-white text-gray-700'}`}
           >
             Manage FYs
           </button>
           <button 
             onClick={() => setActiveTab('compare')}
-            className={`sap-btn px-3 py-1 ${activeTab === 'compare' ? 'bg-[#002f6c] text-white' : 'bg-white text-gray-700'}`}
+            className={`sap-btn px-3 py-1 ${activeTab === 'compare' ? 'bg-[var(--color-sap-blue-val)] text-white' : 'bg-white text-gray-700'}`}
           >
             Comparison Reports
           </button>

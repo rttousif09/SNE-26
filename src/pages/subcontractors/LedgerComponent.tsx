@@ -229,7 +229,7 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
                       return (
                         <tr key={idx} className="hover:bg-gray-50/50 transition">
                           <td className="p-2 text-gray-500 text-center font-bold">{line.date}</td>
-                          <td className="p-2 font-bold text-[#002f6c]">{line.referenceNo}</td>
+                          <td className="p-2 font-bold text-[var(--color-sap-blue-val)]">{line.referenceNo}</td>
                           <td className="p-2 font-medium text-gray-800">{line.particulars}</td>
                           <td className="p-2 text-gray-400 text-[9px] font-bold">{line.projectName}</td>
                           <td className="p-2 text-right text-rose-600 font-bold">

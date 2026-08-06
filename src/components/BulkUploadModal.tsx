@@ -458,7 +458,7 @@ export function BulkUploadModal({
         
         {/* Header toolbar */}
         <div className="flex justify-between items-center p-3.5 border-b bg-[#eef2f6] shrink-0">
-          <h2 className="font-bold text-[#002f6c] flex items-center text-xs font-sans">
+          <h2 className="font-bold text-[var(--color-sap-blue-val)] flex items-center text-xs font-sans">
             <Upload size={14} className="mr-2 text-[#0056b3]" />
             Smart Sheet Import Suite: <span className="text-[#0056b3] ml-1 font-bold">[{entityName}]</span>
           </h2>
@@ -537,7 +537,7 @@ export function BulkUploadModal({
                 <div className="flex items-center space-x-2 shrink-0 max-sm:w-full max-sm:justify-end">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-2.5 py-1 text-[#0056b3] border border-[#0056b3]/30 text-[10px] hover:bg-[#0056b3]/5 bg-white font-bold rounded cursor-pointer"
+                    className="px-2.5 py-1 text-[#0056b3] border border-[#0056b3]/30 text-[10px] hover:bg-[var(--btn-hover-top)]/5 bg-white font-bold rounded cursor-pointer"
                   >
                     Load New File
                   </button>
@@ -552,12 +552,12 @@ export function BulkUploadModal({
             ) : (
               <div className="space-y-2">
                 <Upload size={24} className="mx-auto text-slate-400 animate-bounce" />
-                <p className="text-[10px] text-[#002f6c] font-sans font-extrabold">DRAG & DROP WORKSHEET OR BROWSE DEVICE</p>
+                <p className="text-[10px] text-[var(--color-sap-blue-val)] font-sans font-extrabold">DRAG & DROP WORKSHEET OR BROWSE DEVICE</p>
                 <div className="pt-1.5">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-1.5 bg-[#0056b3] text-white hover:bg-[#003d80] rounded font-sans font-bold select-none cursor-pointer text-[10px]"
+                    className="px-4 py-1.5 bg-[var(--btn-hover-top)] text-white hover:bg-[#003d80] rounded font-sans font-bold select-none cursor-pointer text-[10px]"
                   >
                     Import From Computer
                   </button>

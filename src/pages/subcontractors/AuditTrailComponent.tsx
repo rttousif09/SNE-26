@@ -21,7 +21,7 @@ export const AuditTrailComponent: React.FC<AuditTrailComponentProps> = ({ auditT
         {val}
       </span>
     )},
-    { key: 'recordId', header: 'Target ID', sortable: true, filterable: true, render: (val) => <span className="text-[#002f6c] font-bold text-[9px] font-mono">{val}</span> },
+    { key: 'recordId', header: 'Target ID', sortable: true, filterable: true, render: (val) => <span className="text-[var(--color-sap-blue-val)] font-bold text-[9px] font-mono">{val}</span> },
     { key: 'details', header: 'Log Details & Descriptions', sortable: true, filterable: true, render: (val) => <span className="text-gray-600 font-mono font-semibold">{val}</span> }
   ];
 

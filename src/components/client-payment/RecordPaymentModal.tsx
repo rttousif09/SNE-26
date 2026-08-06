@@ -85,7 +85,7 @@ export const RecordPaymentModal = ({
       >
         <div className="border-b border-gray-200 bg-gray-50 px-4 py-2.5 flex justify-between items-center">
           <div>
-            <h2 className="text-[#002f6c] font-bold text-sm flex items-center space-x-1.5">
+            <h2 className="text-[var(--color-sap-blue-val)] font-bold text-sm flex items-center space-x-1.5">
               <Landmark size={14} className="text-[#0056b3]" />
               <span>Record Client Payment</span>
             </h2>
@@ -108,7 +108,7 @@ export const RecordPaymentModal = ({
               </label>
               <select
                 required
-                className="sap-input font-bold text-[#002f6c]"
+                className="sap-input font-bold text-[var(--color-sap-blue-val)]"
                 value={formData.projectId}
                 onChange={(e) => setFormData({ ...formData, projectId: e.target.value, billId: '' })}
               >
@@ -299,7 +299,7 @@ export const RecordPaymentModal = ({
             </button>
             <button
               type="submit"
-              className="sap-btn bg-[#0056b3] text-white hover:bg-[#004494] px-4 flex items-center space-x-1"
+              className="sap-btn bg-[var(--btn-hover-top)] text-white hover:bg-[#004494] px-4 flex items-center space-x-1"
             >
               <Save size={14} />
               <span>Record Payment</span>

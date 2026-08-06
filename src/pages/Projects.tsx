@@ -386,21 +386,21 @@ export const Projects: React.FC = () => {
             <button
               type="button"
               onClick={() => setFilterStatus('All')}
-              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'All' ? 'bg-[#0056b3] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'All' ? 'bg-[var(--btn-hover-top)] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
             >
               All
             </button>
             <button
               type="button"
               onClick={() => setFilterStatus('Ongoing')}
-              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'Ongoing' ? 'bg-[#0056b3] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'Ongoing' ? 'bg-[var(--btn-hover-top)] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
             >
               Ongoing
             </button>
             <button
               type="button"
               onClick={() => setFilterStatus('Completed')}
-              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'Completed' ? 'bg-[#0056b3] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+              className={`px-2 flex items-center h-full text-[10px] font-bold ${filterStatus === 'Completed' ? 'bg-[var(--btn-hover-top)] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
             >
               Completed
             </button>
@@ -682,7 +682,7 @@ export const Projects: React.FC = () => {
       {viewDetailsId && projects.find(p => p.id === viewDetailsId) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="bg-white rounded-md shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-[#0056b3] text-white px-4 py-2 flex justify-between items-center shrink-0">
+            <div className="bg-[var(--btn-hover-top)] text-white px-4 py-2 flex justify-between items-center shrink-0">
               <h3 className="font-bold">Project Details</h3>
               <button
                 onClick={() => setViewDetailsId(null)}

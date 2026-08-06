@@ -395,11 +395,11 @@ export const ClientPayment = () => {
 
         {/* Quick select project filter right on the toolbar */}
         <div className="flex items-center space-x-1.5">
-          <span className="font-bold text-[#002f6c] uppercase tracking-wide text-[8px]">Active Project:</span>
+          <span className="font-bold text-[var(--color-sap-blue-val)] uppercase tracking-wide text-[8px]">Active Project:</span>
           <select 
             value={selectedProjectId} 
             onChange={e => setSelectedProjectId(e.target.value)}
-            className="sap-input font-bold text-[#002f6c] py-0.5 text-[11px] w-48"
+            className="sap-input font-bold text-[var(--color-sap-blue-val)] py-0.5 text-[11px] w-48"
           >
             <option value="all">— All Accounts —</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -491,8 +491,8 @@ export const ClientPayment = () => {
       <div className="mb-3 p-3 bg-white border border-[#8c9ba8] shadow-xs rounded-sm">
         <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-gray-200">
           <div className="flex items-center space-x-2">
-            <ShieldCheck size={14} className="text-[#002f6c]" />
-            <h3 className="font-bold text-xs uppercase text-[#002f6c] tracking-wide">Ledger Reconciliation & Validation</h3>
+            <ShieldCheck size={14} className="text-[var(--color-sap-blue-val)]" />
+            <h3 className="font-bold text-xs uppercase text-[var(--color-sap-blue-val)] tracking-wide">Ledger Reconciliation & Validation</h3>
           </div>
           <span className="text-[9px] bg-slate-100 px-2 py-0.5 rounded-full font-mono text-slate-600 font-bold">
             {selectedProjectId === 'all' ? 'All Consolidated Accounts' : `Project: ${projects.find(p => p.id === selectedProjectId)?.name || 'Selected Project'}`}
@@ -536,7 +536,7 @@ export const ClientPayment = () => {
           <div className="md:col-span-4 bg-gray-50 p-2 border border-gray-200 rounded-sm font-mono text-[11px] flex flex-col space-y-1">
             <div className="flex justify-between">
               <span className="text-gray-500 text-[9px] font-sans">TOTAL NET BILLED (W/ EXTRA WORK):</span>
-              <span className="font-bold text-[#002f6c]">{fmt(metrics.totalBillingAmount)}</span>
+              <span className="font-bold text-[var(--color-sap-blue-val)]">{fmt(metrics.totalBillingAmount)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500 text-[9px] font-sans">TOTAL AMOUNT RECEIVED:</span>
@@ -567,7 +567,7 @@ export const ClientPayment = () => {
             <div className="bg-[#f8f9fa] border border-[#8c9ba8] p-3 rounded-sm shadow-xs grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs">
               {/* Project Selection */}
               <div className="flex flex-col space-y-1">
-                <label className="font-bold text-[#002f6c] uppercase tracking-wide text-[9px] flex items-center gap-1">
+                <label className="font-bold text-[var(--color-sap-blue-val)] uppercase tracking-wide text-[9px] flex items-center gap-1">
                   <Briefcase size={10} className="text-[#0056b3]" />
                   <span>Project / Site</span>
                 </label>
@@ -686,7 +686,7 @@ export const ClientPayment = () => {
         {activeTab === 'bills' && (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-[10px] md:text-[11px] relative">
-              <thead className="bg-[#f1f3f5] text-[#002f6c] uppercase font-bold sticky top-0 z-20 border-b border-gray-300 text-[9px]">
+              <thead className="bg-[#f1f3f5] text-[var(--color-sap-blue-val)] uppercase font-bold sticky top-0 z-20 border-b border-gray-300 text-[9px]">
                 <tr>
                   <th className="p-2 border-r border-gray-200 text-center">No.</th>
                   <th className="p-2 border-r border-gray-200">Bill No.</th>
@@ -699,7 +699,7 @@ export const ClientPayment = () => {
                   <th className="p-2 border-r border-gray-200 text-right">Retention Amount</th>
                   <th className="p-2 border-r border-gray-200 text-right text-red-700">Debits</th>
                   <th className="p-2 border-r border-gray-200 text-right text-amber-700">Holds</th>
-                  <th className="p-2 border-r border-gray-200 text-right font-black text-[#002f6c]">Billing Amount</th>
+                  <th className="p-2 border-r border-gray-200 text-right font-black text-[var(--color-sap-blue-val)]">Billing Amount</th>
                   <th className="p-2 text-center">Status</th>
                 </tr>
               </thead>
@@ -727,7 +727,7 @@ export const ClientPayment = () => {
                         <td className="p-2 border-r border-gray-200 text-right text-teal-700">({b.retention.toLocaleString('en-IN')})</td>
                         <td className="p-2 border-r border-gray-200 text-right text-red-500">({b.debit.toLocaleString('en-IN')})</td>
                         <td className="p-2 border-r border-gray-200 text-right text-amber-600">({b.hold.toLocaleString('en-IN')})</td>
-                        <td className="p-2 border-r border-gray-200 text-right font-black text-[#002f6c] bg-gray-50/50">
+                        <td className="p-2 border-r border-gray-200 text-right font-black text-[var(--color-sap-blue-val)] bg-gray-50/50">
                           {b.netReceivable.toLocaleString('en-IN')}
                         </td>
                         <td className="p-2 text-center font-sans">
@@ -777,7 +777,7 @@ export const ClientPayment = () => {
                     <td className="p-2.5 border-r border-gray-300 text-amber-700">
                       ({filteredBills.reduce((acc, b) => acc + b.hold, 0).toLocaleString('en-IN')})
                     </td>
-                    <td className="p-2.5 border-r border-gray-300 text-[#002f6c] font-black bg-gray-200">
+                    <td className="p-2.5 border-r border-gray-300 text-[var(--color-sap-blue-val)] font-black bg-gray-200">
                       {filteredBills.reduce((acc, b) => acc + b.netReceivable, 0).toLocaleString('en-IN')}
                     </td>
                     <td className="p-2.5 bg-white"></td>
@@ -794,12 +794,12 @@ export const ClientPayment = () => {
         {activeTab === 'payments' && (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-[10px] md:text-[11px]">
-              <thead className="bg-[#f1f3f5] text-[#002f6c] uppercase font-bold sticky top-0 z-20 border-b border-gray-300">
+              <thead className="bg-[#f1f3f5] text-[var(--color-sap-blue-val)] uppercase font-bold sticky top-0 z-20 border-b border-gray-300">
                 <tr>
                   <th className="p-2 border-r border-gray-200 text-center">No.</th>
                   <th className="p-2 border-r border-gray-200">Payment Date</th>
                   <th className="p-2 border-r border-gray-200">Payment Category</th>
-                  <th className="p-2 border-r border-gray-200 text-right font-black text-[#002f6c]">Amount Received</th>
+                  <th className="p-2 border-r border-gray-200 text-right font-black text-[var(--color-sap-blue-val)]">Amount Received</th>
                   <th className="p-2 border-r border-gray-200">Payment Mode</th>
                   <th className="p-2 border-r border-gray-200">Reference Number</th>
                   <th className="p-2 border-r border-gray-200">Remarks</th>
@@ -1007,7 +1007,7 @@ const PaymentEntryFormModal = ({
         {/* Header */}
         <div className="border-b border-gray-200 bg-[#f8f9fa] px-4 py-3 flex justify-between items-center">
           <div>
-            <h2 className="text-[#002f6c] font-bold text-sm flex items-center space-x-1.5">
+            <h2 className="text-[var(--color-sap-blue-val)] font-bold text-sm flex items-center space-x-1.5">
               <Landmark size={14} className="text-[#0056b3]" />
               <span>Record Client Receipt Voucher</span>
             </h2>
@@ -1029,7 +1029,7 @@ const PaymentEntryFormModal = ({
             </label>
             <select
               required
-              className="sap-input font-semibold text-[#002f6c] w-full"
+              className="sap-input font-semibold text-[var(--color-sap-blue-val)] w-full"
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
             >
@@ -1046,7 +1046,7 @@ const PaymentEntryFormModal = ({
             </label>
             <select
               required
-              className="sap-input font-semibold text-[#002f6c] w-full"
+              className="sap-input font-semibold text-[var(--color-sap-blue-val)] w-full"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
@@ -1151,7 +1151,7 @@ const PaymentEntryFormModal = ({
             </button>
             <button
               type="submit"
-              className="sap-btn bg-[#0056b3] text-white hover:bg-[#004494] px-5 py-1.5 font-bold cursor-pointer"
+              className="sap-btn bg-[var(--btn-hover-top)] text-white hover:bg-[#004494] px-5 py-1.5 font-bold cursor-pointer"
             >
               Post Client Voucher
             </button>

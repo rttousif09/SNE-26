@@ -171,7 +171,7 @@ export const SheetPreviewModal = ({
         {/* Header toolbar */}
         <div className="border-b border-gray-200 bg-gray-50 px-4 py-3 flex justify-between items-center shrink-0">
           <div>
-            <h2 className="text-[#002f6c] font-black text-sm flex items-center space-x-2">
+            <h2 className="text-[var(--color-sap-blue-val)] font-black text-sm flex items-center space-x-2">
               <FileText size={16} className="text-[#0056b3]" />
               <span>
                 {type === 'paymentSheet' && 'Worker Monthly Payment Sheet Detail View'}
@@ -181,7 +181,7 @@ export const SheetPreviewModal = ({
               </span>
             </h2>
             <div className="text-[10px] text-gray-500 font-mono mt-0.5 flex items-center space-x-2">
-              <span className="font-bold text-[#002f6c]">{projectName}</span>
+              <span className="font-bold text-[var(--color-sap-blue-val)]">{projectName}</span>
               {month && (
                 <>
                   <span className="text-gray-300">|</span>
@@ -207,7 +207,7 @@ export const SheetPreviewModal = ({
             <div className="border border-slate-200 bg-blue-50/20 p-2.5 rounded-sm flex items-center justify-between">
               <div>
                 <p className="text-[9px] text-gray-500 uppercase font-semibold">Total Row Entries</p>
-                <p className="text-lg font-black text-[#002f6c]">
+                <p className="text-lg font-black text-[var(--color-sap-blue-val)]">
                   {type === 'paymentSheet' && sheetPayments.length}
                   {type === 'kharchiSheet' && sheetKharchis.length}
                   {type === 'advanceSheet' && sheetAdvances.length}
@@ -290,7 +290,7 @@ export const SheetPreviewModal = ({
                               <span className="text-[9px] text-gray-400 font-normal">{winfo.design}</span>
                             </td>
                             <td className="px-2 py-1.5 font-sans text-gray-600 border-r border-slate-100">{p.level || <span className="text-slate-300 italic">None</span>}</td>
-                            <td className="px-2 py-1.5 text-right border-r border-slate-100 font-bold text-[#002f6c]">₹{(p.workAmount || 0).toLocaleString('en-IN')}</td>
+                            <td className="px-2 py-1.5 text-right border-r border-slate-100 font-bold text-[var(--color-sap-blue-val)]">₹{(p.workAmount || 0).toLocaleString('en-IN')}</td>
                             <td className="px-2 py-1.5 text-right border-r border-slate-100 text-emerald-800 bg-emerald-50/10">₹{Number(p.supplyAmount || 0).toLocaleString('en-IN')}</td>
                             <td className="px-2 py-1.5 text-right border-r border-slate-100 text-red-600">₹{(p.messDeduction || 0).toLocaleString('en-IN')}</td>
                             <td className="px-2 py-1.5 text-right border-r border-slate-100 text-red-600">₹{(p.kharchiDeduction || 0).toLocaleString('en-IN')}</td>
@@ -375,7 +375,7 @@ export const SheetPreviewModal = ({
                             {winfo.name}
                           </td>
                           <td className="px-3 py-1.5 border-r border-slate-100">{k.date.split('-').reverse().join('-')}</td>
-                          <td className="px-3 py-1.5 text-right font-bold text-[#002f6c] bg-blue-50/10">
+                          <td className="px-3 py-1.5 text-right font-bold text-[var(--color-sap-blue-val)] bg-blue-50/10">
                             ₹{(k.amount || 0).toLocaleString('en-IN')}
                           </td>
                         </tr>
@@ -387,7 +387,7 @@ export const SheetPreviewModal = ({
                       <td colSpan={4} className="px-3 py-2 text-right uppercase text-[9px] font-sans">
                         Cumulative Amount:
                       </td>
-                      <td className="px-3 py-2 text-right text-[#002f6c] bg-blue-50">
+                      <td className="px-3 py-2 text-right text-[var(--color-sap-blue-val)] bg-blue-50">
                         ₹{kharchiTotal.toLocaleString('en-IN')}
                       </td>
                     </tr>
@@ -448,7 +448,7 @@ export const SheetPreviewModal = ({
                           <td className="px-3 py-2 font-sans text-gray-650 border-r border-slate-100 leading-normal">
                             {a.remarks || '-'}
                           </td>
-                          <td className="px-3 py-2 text-right font-bold text-[#002f6c] bg-amber-50/5">
+                          <td className="px-3 py-2 text-right font-bold text-[var(--color-sap-blue-val)] bg-amber-50/5">
                             ₹{(a.amount || 0).toLocaleString('en-IN')}
                           </td>
                         </tr>
@@ -460,7 +460,7 @@ export const SheetPreviewModal = ({
                       <td colSpan={7} className="px-3 py-2.5 text-right uppercase text-[9px] font-sans">
                         Cumulative Sheet advances:
                       </td>
-                      <td className="px-3 py-2.5 text-right text-[#002f6c] bg-amber-100/40">
+                      <td className="px-3 py-2.5 text-right text-[var(--color-sap-blue-val)] bg-amber-100/40">
                         ₹{advanceTotal.toLocaleString('en-IN')}
                       </td>
                     </tr>
@@ -486,7 +486,7 @@ export const SheetPreviewModal = ({
                         <Calculator size={13} className="text-[#0056b3]" />
                         <span>Expense Narrative and Submission Meta</span>
                       </h4>
-                      <p className="text-[#002f6c] font-black text-xs leading-normal">
+                      <p className="text-[var(--color-sap-blue-val)] font-black text-xs leading-normal">
                         Description: <span className="text-gray-800 font-medium font-sans">{expenseItem.description}</span>
                       </p>
                       <div className="grid grid-cols-2 gap-2 mt-2 font-sans text-[10px] text-gray-600">
@@ -516,7 +516,7 @@ export const SheetPreviewModal = ({
                           </div>
                         ))}
                         <div className="px-3 py-2.5 flex justify-between items-center bg-slate-100 font-extrabold border-t border-slate-300">
-                          <span className="font-sans text-[#002f6c] uppercase text-[9px]">Sum Total Ledger Amount:</span>
+                          <span className="font-sans text-[var(--color-sap-blue-val)] uppercase text-[9px]">Sum Total Ledger Amount:</span>
                           <span className="font-mono text-lg text-green-800 font-black">
                             ₹{expenseTotal.toLocaleString('en-IN')}
                           </span>
@@ -576,7 +576,7 @@ export const SheetPreviewModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="sap-btn bg-[#002f6c] text-white hover:bg-[#001d44] px-4 font-bold rounded flex items-center space-x-1 cursor-pointer transition font-sans text-xs h-8"
+            className="sap-btn bg-[var(--color-sap-blue-val)] text-white hover:bg-[#001d44] px-4 font-bold rounded flex items-center space-x-1 cursor-pointer transition font-sans text-xs h-8"
           >
             <span>Close Workspace Screen</span>
             <X size={14} />

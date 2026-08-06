@@ -49,7 +49,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ isLocked, onUnlock }) =>
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="fixed inset-0 z-[9999] bg-[#002f6c]/95 backdrop-blur-md flex items-center justify-center pointer-events-auto"
+          className="fixed inset-0 z-[9999] bg-[var(--color-sap-blue-val)]/95 backdrop-blur-md flex items-center justify-center pointer-events-auto"
         >
           <motion.div 
             initial={{ scale: 0.9, y: 20 }}
@@ -68,7 +68,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ isLocked, onUnlock }) =>
               </div>
             </div>
             
-            <h2 className="text-2xl font-bold text-center text-[#002f6c] mb-2 font-sans relative z-10">Terminal Locked</h2>
+            <h2 className="text-2xl font-bold text-center text-[var(--color-sap-blue-val)] mb-2 font-sans relative z-10">Terminal Locked</h2>
             <p className="text-gray-500 text-center text-[11px] mb-6 relative z-10">
               Please enter your system pin to resume session. <br/>
               <span className="font-mono text-[9px] bg-gray-100 px-1 py-0.5 rounded text-gray-400 mt-1 inline-block">(Default: admin123)</span>
@@ -108,7 +108,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ isLocked, onUnlock }) =>
 
               <button
                 type="submit"
-                className="w-full bg-[#0056b3] text-white py-3 rounded-sm font-bold hover:bg-[#004085] transition-colors flex items-center justify-center space-x-2 text-sm"
+                className="w-full bg-[var(--btn-hover-top)] text-white py-3 rounded-sm font-bold hover:bg-[#004085] transition-colors flex items-center justify-center space-x-2 text-sm"
               >
                 <span>Unlock Session</span>
                 <Unlock size={16} />

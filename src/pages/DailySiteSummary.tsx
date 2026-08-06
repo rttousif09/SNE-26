@@ -58,7 +58,7 @@ export function DailySiteSummary() {
     <div className="flex flex-col h-full bg-[#f0f4f8]">
       {/* Header */}
       <div className="sap-header p-2 flex justify-between items-center bg-[#eef2f6] border-b border-[#8c9ba8]">
-        <div className="flex items-center space-x-2 text-[#002f6c]">
+        <div className="flex items-center space-x-2 text-[var(--color-sap-blue-val)]">
           <Zap size={14} className="text-amber-500" />
           <span className="font-bold text-[13px] tracking-wide uppercase">AI Daily Site Summary Module</span>
         </div>
@@ -88,7 +88,7 @@ export function DailySiteSummary() {
           <button 
             onClick={generateReport}
             disabled={!selectedProject || !selectedDate || isLoading}
-            className="ml-2 sap-btn flex items-center bg-[#0056b3] text-white hover:bg-[#004494] disabled:bg-gray-400"
+            className="ml-2 sap-btn flex items-center bg-[var(--btn-hover-top)] text-white hover:bg-[#004494] disabled:bg-gray-400"
           >
             {isLoading ? <RefreshCw size={12} className="animate-spin mr-1" /> : <Play size={12} className="mr-1" />}
             {summary ? "Regenerate Analysis" : "Run AI Analysis"}
@@ -119,7 +119,7 @@ export function DailySiteSummary() {
             <div className="bg-white border-t-4 border-[#0056b3] shadow-md rounded-b p-4 relative overflow-hidden">
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <h1 className="text-xl font-bold text-[#002f6c]">{projects.find(p => p.id === selectedProject)?.name}</h1>
+                  <h1 className="text-xl font-bold text-[var(--color-sap-blue-val)]">{projects.find(p => p.id === selectedProject)?.name}</h1>
                   <p className="text-sm font-semibold text-gray-600 flex items-center mt-1"><CalIcon size={14} className="mr-1" /> Daily Executive Summary - {new Date(selectedDate).toLocaleDateString()}</p>
                 </div>
                 <div className="flex flex-col items-end">

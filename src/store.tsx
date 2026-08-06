@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog, BOQ, BOQItem, BOQRevision, BOQExtraItem, BOQAuditLog } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog, BOQ, BOQItem, BOQRevision, BOQExtraItem, BOQAuditLog, ClientFloorBill } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 class GlobalEventBus {
@@ -63,6 +63,7 @@ interface AppState {
   workerRecoveryAuditTrail: WorkerRecoveryAuditTrail[];
   attendance: Attendance[];
   trackedBills: TrackedBill[];
+  clientFloorBills: ClientFloorBill[];
   billTimelines: BillTimelineEntry[];
   financialYears: FinancialYear[];
   staff: Staff[];
@@ -170,6 +171,9 @@ interface AppContextType extends AppState {
   addTrackedBill: (bill: Omit<TrackedBill, 'id'>) => Promise<void>;
   updateTrackedBill: (id: string, bill: Partial<TrackedBill>) => Promise<void>;
   deleteTrackedBill: (id: string) => Promise<void>;
+  addClientFloorBill: (bill: Omit<ClientFloorBill, 'id'>) => Promise<void>;
+  updateClientFloorBill: (id: string, bill: Partial<ClientFloorBill>) => Promise<void>;
+  deleteClientFloorBill: (id: string) => Promise<void>;
   addBillTimeline: (timeline: Omit<BillTimelineEntry, 'id'>) => Promise<void>;
   addFinancialYear: (fy: Omit<FinancialYear, 'id'>) => Promise<void>;
   updateFinancialYear: (id: string, fy: Partial<FinancialYear>) => Promise<void>;
@@ -244,6 +248,7 @@ const initialState: AppState = {
   workerRecoveryAuditTrail: [],
   attendance: [],
   trackedBills: [],
+    clientFloorBills: [],
   billTimelines: [],
   financialYears: [],
   staff: [],
@@ -298,6 +303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     workerRecoveryAuditTrail: [],
     attendance: [],
     trackedBills: [],
+    clientFloorBills: [],
     billTimelines: [],
     financialYears: [],
     staff: [],
@@ -388,6 +394,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           workerRecoveryAuditTrail: wratRes || [],
           attendance: attRes || [],
           trackedBills: tbRes || [],
+          clientFloorBills: [],
           billTimelines: tlRes || [],
           financialYears: fyRes || [],
           staff: staffRes || [],
@@ -425,6 +432,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await saveAllToStore('assetMaintenances', assetMaintenancesRes || []).catch(() => {});
         await saveAllToStore('attendance', attRes || []).catch(() => {});
         await saveAllToStore('trackedBills', tbRes || []).catch(() => {});
+        await saveAllToStore('clientFloorBills', []).catch(() => {});
         await saveAllToStore('billTimelines', tlRes || []).catch(() => {});
         await saveAllToStore('financialYears', fyRes || []).catch(() => {});
         await saveAllToStore('floorAbstracts', faRes || []).catch(() => {});
@@ -464,6 +472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const advanceSheetApprovals = await getAllFromStore('advanceSheetApprovals').catch(() => []);
           const attendance = await getAllFromStore('attendance').catch(() => []);
           const trackedBills = await getAllFromStore('trackedBills').catch(() => []);
+          const clientFloorBills = await getAllFromStore('clientFloorBills').catch(() => []);
           const billTimelines = await getAllFromStore('billTimelines').catch(() => []);
           const financialYears = await getAllFromStore('financialYears').catch(() => []);
           const staff = await getAllFromStore('staff').catch(() => []);
@@ -517,6 +526,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               workerRecoveryAuditTrail,
               attendance,
               trackedBills,
+              clientFloorBills,
               billTimelines,
               financialYears,
               staff,
@@ -620,6 +630,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await saveAllToStore('workerRecoveryAuditTrail', backupState.workerRecoveryAuditTrail || []).catch(() => {});
       await saveAllToStore('attendance', backupState.attendance || []);
       await saveAllToStore('trackedBills', backupState.trackedBills || []).catch(() => {});
+      await saveAllToStore('clientFloorBills', backupState.clientFloorBills || []).catch(() => {});
       await saveAllToStore('billTimelines', backupState.billTimelines || []).catch(() => {});
       await saveAllToStore('financialYears', backupState.financialYears || []).catch(() => {});
       await saveAllToStore('staff', backupState.staff || []).catch(() => {});
@@ -2182,16 +2193,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  
+  const addClientFloorBill = async (bill: Omit<ClientFloorBill, 'id'>) => {
+    const newBill = { ...bill, id: generateId() };
+    setState(s => ({ ...s, clientFloorBills: [...(s.clientFloorBills || []), newBill] }));
+    try {
+      await fetch('/api/client-floor-bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newBill)
+      });
+      await saveAllToStore('clientFloorBills', [...(state.clientFloorBills || []), newBill]);
+    } catch (e) {
+      console.error(e);
+      await saveAllToStore('clientFloorBills', [...(state.clientFloorBills || []), newBill]);
+    }
+  };
+
+  const updateClientFloorBill = async (id: string, bill: Partial<ClientFloorBill>) => {
+    setState(s => {
+      const updated = (s.clientFloorBills || []).map(tb => tb.id === id ? { ...tb, ...bill } : tb);
+      saveAllToStore('clientFloorBills', updated).catch(() => {});
+      return { ...s, clientFloorBills: updated };
+    });
+    try {
+      const existing = (state.clientFloorBills || []).find(tb => tb.id === id);
+      if (existing) {
+        const merged = { ...existing, ...bill };
+        await fetch(`/api/client-floor-bills/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged)
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteClientFloorBill = async (id: string) => {
+    setState(s => {
+      const filtered = (s.clientFloorBills || []).filter(tb => tb.id !== id);
+      saveAllToStore('clientFloorBills', filtered).catch(() => {});
+      return { ...s, clientFloorBills: filtered };
+    });
+    try {
+      await fetch(`/api/client-floor-bills/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const addTrackedBill = async (bill: Omit<TrackedBill, 'id'>) => {
     const newBill = { ...bill, id: generateId() };
-    setState(s => ({ ...s, trackedBills: [...s.trackedBills, newBill] }));
+    setState(s => ({ ...s, trackedBills: [...s.trackedBills,
+              newBill] }));
     try {
       await fetch('/api/tracked-bills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newBill)
       });
-      await saveAllToStore('trackedBills', [...state.trackedBills, newBill]);
+      await saveAllToStore('trackedBills', [...state.trackedBills,
+              newBill]);
     } catch (e) {
       console.error(e);
     }
@@ -2495,6 +2559,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addWorkerRecoveryAudit,
       addAttendance,
       addTrackedBill,
+      addClientFloorBill,
+      updateClientFloorBill,
+      deleteClientFloorBill,
       updateTrackedBill,
       deleteTrackedBill,
       addBillTimeline,

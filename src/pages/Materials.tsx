@@ -1233,7 +1233,7 @@ export const Materials: React.FC = () => {
                   <div className="mt-4 border border-blue-200 bg-blue-50/30 p-2 rounded">
                     <div className="flex justify-between items-center mb-2">
                       <h4 className="font-bold text-xs text-[#0056b3]">Line Items</h4>
-                      <button onClick={() => setReceiptLineItems([...receiptLineItems, { id: Math.random(), itemId: '', qty: 0, tower: '', floor: '', remarks: '' }])} className="text-[10px] bg-[#0056b3] text-white px-2 py-1 rounded hover:bg-blue-800 flex items-center">
+                      <button onClick={() => setReceiptLineItems([...receiptLineItems, { id: Math.random(), itemId: '', qty: 0, tower: '', floor: '', remarks: '' }])} className="text-[10px] bg-[var(--btn-hover-top)] text-white px-2 py-1 rounded hover:bg-blue-800 flex items-center">
                         <Plus size={10} className="mr-1" /> Add Line
                       </button>
                     </div>

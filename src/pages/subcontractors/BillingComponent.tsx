@@ -39,7 +39,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
     { key: 'projectName', header: 'Project', sortable: true, filterable: true, render: (val) => <span className="font-semibold text-gray-700">{val}</span> },
     { key: 'subcontractorName', header: 'Subcontractor Target', sortable: true, filterable: true, render: (_, row) => (
       <div>
-        <span className="font-bold text-[#002f6c]">{row.subcontractorName}</span>
+        <span className="font-bold text-[var(--color-sap-blue-val)]">{row.subcontractorName}</span>
         <div className="text-[9px] text-gray-500">{row.subcontractorFirm || 'Personal'}</div>
       </div>
     )},

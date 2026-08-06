@@ -38,7 +38,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     <div className="min-h-screen flex flex-col justify-between bg-[#f2f6fa] font-sans text-[11px]">
       
       {/* Brand Header */}
-      <header className="bg-[#002f6c] text-white px-6 py-2.5 flex items-center justify-between border-b-2 border-[#8c9ba8] shadow-md">
+      <header className="bg-[var(--color-sap-blue-val)] text-white px-6 py-2.5 flex items-center justify-between border-b-2 border-[#8c9ba8] shadow-md">
         <div className="flex items-center space-x-3">
           <SNLogo size={36} className="text-white hover:scale-105 transition-transform" />
           <div>

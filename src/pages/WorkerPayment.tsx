@@ -705,7 +705,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             {selectedCategory === 'Monthly work' && (
               <div className="bg-blue-50/50 p-2 border border-blue-100 rounded-sm mb-3 mt-1">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-[11px] font-bold text-[#002f6c] uppercase">Monthly Work Details</span>
+                  <span className="text-[11px] font-bold text-[var(--color-sap-blue-val)] uppercase">Monthly Work Details</span>
                   {formData.workerId && (
                     <button
                       type="button"
@@ -1052,7 +1052,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
         <div className="space-y-3">
           {/* Table Header Row with dynamic submission widget if MD is active and not submitted yet */}
           <div className="flex items-center justify-between pb-1 text-gray-800">
-            <span className="text-[12px] font-bold text-[#002f6c] bg-[#eef2f6] px-2 py-0.5 border border-[#8c9ba8]">
+            <span className="text-[12px] font-bold text-[var(--color-sap-blue-val)] bg-[#eef2f6] px-2 py-0.5 border border-[#8c9ba8]">
               Wage Ledger Table: {selectedMonth} | {selectedCategory}
             </span>
 
@@ -1424,7 +1424,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
           <div className="max-w-6xl mx-auto p-4 sm:p-8 min-h-screen">
             <div className="flex justify-between items-start mb-6 print:hidden">
               <div>
-                <h2 className="text-xl font-bold text-[#002f6c] uppercase tracking-wider">Wage Ledger Report</h2>
+                <h2 className="text-xl font-bold text-[var(--color-sap-blue-val)] uppercase tracking-wider">Wage Ledger Report</h2>
                 <p className="text-sm font-semibold text-gray-600">Month: {selectedMonth} | {selectedCategory}</p>
               </div>
               <div className="flex space-x-2">
@@ -1539,7 +1539,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
           <div className="max-w-4xl mx-auto p-4 sm:p-8 min-h-screen">
             <div className="flex justify-between items-start mb-6 print:hidden">
               <div>
-                <h2 className="text-xl font-bold text-[#002f6c] uppercase tracking-wider">Project Supply Work Report</h2>
+                <h2 className="text-xl font-bold text-[var(--color-sap-blue-val)] uppercase tracking-wider">Project Supply Work Report</h2>
                 <p className="text-sm font-semibold text-gray-600">Month: {selectedMonth}</p>
               </div>
               <div className="flex space-x-2">
@@ -1669,7 +1669,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-400">
             {/* Header */}
-            <div className="bg-[#002f6c] text-white px-3.5 py-2 flex justify-between items-center shrink-0">
+            <div className="bg-[var(--color-sap-blue-val)] text-white px-3.5 py-2 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-xs uppercase tracking-wider">Import Flat/Floor Abstract Records</h3>
               <button 
                 type="button" 
@@ -1711,7 +1711,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 <div className="border border-[#8c9ba8] rounded-sm overflow-hidden bg-white">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-[#eef2f6] text-[#002f6c] font-bold border-b border-[#8c9ba8] text-[10px]">
+                      <tr className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] font-bold border-b border-[#8c9ba8] text-[10px]">
                         <th className="p-2 border-r border-[#8c9ba8] w-12 text-center">Select</th>
                         <th className="p-2 border-r border-[#8c9ba8]">Level / Floor</th>
                         <th className="p-2 border-r border-[#8c9ba8]">Flat No</th>

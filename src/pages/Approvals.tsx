@@ -457,7 +457,7 @@ export const Approvals: React.FC = () => {
       <div className="flex items-center justify-between bg-[#eef2f6] border border-[#8c9ba8] p-1 shadow-sm">
         <div className="flex items-center space-x-1">
           {isOwner ? (
-            <div className="text-[11px] font-bold px-1.5 text-[#002f6c] h-5 flex items-center bg-white border border-[#8c9ba8] rounded-sm">
+            <div className="text-[11px] font-bold px-1.5 text-[var(--color-sap-blue-val)] h-5 flex items-center bg-white border border-[#8c9ba8] rounded-sm">
               👑 Owner Saddam Hussain - Review Workspace
             </div>
           ) : (
@@ -886,7 +886,7 @@ export const Approvals: React.FC = () => {
                             month: sheet.month,
                             projectName: getProjectName(sheet.projectId)
                           })}
-                          className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                          className="px-1.5 py-0.5 bg-[var(--btn-hover-top)]/10 hover:bg-[var(--btn-hover-top)] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
                           title="View entire monthly payment sheet workers and totals"
                         >
                           <Eye size={10} />
@@ -1028,7 +1028,7 @@ export const Approvals: React.FC = () => {
                             month: sheet.month,
                             projectName: getProjectName(sheet.projectId)
                           })}
-                          className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                          className="px-1.5 py-0.5 bg-[var(--btn-hover-top)]/10 hover:bg-[var(--btn-hover-top)] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
                           title="View entire monthly kharchi details and sum sheet"
                         >
                           <Eye size={10} />
@@ -1159,7 +1159,7 @@ export const Approvals: React.FC = () => {
                           month: sheet.month,
                           projectName: getProjectName(sheet.projectId)
                         })}
-                        className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                        className="px-1.5 py-0.5 bg-[var(--btn-hover-top)]/10 hover:bg-[var(--btn-hover-top)] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
                         title="View entire monthly advance list sheet"
                       >
                         <Eye size={10} />
@@ -1291,7 +1291,7 @@ export const Approvals: React.FC = () => {
                           expenseId: exp.id,
                           projectName: getProjectName(exp.projectId)
                         })}
-                        className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                        className="px-1.5 py-0.5 bg-[var(--btn-hover-top)]/10 hover:bg-[var(--btn-hover-top)] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
                         title="View breakdown cost categories and support invoice"
                       >
                         <Eye size={10} />
@@ -1433,7 +1433,7 @@ export const Approvals: React.FC = () => {
                                 projectName: log.projectName
                               });
                             }}
-                            className="px-1.5 py-0.5 bg-[#0056b3]/10 hover:bg-[#0056b3] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
+                            className="px-1.5 py-0.5 bg-[var(--btn-hover-top)]/10 hover:bg-[var(--btn-hover-top)] text-[#0056b3] hover:text-white border border-[#0056b3]/30 rounded flex items-center space-x-1 cursor-pointer text-[9px] font-bold font-sans transition ml-2 shrink-0 select-none"
                             title="View historical sheet details"
                           >
                             <Eye size={10} />
@@ -1477,7 +1477,7 @@ export const Approvals: React.FC = () => {
               className="bg-white border-2 border-[#8c9ba8] shadow-2xl max-w-md w-full rounded p-4 text-[11px]"
             >
               <div className="flex items-center justify-between border-b pb-2 mb-3 bg-[#eef2f6] p-1.5 border border-[#8c9ba8] rounded-sm">
-                <span className="font-bold text-[#002f6c] uppercase tracking-wide">
+                <span className="font-bold text-[var(--color-sap-blue-val)] uppercase tracking-wide">
                   {noteModal.action === 'Approved' ? '✅ Resolve: Approval Remarks' : '❌ Resolve: Rejection Justification'}
                 </span>
                 <button onClick={() => setNoteModal(null)} className="text-gray-400 hover:text-black cursor-pointer">
@@ -1580,7 +1580,7 @@ export const Approvals: React.FC = () => {
             </div>
             
             <div className="text-[10px] pt-1 leading-relaxed text-gray-800">
-              Submission <span className="font-bold text-[#002f6c]">{notif.workerName}</span> ({notif.projectName}) of <span className="font-bold">₹{notif.amount.toLocaleString('en-IN')}</span> has been:
+              Submission <span className="font-bold text-[var(--color-sap-blue-val)]">{notif.workerName}</span> ({notif.projectName}) of <span className="font-bold">₹{notif.amount.toLocaleString('en-IN')}</span> has been:
             </div>
             
             <div className="flex items-center justify-between pt-1">

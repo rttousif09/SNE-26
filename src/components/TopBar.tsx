@@ -606,7 +606,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   return (
     <div className="flex flex-col bg-[#eef2f6] border-b border-[#8c9ba8] select-none text-[11px]">
       {/* Brand & Profile Section */}
-      <div className="bg-[#002f6c] text-white px-3 py-1 flex items-center justify-between border-b border-[#8c9ba8] shadow-sm">
+      <div className="bg-[var(--color-sap-blue-val)] text-white px-3 py-1 flex items-center justify-between border-b border-[#8c9ba8] shadow-sm">
         <div className="flex items-center space-x-2">
           <SNLogo size={22} className="text-white hover:scale-105 transition-transform" />
           <span className="font-mono text-xs font-black uppercase tracking-widest text-white">SN ENTERPRISES ERP</span>
@@ -620,7 +620,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <button
               onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
               title="Change Workspace Theme"
-              className="flex items-center space-x-1.5 p-1.5 hover:bg-[#001f4d] rounded transition duration-150 text-white focus:outline-none cursor-pointer border border-[#8c9ba8]/20 bg-[#002f6c]"
+              className="flex items-center space-x-1.5 p-1.5 hover:bg-[#001f4d] rounded transition duration-150 text-white focus:outline-none cursor-pointer border border-[#8c9ba8]/20 bg-[var(--color-sap-blue-val)]"
             >
               {darkMode ? (
                 <Moon size={13} className="text-blue-300" />
@@ -651,7 +651,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                         : 'bg-white border-gray-100 hover:bg-slate-50 hover:border-gray-300'
                     }`}
                   >
-                    <div className="w-4 h-4 bg-[#0056b3] rounded-full border border-blue-400 mt-0.5 shrink-0 flex items-center justify-center">
+                    <div className="w-4 h-4 bg-[var(--btn-hover-top)] rounded-full border border-blue-400 mt-0.5 shrink-0 flex items-center justify-center">
                       {!darkMode && <Check size={10} className="text-white font-bold" />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -732,7 +732,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               {unreadCount > 0 && (
                 <span className="absolute top-0.5 right-0.5 flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-[#002f6c] text-[7px] items-center justify-center font-bold text-white leading-none shadow shadow-red-900/50">
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-[var(--color-sap-blue-val)] text-[7px] items-center justify-center font-bold text-white leading-none shadow shadow-red-900/50">
                     {unreadCount}
                   </span>
                 </span>
@@ -821,7 +821,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
                 <div className="p-3 bg-white border border-[#8c9ba8] border-t-0 text-[10px] space-y-2">
                   <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-[#0056b3] text-white rounded-full flex items-center justify-center font-mono text-xs font-semibold uppercase shrink-0">
+                    <div className="w-8 h-8 bg-[var(--btn-hover-top)] text-white rounded-full flex items-center justify-center font-mono text-xs font-semibold uppercase shrink-0">
                       {user.name.split(' ').map((n: any) => n.charAt(0)).join('')}
                     </div>
                     <div>
@@ -881,7 +881,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
                   {/* QR Code Section */}
                   <div className="pt-2 border-t border-gray-150 flex flex-col items-center space-y-1.5">
-                    <div className="flex items-center space-x-1 text-[#002f6c] font-bold text-[8px] uppercase tracking-wide">
+                    <div className="flex items-center space-x-1 text-[var(--color-sap-blue-val)] font-bold text-[8px] uppercase tracking-wide">
                       <QrCode size={11} className="text-[#0056b3]" />
                       <span>Scan for Sites Report PDF</span>
                     </div>
@@ -899,7 +899,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                       <button
                         onClick={handleDirectDownload}
                         title="Compile and download all site reports now (PDF)"
-                        className="sap-btn flex-1 py-1 px-1.5 text-[9px] text-[#002f6c] hover:text-[#001f4d] font-bold uppercase hover:bg-blue-50 border-blue-450 transition flex items-center justify-center space-x-1 h-6 cursor-pointer"
+                        className="sap-btn flex-1 py-1 px-1.5 text-[9px] text-[var(--color-sap-blue-val)] hover:text-[#001f4d] font-bold uppercase hover:bg-blue-50 border-blue-450 transition flex items-center justify-center space-x-1 h-6 cursor-pointer"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         <span>Download</span>
@@ -945,7 +945,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       {showMyProfile && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center z-[99999] p-4 select-none animate-fade-in text-slate-800">
           <div className="sap-panel bg-white w-full max-w-sm rounded p-4 shadow-2xl border-b-4 border-b-[#0056b3]">
-            <div className="font-extrabold pb-2 mb-3 border-b border-gray-200 text-[#002f6c] text-xs uppercase tracking-wider flex justify-between items-center">
+            <div className="font-extrabold pb-2 mb-3 border-b border-gray-200 text-[var(--color-sap-blue-val)] text-xs uppercase tracking-wider flex justify-between items-center">
               <span>My ERP Profile Detail</span>
               <button onClick={() => setShowMyProfile(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer text-xs">✕</button>
             </div>
@@ -986,7 +986,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       {showChangePassword && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center z-[99999] p-4 select-none animate-fade-in text-slate-800">
           <div className="sap-panel bg-white w-full max-w-sm rounded p-4 shadow-2xl border-b-4 border-b-amber-500">
-            <div className="font-extrabold pb-2 mb-3 border-b border-gray-200 text-[#002f6c] text-xs uppercase tracking-wider flex justify-between items-center">
+            <div className="font-extrabold pb-2 mb-3 border-b border-gray-200 text-[var(--color-sap-blue-val)] text-xs uppercase tracking-wider flex justify-between items-center">
               <span>Change Account Password</span>
               <button onClick={() => { setShowChangePassword(false); setPassError(null); setPassSuccess(null); }} className="text-gray-400 hover:text-gray-600 cursor-pointer text-xs">✕</button>
             </div>
@@ -1021,7 +1021,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="relative group">
           <span className="hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent px-1 cursor-pointer">Navigate</span>
           <div className="absolute left-0 mt-0.5 w-[220px] bg-[#f5f8fb] border border-[#8c9ba8] shadow-2xl hidden group-hover:block z-[9999] text-black">
-            <div className="bg-[#002f6c] text-white font-semibold text-[8px] px-2 py-0.5 select-none uppercase font-mono">F-Key Quick Jump</div>
+            <div className="bg-[var(--color-sap-blue-val)] text-white font-semibold text-[8px] px-2 py-0.5 select-none uppercase font-mono">F-Key Quick Jump</div>
             <div className="max-h-80 overflow-y-auto cursor-pointer">
               <button onClick={onShowHelp} className="w-full text-left px-2 py-1.5 hover:bg-blue-600 hover:text-white text-[10px] flex items-center justify-between">
                 <span>F1: Show Keyboard Help</span>
@@ -1040,7 +1040,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="relative group">
           <span className="hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent px-1 cursor-pointer font-semibold text-[#0056b3]">Help</span>
           <div className="absolute left-0 mt-0.5 w-[200px] bg-[#f5f8fb] border border-[#8c9ba8] shadow-2xl hidden group-hover:block z-[9999] text-black">
-            <div className="bg-[#002f6c] text-white font-semibold text-[8px] px-2 py-0.5 select-none uppercase font-mono">System Guides</div>
+            <div className="bg-[var(--color-sap-blue-val)] text-white font-semibold text-[8px] px-2 py-0.5 select-none uppercase font-mono">System Guides</div>
             <button onClick={onShowHelp} className="w-full text-left px-2 py-1.5 hover:bg-blue-600 hover:text-white text-[10px] flex items-center justify-between">
               <span>F1 Keyboard Guidelines</span>
               <span className="bg-gray-200 text-gray-800 rounded px-1 text-[8px] font-mono select-none">F1</span>
@@ -1139,9 +1139,9 @@ export const TopBar: React.FC<TopBarProps> = ({
 
             {/* Fiori-styled Suggestions Popover */}
             {isSearchFocused && (
-              <div className="absolute left-0 mt-1.5 w-[420px] bg-[#f5f8fb] border-2 border-[#002f6c] shadow-[0_15px_30px_rgba(0,0,0,0.3)] rounded-sm z-[99999] text-black animate-fade-in divide-y divide-gray-200">
+              <div className="absolute left-0 mt-1.5 w-[420px] bg-[#f5f8fb] border-2 border-[var(--color-sap-blue-val)] shadow-[0_15px_30px_rgba(0,0,0,0.3)] rounded-sm z-[99999] text-black animate-fade-in divide-y divide-gray-200">
                 {/* SAP style status line */}
-                <div className="bg-[#002f6c] text-white px-2 py-0.5 flex items-center justify-between text-[8px] font-bold uppercase font-mono tracking-wider">
+                <div className="bg-[var(--color-sap-blue-val)] text-white px-2 py-0.5 flex items-center justify-between text-[8px] font-bold uppercase font-mono tracking-wider">
                   <div className="flex items-center space-x-1">
                     <Search size={10} className="text-amber-400" />
                     <span>SAP ERP Enterprise Command Hub (Client: 100)</span>
@@ -1460,7 +1460,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <div className="bg-gray-50 px-4 py-3 flex justify-end space-x-2 border-t border-gray-200">
               <button
                 onClick={() => setUnauthorizedTCode(null)}
-                className="px-4 py-1 bg-[#002f6c] text-white hover:bg-blue-800 border border-[#002f6c] text-[10px] font-semibold rounded shadow-sm focus:outline-none transition duration-150 cursor-pointer"
+                className="px-4 py-1 bg-[var(--color-sap-blue-val)] text-white hover:bg-blue-800 border border-[var(--color-sap-blue-val)] text-[10px] font-semibold rounded shadow-sm focus:outline-none transition duration-150 cursor-pointer"
               >
                 Acknowledge
               </button>
@@ -1488,7 +1488,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     The transaction code you entered is not registered in the active T-Code directory of client <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-800">SN_ERP_CLNT_100</span>.
                   </p>
                   <p className="text-[11px] text-gray-600 mt-2 leading-relaxed">
-                    Please verify the syntax or check the <span className="font-semibold text-[#002f6c]">SAP T-Code Registry</span> in Settings to view the list of all available commands.
+                    Please verify the syntax or check the <span className="font-semibold text-[var(--color-sap-blue-val)]">SAP T-Code Registry</span> in Settings to view the list of all available commands.
                   </p>
                 </div>
               </div>
@@ -1498,7 +1498,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <div className="bg-gray-50 px-4 py-3 flex justify-end space-x-2 border-t border-gray-200">
               <button
                 onClick={() => setInvalidTCode(null)}
-                className="px-4 py-1 bg-[#002f6c] text-white hover:bg-blue-800 border border-[#002f6c] text-[10px] font-semibold rounded shadow-sm focus:outline-none transition duration-150 cursor-pointer"
+                className="px-4 py-1 bg-[var(--color-sap-blue-val)] text-white hover:bg-blue-800 border border-[var(--color-sap-blue-val)] text-[10px] font-semibold rounded shadow-sm focus:outline-none transition duration-150 cursor-pointer"
               >
                 Acknowledge
               </button>

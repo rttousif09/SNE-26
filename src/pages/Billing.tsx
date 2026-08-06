@@ -716,13 +716,13 @@ export const Billing: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Column 1: Bill Reference */}
           <div className="space-y-2 border-r border-slate-200 pr-4">
-            <h4 className="text-[10px] uppercase font-bold text-[#002f6c] tracking-wider font-sans">📁 Entry Details</h4>
+            <h4 className="text-[10px] uppercase font-bold text-[var(--color-sap-blue-val)] tracking-wider font-sans">📁 Entry Details</h4>
             <div className="grid grid-cols-2 gap-y-1.5 text-[11px] text-slate-700 font-sans">
               <span className="text-slate-400">Site / Project:</span>
               <span className="font-bold text-slate-900 truncate" title={getProjectName(bill.projectId)}>{getProjectName(bill.projectId)}</span>
 
               <span className="text-slate-400">Bill Number:</span>
-              <span className="font-bold font-mono text-[#002f6c]">{bill.billNo}</span>
+              <span className="font-bold font-mono text-[var(--color-sap-blue-val)]">{bill.billNo}</span>
 
               <span className="text-slate-400">Nature of Work:</span>
               <span className="font-semibold text-slate-900 truncate" title={bill.workNature}>{bill.workNature}</span>
@@ -1034,7 +1034,7 @@ export const Billing: React.FC = () => {
                   e.stopPropagation();
                   setPrintingBill(bill);
                 }}
-                className="w-full flex items-center justify-center space-x-1.5 py-1 px-2.5 bg-[#0056b3] text-white hover:bg-blue-800 rounded shadow-3xs cursor-pointer font-bold uppercase transition-colors text-center font-sans"
+                className="w-full flex items-center justify-center space-x-1.5 py-1 px-2.5 bg-[var(--btn-hover-top)] text-white hover:bg-blue-800 rounded shadow-3xs cursor-pointer font-bold uppercase transition-colors text-center font-sans"
               >
                 <span>🔍 Open Invoice Preview</span>
               </button>
@@ -2555,7 +2555,7 @@ export const Billing: React.FC = () => {
           {/* Retention Table */}
           <div className="bg-white border border-[#8c9ba8] rounded overflow-hidden shadow-xs">
             <div className="bg-[#e6f2ff] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
-              <span className="font-bold text-[#002f6c] text-[11px] uppercase tracking-wider flex items-center">
+              <span className="font-bold text-[var(--color-sap-blue-val)] text-[11px] uppercase tracking-wider flex items-center">
                 🔒 Retention Money Register List
               </span>
             </div>
@@ -2623,7 +2623,7 @@ export const Billing: React.FC = () => {
                             <td className="p-1.5 px-3 text-center">
                               <span className={`text-[10px] font-sans font-bold inline-flex items-center gap-1 border rounded px-1.5 py-0.5 shadow-3xs transition-colors ${
                                 isExpanded 
-                                  ? 'bg-[#0056b3] text-white border-[#0056b3]' 
+                                  ? 'bg-[var(--btn-hover-top)] text-white border-[#0056b3]' 
                                   : 'text-[#0056b3] bg-blue-50 border-blue-200 hover:bg-blue-100 hover:text-blue-800'
                               }`}>
                                 {isExpanded ? 'Collapse' : '🔍 Drill Down'}

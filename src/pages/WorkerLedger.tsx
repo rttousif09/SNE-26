@@ -1616,7 +1616,7 @@ export const WorkerLedger: React.FC = () => {
             <div className="space-y-4">
               
               {/* Financial Statement Formula card */}
-              <div className="bg-[#002f6c] rounded-[8px] p-3.5 text-white shadow-md border border-[#001f4c]">
+              <div className="bg-[var(--color-sap-blue-val)] rounded-[8px] p-3.5 text-white shadow-md border border-[#001f4c]">
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-blue-200 border-b border-blue-800 pb-1.5 flex items-center space-x-1.5">
                   <Calculator className="w-3.5 h-3.5 text-blue-300" />
                   <span>Financial Summary Panel</span>
@@ -1964,7 +1964,7 @@ export const WorkerLedger: React.FC = () => {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-1.5 bg-[#0a6ed1] hover:bg-[#0056b3] text-white font-bold rounded shadow-xs flex items-center space-x-1"
+                  className="px-4 py-1.5 bg-[#0a6ed1] hover:bg-[var(--btn-hover-top)] text-white font-bold rounded shadow-xs flex items-center space-x-1"
                 >
                   <Save size={11} />
                   <span>{editingEntryId ? 'Update Posting' : 'Post Balance'}</span>

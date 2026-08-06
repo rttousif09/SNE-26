@@ -214,7 +214,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
           onClick={() => handleItemClick('dashboard')}
           className={`group flex items-center py-1.5 px-2 rounded-sm cursor-pointer transition ${
             currentTab === 'dashboard' 
-              ? 'bg-[#cce8ff] text-[#002f6c] font-bold border border-[#99d1ff]' 
+              ? 'bg-[#cce8ff] text-[var(--color-sap-blue-val)] font-bold border border-[#99d1ff]' 
               : 'hover:bg-[#e6f2ff] text-slate-700 hover:text-slate-900 border border-transparent'
           }`}
           title={isCollapsed ? "Dashboard" : ""}
@@ -231,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
             onClick={() => handleItemClick('approvals')}
             className={`group flex items-center py-1.5 px-2 rounded-sm cursor-pointer transition ${
               currentTab === 'approvals' 
-                ? 'bg-[#cce8ff] text-[#002f6c] font-bold border border-[#99d1ff]' 
+                ? 'bg-[#cce8ff] text-[var(--color-sap-blue-val)] font-bold border border-[#99d1ff]' 
                 : 'hover:bg-[#e6f2ff] text-slate-700 hover:text-slate-900 border border-transparent'
             }`}
             title={isCollapsed ? `Approvals (${pendingCount} Pending)` : ""}
@@ -273,7 +273,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                 onClick={() => toggleFolder(folder.key)}
                 className={`group flex items-center py-1.5 px-2 rounded-sm cursor-pointer transition ${
                   activeFolder && isCollapsed 
-                    ? 'bg-[#cce8ff] text-[#002f6c] border border-[#99d1ff]' 
+                    ? 'bg-[#cce8ff] text-[var(--color-sap-blue-val)] border border-[#99d1ff]' 
                     : 'hover:bg-[#e6f2ff] text-slate-700'
                 }`}
                 title={isCollapsed ? folder.label : ""}
@@ -284,7 +284,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                 
                 {!isCollapsed && (
                   <>
-                    <span className={`ml-2 font-semibold flex-1 ${activeFolder ? 'text-[#002f6c] font-bold' : ''}`}>
+                    <span className={`ml-2 font-semibold flex-1 ${activeFolder ? 'text-[var(--color-sap-blue-val)] font-bold' : ''}`}>
                       📂 {folder.label}
                     </span>
                     <div className="text-slate-400 group-hover:text-slate-600">
@@ -315,7 +315,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
                             onClick={() => handleItemClick(item.id)}
                             className={`flex items-center space-x-2 py-1 px-2 rounded-sm cursor-pointer transition border ${
                               isItemActive 
-                                ? 'bg-[#cce8ff] border-[#99d1ff] text-[#002f6c] font-bold' 
+                                ? 'bg-[#cce8ff] border-[#99d1ff] text-[var(--color-sap-blue-val)] font-bold' 
                                 : 'hover:bg-[#e6f2ff] border-transparent text-slate-600 hover:text-slate-950'
                             }`}
                           >

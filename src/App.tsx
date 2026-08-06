@@ -603,7 +603,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           {/* Classic SAP Function Keys Navigation Ribbon */}
           {showFKeysBar && (
             <div className="bg-[#f0f4f8] border-b border-[#8c9ba8] px-2 py-1 flex items-center space-x-1.5 overflow-x-auto select-none print:hidden h-8 shrink-0 text-[10px]">
-              <span className="font-bold text-[#002f6c] mr-2 uppercase tracking-wider font-mono text-[9px] flex items-center shrink-0">
+              <span className="font-bold text-[var(--color-sap-blue-val)] mr-2 uppercase tracking-wider font-mono text-[9px] flex items-center shrink-0">
                 <Keyboard size={12} className="mr-1 text-blue-800" />
                 Active F-Keys:
               </span>
@@ -750,7 +750,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
                 const isLast = idx === arr.length - 1;
                 return (
                   <React.Fragment key={idx}>
-                    <span className={isLast ? 'text-[#002f6c] font-extrabold font-sans' : 'text-slate-600 font-medium'}>
+                    <span className={isLast ? 'text-[var(--color-sap-blue-val)] font-extrabold font-sans' : 'text-slate-600 font-medium'}>
                       {crumb}
                     </span>
                     {!isLast && <span className="text-slate-300">/</span>}
@@ -980,7 +980,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       {/* Persistent Enterprise Status Footer */}
       <footer className="bg-[#eef2f6] border-t border-[#8c9ba8] px-4 py-1 flex items-center justify-between text-[9px] text-slate-500 font-mono shrink-0 select-none print:hidden">
         <div className="flex items-center space-x-3">
-          <span className="font-extrabold text-[#002f6c]">SN ENTERPRISES ERP</span>
+          <span className="font-extrabold text-[var(--color-sap-blue-val)]">SN ENTERPRISES ERP</span>
           <span className="text-slate-300">|</span>
           <span>Version: 3.4.0-Enterprise</span>
         </div>
@@ -1003,10 +1003,10 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
               animate={{ scale: 1, opacity: 1 }} 
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="bg-[#f0f4f8] border-2 border-[#002f6c] w-full max-w-2xl shadow-2xl flex flex-col rounded-sm overflow-hidden text-black"
+              className="bg-[#f0f4f8] border-2 border-[var(--color-sap-blue-val)] w-full max-w-2xl shadow-2xl flex flex-col rounded-sm overflow-hidden text-black"
             >
               {/* SAP GUI Retro blue title bar */}
-              <div className="bg-[#002f6c] text-white px-3 py-1.5 flex items-center justify-between font-bold text-[11px] font-mono shadow-md select-none">
+              <div className="bg-[var(--color-sap-blue-val)] text-white px-3 py-1.5 flex items-center justify-between font-bold text-[11px] font-mono shadow-md select-none">
                 <div className="flex items-center space-x-2">
                   <Keyboard size={14} className="text-amber-400" />
                   <span>SAP Short-cuts (Functional Key Assignments Help Menu)</span>
@@ -1046,7 +1046,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
                         <span className="text-gray-500 font-mono text-[9px] select-all">/nBACK</span>
                       </div>
                       <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-[#0056b3] text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-blue-700 shadow-sm mr-2 w-8 text-center select-all">F4</kbd> Approvals workflow</span>
+                        <span className="flex items-center"><kbd className="bg-[var(--btn-hover-top)] text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-blue-700 shadow-sm mr-2 w-8 text-center select-all">F4</kbd> Approvals workflow</span>
                         <span className="text-gray-500 font-mono text-[9px] select-all">/nAPPV</span>
                       </div>
                       <div className="flex items-center justify-between p-1.5 text-[10px]">

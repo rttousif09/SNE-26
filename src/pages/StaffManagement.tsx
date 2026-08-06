@@ -478,7 +478,7 @@ export default function StaffManagement() {
             </button>
             <button
               type="submit"
-              className="px-4 py-1 bg-[#0056b3] hover:bg-blue-700 text-white border border-blue-800 rounded font-semibold transition-colors"
+              className="px-4 py-1 bg-[var(--btn-hover-top)] hover:bg-blue-700 text-white border border-blue-800 rounded font-semibold transition-colors"
             >
               {editingId ? 'Save Access Parameters' : 'Create Staff Account'}
             </button>

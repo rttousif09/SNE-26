@@ -886,7 +886,7 @@ export const EquipmentAssetManagement: React.FC = () => {
           <div className="bg-white border border-[#8c9ba8] rounded-sm shadow-sm overflow-hidden flex flex-col">
             <div className="bg-slate-50 text-slate-700 border-b border-[#8c9ba8] p-1 px-2 font-bold uppercase select-none print:hidden flex justify-between items-center text-[10px]">
               <span>EQUIPMENT & CAPITAL ASSETS REGISTER</span>
-              <span className="bg-[#0056b3] text-white text-[9px] px-2 py-0.5 rounded font-mono font-bold tracking-wider">{filteredAssets.length} assets matched</span>
+              <span className="bg-[var(--btn-hover-top)] text-white text-[9px] px-2 py-0.5 rounded font-mono font-bold tracking-wider">{filteredAssets.length} assets matched</span>
             </div>
             
             <div className="overflow-x-auto">
@@ -1478,7 +1478,7 @@ export const EquipmentAssetManagement: React.FC = () => {
       {isAssetModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded shadow-xl border border-slate-300 flex flex-col text-[11px] font-sans">
-            <div className="bg-[#0056b3] text-white p-2.5 flex items-center justify-between font-bold text-[11px]">
+            <div className="bg-[var(--btn-hover-top)] text-white p-2.5 flex items-center justify-between font-bold text-[11px]">
               <span>{editingAssetId ? 'EDIT CAPITAL ASSET PARAMETERS' : 'REGISTER NEW FIELD ASSET'}</span>
               <button onClick={() => setIsAssetModalOpen(false)} className="hover:opacity-80"><X size={14} /></button>
             </div>
@@ -1621,7 +1621,7 @@ export const EquipmentAssetManagement: React.FC = () => {
 
               <div className="flex items-center justify-end space-x-2 pt-2 border-t">
                 <button type="button" onClick={() => setIsAssetModalOpen(false)} className="sap-btn border p-1 px-3 text-slate-600">Cancel</button>
-                <button type="submit" className="sap-btn bg-[#0056b3] text-white p-1 px-4 font-bold">Save Asset</button>
+                <button type="submit" className="sap-btn bg-[var(--btn-hover-top)] text-white p-1 px-4 font-bold">Save Asset</button>
               </div>
             </form>
           </div>

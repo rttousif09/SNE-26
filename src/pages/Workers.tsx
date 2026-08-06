@@ -749,7 +749,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
             {workersPerSite.map((site, idx) => (
               <div key={idx} className="sap-panel px-3 py-1.5 flex items-center space-x-2 bg-gradient-to-r from-gray-50 to-white hover:shadow-xs transition border border-[#bcc5cf]">
                 <span className="font-bold text-gray-500 text-[10px] uppercase font-mono">Site:</span>
-                <span className="font-semibold text-[#002f6c]">{site.name}</span>
+                <span className="font-semibold text-[var(--color-sap-blue-val)]">{site.name}</span>
                 <span className="px-1.5 py-0.2 text-[10px] bg-blue-100 text-blue-800 font-extrabold rounded-full">{site.count}</span>
               </div>
             ))}
@@ -855,7 +855,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                   <input type="date" className="sap-input flex-1" value={formData.exitDate} onChange={e => setFormData({...formData, exitDate: e.target.value})} />
                 </div>
                 <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-end pt-2 space-x-2 border-t border-gray-200 mt-2">
-                  <button type="submit" className="sap-btn flex items-center space-x-1.5 bg-[#0056b3]/10 text-[#0056b3] border-[#0056b3]/40 hover:bg-[#0056b3] hover:text-white transition">
+                  <button type="submit" className="sap-btn flex items-center space-x-1.5 bg-[var(--btn-hover-top)]/10 text-[#0056b3] border-[#0056b3]/40 hover:bg-[var(--btn-hover-top)] hover:text-white transition">
                     <Save size={12} />
                     <strong>{editingId ? 'Update Record' : 'Save Record'}</strong>
                   </button>
@@ -961,7 +961,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
           {/* LEFT Sidebar: Autocomplete Search list */}
           <div className="w-full md:w-[280px] bg-[#f8fafc] border border-[#8c9ba8] flex flex-col p-2 select-none print:hidden h-full flex-shrink-0">
             <div className="relative mb-2">
-              <span className="font-extrabold text-[#002f6c] block mb-1 text-[10px] uppercase font-mono tracking-wider">Worker Directory Scope</span>
+              <span className="font-extrabold text-[var(--color-sap-blue-val)] block mb-1 text-[10px] uppercase font-mono tracking-wider">Worker Directory Scope</span>
               <div className="relative flex items-center">
                 <Search size={12} className="absolute left-2 text-gray-400" />
                 <input
@@ -987,7 +987,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                   <div
                     key={worker.id}
                     onClick={() => setSelectedWorkerId(worker.id)}
-                    className={`p-2 cursor-pointer transition text-[10.5px] ${isActive ? 'bg-[#cce8ff] border-l-4 border-l-[#0056b3] font-bold text-[#002f6c]' : 'hover:bg-gray-50 text-gray-700'}`}
+                    className={`p-2 cursor-pointer transition text-[10.5px] ${isActive ? 'bg-[#cce8ff] border-l-4 border-l-[#0056b3] font-bold text-[var(--color-sap-blue-val)]' : 'hover:bg-gray-50 text-gray-700'}`}
                   >
                     <div className="flex justify-between items-center mb-0.5">
                       <span className="font-extrabold font-mono text-cyan-800">{worker.workerId}</span>
@@ -1023,10 +1023,10 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                 <div className="flex justify-between items-center border-b border-[#bcc5cf] pb-2 mb-2 select-none print:hidden flex-wrap gap-2">
                   <div className="flex items-center space-x-1.5">
                     <User size={13} className="text-[#0056b3]" />
-                    <span className="text-[12px] font-black text-[#002f6c]">
+                    <span className="text-[12px] font-black text-[var(--color-sap-blue-val)]">
                       ACCOUNT STATEMENT LEDGER FILE: {activeWorker.name}
                     </span>
-                    <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-[#eef2f6] text-[#002f6c] border border-[#bcc5cf] rounded-sm">
+                    <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-[#eef2f6] text-[var(--color-sap-blue-val)] border border-[#bcc5cf] rounded-sm">
                       ID: {activeWorker.workerId}
                     </span>
                   </div>
@@ -1034,7 +1034,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                   <div className="flex items-center space-x-1.5 flex-wrap">
                     <button
                       onClick={handlePrint}
-                      className="sap-btn flex items-center space-x-1 font-bold bg-[#0056b3]/10 text-[#0056b3] border-[#0056b3]/50 hover:bg-[#0056b3] hover:text-white transition py-1 px-3 cursor-pointer rounded"
+                      className="sap-btn flex items-center space-x-1 font-bold bg-[var(--btn-hover-top)]/10 text-[#0056b3] border-[#0056b3]/50 hover:bg-[var(--btn-hover-top)] hover:text-white transition py-1 px-3 cursor-pointer rounded"
                       title="Generate beautiful PDF Statement Report representation for saving"
                     >
                       <Printer size={12} />
@@ -1129,7 +1129,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                 <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-3">
                   <div className="border border-[#bcc5cf] bg-[#fdfdfd] p-1.5 rounded text-center select-none shadow-xs">
                     <span className="text-[8.5px] text-gray-500 font-semibold block uppercase">1. Gross Earned (A)</span>
-                    <span className="font-mono font-bold text-[11px] text-[#002f6c] tracking-tight">{currencyFormat(workerLedgerData.totalWorkExecuted)}</span>
+                    <span className="font-mono font-bold text-[11px] text-[var(--color-sap-blue-val)] tracking-tight">{currencyFormat(workerLedgerData.totalWorkExecuted)}</span>
                     <span className="text-[7.5px] block text-gray-400 font-mono mt-0.5">Sum(Work_Amount)</span>
                   </div>
                   <div className="border border-[#bcc5cf] bg-[#fdfdfd] p-1.5 rounded text-center select-none shadow-xs">
@@ -1171,7 +1171,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                   <div className="px-2 text-gray-500 font-semibold border-r border-[#bcc5cf] shrink-0">
                     RECONCILE_WORKER_CASHFLOW
                   </div>
-                  <div className="flex-1 text-[#002f6c] truncate flex items-center ml-2 space-x-1">
+                  <div className="flex-1 text-[var(--color-sap-blue-val)] truncate flex items-center ml-2 space-x-1">
                     <span className="text-[#107c41] font-bold">=</span>
                     <span className="font-bold">
                       NET_CREDIT({workerLedgerData.netEarningCredit}) - CASH_DISBURSED_POCKET({workerLedgerData.totalKharchiCashReceived}) - DIRECT_LOANS({workerLedgerData.totalAdvancesLoanReceived}) - MONTHLY_PAYMENTS({workerLedgerData.totalNetPaycheckSettlements})
@@ -1253,7 +1253,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                               </td>
                               <td className="border border-[#bcc5cf] px-2 py-1 select-all font-semibold text-gray-700">{row.site}</td>
                               <td className="border border-[#bcc5cf] px-2 py-1 text-gray-500 truncate max-w-72" title={row.description}>{row.description}</td>
-                              <td className="border border-[#bcc5cf] px-2 py-1 text-right font-mono text-[#002f6c] font-semibold">
+                              <td className="border border-[#bcc5cf] px-2 py-1 text-right font-mono text-[var(--color-sap-blue-val)] font-semibold">
                                 {row.chargeCredit > 0 ? currencyFormat(row.chargeCredit) : '—'}
                               </td>
                               <td className="border border-[#bcc5cf] px-2 py-1 text-right font-mono text-red-600">
@@ -1407,7 +1407,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                             <td className="excel-row-num">{i + 3}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-mono text-gray-700">{adv.date}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 font-semibold text-gray-800">{getProjectName(adv.projectId)}</td>
-                            <td className="border border-[#bcc5cf] px-2 py-1.5 font-bold text-[#002f6c]">{adv.paidBy}</td>
+                            <td className="border border-[#bcc5cf] px-2 py-1.5 font-bold text-[var(--color-sap-blue-val)]">{adv.paidBy}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-gray-500 max-w-72 truncate" title={adv.remarks}>{adv.remarks || '—'}</td>
                             <td className="border border-[#bcc5cf] px-2 py-1.5 text-right font-mono font-bold text-red-700 bg-red-50/5">{currencyFormat(adv.amount)}</td>
                           </motion.tr>
@@ -1443,7 +1443,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 text-slate-400 text-center select-none border border-dashed border-[#bcc5cf]">
                 <User size={36} className="text-gray-300 mb-2" />
-                <span className="font-extrabold text-[12px] text-[#002f6c] mb-1">Worker Account Card Console</span>
+                <span className="font-extrabold text-[12px] text-[var(--color-sap-blue-val)] mb-1">Worker Account Card Console</span>
                 <p className="max-w-md text-[10.5px] leading-relaxed text-gray-500">
                   Please select a worker name or employee ID card on the left directory navigation panel to generate their comprehensive 360° audit statement in chronological view instantly!
                 </p>
@@ -1460,7 +1460,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
       {activeView === 'transfers' && (
         <div className="flex flex-col space-y-4">
           <div className="flex items-center justify-between bg-[#eef2f6] p-2 border border-[#8c9ba8] shadow-sm rounded-sm">
-            <h2 className="font-bold text-[#002f6c] uppercase text-sm flex items-center">
+            <h2 className="font-bold text-[var(--color-sap-blue-val)] uppercase text-sm flex items-center">
               <Briefcase className="mr-2" size={16} /> Worker Transfer History
             </h2>
             <div className="flex items-center space-x-4">

@@ -435,7 +435,7 @@ export const SiteMonthlySummary: React.FC = () => {
                   <td colSpan={2} className="border border-[#444] px-3 py-3 text-center italic font-black uppercase tracking-wider">
                     Cumulative Amount
                   </td>
-                  <td className="border border-[#444] px-3 py-3 text-center font-black text-[#002f6c] bg-gray-200 font-mono border-double border-b-4">
+                  <td className="border border-[#444] px-3 py-3 text-center font-black text-[var(--color-sap-blue-val)] bg-gray-200 font-mono border-double border-b-4">
                     ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="border border-[#444] px-3 py-3"></td>

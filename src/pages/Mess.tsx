@@ -613,7 +613,7 @@ export const Mess: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleBatchPostToLedger}
-                    className="px-2.5 py-1 text-[10px] bg-[#0056b3] text-white rounded-sm font-semibold hover:bg-[#004085] transition duration-150 flex items-center space-x-1 cursor-pointer"
+                    className="px-2.5 py-1 text-[10px] bg-[var(--btn-hover-top)] text-white rounded-sm font-semibold hover:bg-[#004085] transition duration-150 flex items-center space-x-1 cursor-pointer"
                   >
                     <CheckSquare size={12} />
                     <span>Batch Post Dues to Ledger</span>

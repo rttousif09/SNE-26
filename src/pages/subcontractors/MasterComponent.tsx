@@ -31,7 +31,7 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
   // ERP Columns for Subcontractor Master
   const erpColumns: ERPColumn<Subcontractor>[] = [
     { key: 'id', header: 'ID', sortable: true, filterable: true, frozen: true, render: (val) => <span className="font-bold text-gray-900 font-mono">{val}</span> },
-    { key: 'name', header: 'Contractor Name', sortable: true, filterable: true, render: (val) => <span className="font-bold text-[#002f6c]">{val}</span> },
+    { key: 'name', header: 'Contractor Name', sortable: true, filterable: true, render: (val) => <span className="font-bold text-[var(--color-sap-blue-val)]">{val}</span> },
     { key: 'firmName', header: 'Firm Title', sortable: true, filterable: true },
     { key: 'contactPerson', header: 'Contact Person / No', sortable: true, filterable: true, render: (_, row) => (
       <div>

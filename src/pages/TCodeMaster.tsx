@@ -241,7 +241,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
       <div className="bg-[#cbdcf0] p-3 border border-[#8baac7] flex flex-col md:flex-row md:items-center justify-between gap-2 shrink-0">
         <div>
           <h2 className="text-[13px] font-bold text-blue-950 flex items-center space-x-2">
-            <Settings size={15} className="text-[#002f6c]" />
+            <Settings size={15} className="text-[var(--color-sap-blue-val)]" />
             <span>SAP Transaction Code Master Control Panel (TCODE_CFG)</span>
           </h2>
           <p className="text-[10px] text-slate-700 mt-0.5">
@@ -272,7 +272,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
       <div className="flex border-b border-[#8baac7] bg-[#f0f4f8] shrink-0">
         <button
           onClick={() => setActiveTab('registry')}
-          className={`px-4 py-2 font-bold text-[11px] border-r border-[#8baac7] transition-all flex items-center space-x-1.5 ${activeTab === 'registry' ? 'bg-white text-[#002f6c] border-t-2 border-t-[#0056b3]' : 'text-slate-600 hover:bg-white/50'}`}
+          className={`px-4 py-2 font-bold text-[11px] border-r border-[#8baac7] transition-all flex items-center space-x-1.5 ${activeTab === 'registry' ? 'bg-white text-[var(--color-sap-blue-val)] border-t-2 border-t-[#0056b3]' : 'text-slate-600 hover:bg-white/50'}`}
         >
           <Layers size={13} />
           <span>Transaction Code Registry ({tcodes.length})</span>
@@ -282,7 +282,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
             setActiveTab('audit');
             setLogs(getTCodeAuditTrail());
           }}
-          className={`px-4 py-2 font-bold text-[11px] border-r border-[#8baac7] transition-all flex items-center space-x-1.5 ${activeTab === 'audit' ? 'bg-white text-[#002f6c] border-t-2 border-t-[#0056b3]' : 'text-slate-600 hover:bg-white/50'}`}
+          className={`px-4 py-2 font-bold text-[11px] border-r border-[#8baac7] transition-all flex items-center space-x-1.5 ${activeTab === 'audit' ? 'bg-white text-[var(--color-sap-blue-val)] border-t-2 border-t-[#0056b3]' : 'text-slate-600 hover:bg-white/50'}`}
         >
           <FileText size={13} />
           <span>Access & Execution Audit Trail ({logs.length})</span>
@@ -413,7 +413,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
             </button>
             <button 
               type="submit" 
-              className="sap-btn bg-[#002f6c] text-white hover:bg-blue-900 px-4 py-1 font-bold"
+              className="sap-btn bg-[var(--color-sap-blue-val)] text-white hover:bg-blue-900 px-4 py-1 font-bold"
             >
               Submit Registration
             </button>
@@ -474,7 +474,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
             <div className="flex-1 overflow-auto border border-[#8baac7] bg-[#fdfdfd]">
               <table className="w-full text-left border-collapse text-[11px]">
                 <thead className="sap-header sticky top-0 z-10 shadow-sm">
-                  <tr className="bg-[#eef2f6] text-[#002f6c] border-b border-[#8baac7]">
+                  <tr className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] border-b border-[#8baac7]">
                     <th className="px-3 py-2 border-r border-[#8baac7] font-bold w-[90px] text-center">T-Code</th>
                     <th className="px-3 py-2 border-r border-[#8baac7] font-bold w-[120px]">Module Group</th>
                     <th className="px-3 py-2 border-r border-[#8baac7] font-bold w-[180px]">Transaction Name</th>
@@ -713,7 +713,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
             <div className="flex-1 overflow-auto border border-[#8baac7] bg-[#fdfdfd]">
               <table className="w-full text-left border-collapse text-[11px]">
                 <thead className="sap-header sticky top-0 z-10 shadow-sm">
-                  <tr className="bg-[#eef2f6] text-[#002f6c] border-b border-[#8baac7]">
+                  <tr className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] border-b border-[#8baac7]">
                     <th className="px-3 py-2 border-r border-[#8baac7] font-bold w-[150px]"><Calendar size={11} className="inline mr-1" />Executed At</th>
                     <th className="px-3 py-2 border-r border-[#8baac7] font-bold w-[90px] text-center">T-Code</th>
                     <th className="px-3 py-2 border-r border-[#8baac7] font-bold w-[160px]">Transaction Name</th>
@@ -735,7 +735,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
                         <td className="px-3 py-2 border-r border-gray-200 font-mono text-[10px] text-slate-600">
                           {new Date(lg.timestamp).toLocaleString('en-IN')}
                         </td>
-                        <td className="px-3 py-2 border-r border-gray-200 text-center font-mono font-bold text-[#002f6c]">
+                        <td className="px-3 py-2 border-r border-gray-200 text-center font-mono font-bold text-[var(--color-sap-blue-val)]">
                           {lg.tcode}
                         </td>
                         <td className="px-3 py-2 border-r border-gray-200 font-bold text-slate-800">

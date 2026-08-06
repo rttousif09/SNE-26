@@ -173,7 +173,7 @@ export const ExpensesSummary: React.FC = () => {
 
       {/* Floating Control Bar inside Print View Mode (Never Printed) */}
       {isPrintView && (
-        <div className="bg-[#002f6c] text-white p-2 flex items-center justify-between mb-4 border border-[#8c9ba8] shadow-md sticky top-0 z-[100000] print:hidden rounded-sm">
+        <div className="bg-[var(--color-sap-blue-val)] text-white p-2 flex items-center justify-between mb-4 border border-[#8c9ba8] shadow-md sticky top-0 z-[100000] print:hidden rounded-sm">
           <div className="flex items-center space-x-2">
             <span className="animate-pulse bg-emerald-500 w-2 h-2 rounded-full block"></span>
             <span className="font-bold uppercase text-[9.5px] tracking-wider">🖨️ LANDSCAPE PRINT PREVIEW MODE (ACTIVE)</span>
@@ -318,7 +318,7 @@ export const ExpensesSummary: React.FC = () => {
             <motion.div 
               variants={itemVariants}
               whileHover={{ scale: 1.01 }}
-              className="border border-[#8c9ba8] bg-[#002f6c] p-4 text-white shadow-sm relative overflow-hidden group hover:bg-[#00224d] transition"
+              className="border border-[#8c9ba8] bg-[var(--color-sap-blue-val)] p-4 text-white shadow-sm relative overflow-hidden group hover:bg-[#00224d] transition"
             >
               <div className="absolute right-0 top-0 w-24 h-24 bg-blue-900 rounded-full translate-x-8 -translate-y-8 flex items-center justify-center text-blue-800 group-hover:scale-110 transition duration-500">
                 <Wallet size={44} className="text-blue-800 opacity-40" />
@@ -737,7 +737,7 @@ export const ExpensesSummary: React.FC = () => {
                     <td className="border border-gray-400 p-1 text-right font-mono font-bold text-emerald-800 bg-emerald-50/20 w-20">
                       {row.crBalance > 0 ? Number(row.crBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : ''}
                     </td>
-                    <td className="border border-gray-400 p-1 text-right font-mono font-bold text-[#002f6c] bg-blue-50/20 w-24">
+                    <td className="border border-gray-400 p-1 text-right font-mono font-bold text-[var(--color-sap-blue-val)] bg-blue-50/20 w-24">
                       ₹{Number(row.avlBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                   </motion.tr>

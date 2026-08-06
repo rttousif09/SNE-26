@@ -714,7 +714,7 @@ export const Expenses: React.FC = () => {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="border border-[#8c9ba8] bg-[#002f6c] p-3 shadow-sm flex items-center justify-between text-white group hover:bg-[#00224d] transition duration-200"
+          className="border border-[#8c9ba8] bg-[var(--color-sap-blue-val)] p-3 shadow-sm flex items-center justify-between text-white group hover:bg-[#00224d] transition duration-200"
         >
           <div className="space-y-1">
             <span className="text-[10px] uppercase font-bold tracking-wider text-blue-200">Available Balance</span>
@@ -742,7 +742,7 @@ export const Expenses: React.FC = () => {
             if (val <= 0 || stats.totalSpent <= 0) return null;
             const percentage = (val / stats.totalSpent) * 100;
             const colors = [
-              'bg-[#0056b3]', 'bg-amber-600', 'bg-purple-600', 'bg-emerald-600', 
+              'bg-[var(--btn-hover-top)]', 'bg-amber-600', 'bg-purple-600', 'bg-emerald-600', 
               'bg-cyan-600', 'bg-pink-600', 'bg-teal-600', 'bg-orange-600', 'bg-slate-600'
             ];
             const catLabel = cat === 'machineryMaterial' ? 'Machinery & Material' : cat.charAt(0).toUpperCase() + cat.slice(1);
@@ -761,7 +761,7 @@ export const Expenses: React.FC = () => {
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
           {(Object.entries(stats.breakdown) as [string, number][]).map(([cat, val], idx) => {
             const colors = [
-              'bg-[#0056b3]', 'bg-amber-600', 'bg-purple-600', 'bg-emerald-600', 
+              'bg-[var(--btn-hover-top)]', 'bg-amber-600', 'bg-purple-600', 'bg-emerald-600', 
               'bg-cyan-600', 'bg-pink-600', 'bg-teal-600', 'bg-orange-600', 'bg-slate-600'
             ];
             const catLabel = cat === 'machineryMaterial' ? 'Machinery & Material' : cat.charAt(0).toUpperCase() + cat.slice(1);
@@ -1183,7 +1183,7 @@ export const Expenses: React.FC = () => {
               <th className="border border-black py-1.5 px-1 font-bold bg-slate-100 text-gray-905 w-18">Others</th>
               <th className="border border-black py-1.5 px-1.5 font-bold w-14 text-center">Bank</th>
               <th className="border border-black py-1.5 px-2 font-bold bg-green-50 text-green-950 w-24 text-right">Cr.Balance</th>
-              <th className="border border-black py-1.5 px-2 font-bold bg-[#edf2f7] text-[#002f6c] w-28 text-right">Avl. Balance</th>
+              <th className="border border-black py-1.5 px-2 font-bold bg-[#edf2f7] text-[var(--color-sap-blue-val)] w-28 text-right">Avl. Balance</th>
               {!isReadOnly && <th className="border border-black py-1.5 px-1 font-normal w-16 print:hidden">Actions</th>}
             </tr>
           </thead>
@@ -1314,7 +1314,7 @@ export const Expenses: React.FC = () => {
                     </td>
 
                     {/* Dynamic Avl Balance with elegant design */}
-                    <td className="border border-black py-1.5 px-2 text-right font-mono font-black bg-[#edf2f7]/50 text-[#002f6c]">
+                    <td className="border border-black py-1.5 px-2 text-right font-mono font-black bg-[#edf2f7]/50 text-[var(--color-sap-blue-val)]">
                       ₹{item.avlBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
 

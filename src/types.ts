@@ -861,3 +861,17 @@ export interface DMSAuditLog {
 
 
 
+
+export interface ClientFloorBill {
+  id: string;
+  projectId: string;
+  srNo: string;
+  floor: string;
+  unit: string;
+  builtUpArea: number;
+  workdoneArea: number;
+  raBills: Record<string, number>; // RA-01, RA-02... mapped to area
+  totalArea: number;
+  totalAmount: number;
+  rate: number;
+}

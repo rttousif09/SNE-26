@@ -85,7 +85,7 @@ export const WorkerAttendanceLog: React.FC = () => {
     <div className="flex-1 flex flex-col min-h-0 bg-white border border-[#8c9ba8] shadow-sm select-none">
       
       {/* Title block */}
-      <div className="bg-[#002f6c] text-white px-4 py-2 flex items-center justify-between border-b border-[#001f4d]">
+      <div className="bg-[var(--color-sap-blue-val)] text-white px-4 py-2 flex items-center justify-between border-b border-[#001f4d]">
         <div className="flex items-center space-x-2">
           <UserCheck size={16} className="text-sky-300" />
           <h2 className="text-xs font-black tracking-wider uppercase font-mono">Roll-Call Attendance Portal</h2>

@@ -168,7 +168,7 @@ export const DLR: React.FC = () => {
         return (
           <div className="mx-2 mb-2 p-2 bg-gradient-to-r from-[#eef4fc] to-[#f4f8fd] border border-[#a2c2ec] rounded shadow-xs print:hidden">
             <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-blue-200">
-              <span className="font-extrabold text-[#002f6c] text-[11px] flex items-center">
+              <span className="font-extrabold text-[var(--color-sap-blue-val)] text-[11px] flex items-center">
                 <span className="mr-1">📋</span> Planned Manpower Requirements for {filterDate}
               </span>
               <span className="text-[9.5px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded font-mono">

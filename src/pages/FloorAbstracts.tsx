@@ -850,7 +850,7 @@ export function FloorAbstracts() {
 
   return (
     <div className="flex flex-col h-full bg-[#f0f4f8]">
-      <div className="bg-[#002f6c] text-white p-2 flex items-center justify-between sap-header">
+      <div className="bg-[var(--color-sap-blue-val)] text-white p-2 flex items-center justify-between sap-header">
         <h2 className="text-lg font-bold font-mono">Floor Abstract</h2>
         {user?.role === 'staff' && !user.allowedModules?.includes('payroll') && (
            <span className="text-xs bg-red-600 px-2 py-0.5 rounded">Read-Only</span>
@@ -859,19 +859,19 @@ export function FloorAbstracts() {
 
       <div className="flex border-b border-gray-300 bg-white px-2 pt-2">
         <button 
-          className={`px-4 py-2 text-sm font-semibold border-b-2 ${activeTab === 'entries' ? 'border-[#002f6c] text-[#002f6c]' : 'border-transparent text-gray-600 hover:text-gray-800'}`}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 ${activeTab === 'entries' ? 'border-[var(--color-sap-blue-val)] text-[var(--color-sap-blue-val)]' : 'border-transparent text-gray-600 hover:text-gray-800'}`}
           onClick={() => setActiveTab('entries')}
         >
           <LayoutList size={16} className="inline-block mr-1" /> Floor Abstracts
         </button>
         <button 
-          className={`px-4 py-2 text-sm font-semibold border-b-2 ${activeTab === 'worker-summary' ? 'border-[#002f6c] text-[#002f6c]' : 'border-transparent text-gray-600 hover:text-gray-800'}`}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 ${activeTab === 'worker-summary' ? 'border-[var(--color-sap-blue-val)] text-[var(--color-sap-blue-val)]' : 'border-transparent text-gray-600 hover:text-gray-800'}`}
           onClick={() => setActiveTab('worker-summary')}
         >
           <Users size={16} className="inline-block mr-1" /> Worker Wise Summary
         </button>
         <button 
-          className={`px-4 py-2 text-sm font-semibold border-b-2 ${activeTab === 'floor-summary' ? 'border-[#002f6c] text-[#002f6c]' : 'border-transparent text-gray-600 hover:text-gray-800'}`}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 ${activeTab === 'floor-summary' ? 'border-[var(--color-sap-blue-val)] text-[var(--color-sap-blue-val)]' : 'border-transparent text-gray-600 hover:text-gray-800'}`}
           onClick={() => setActiveTab('floor-summary')}
         >
           <LayoutList size={16} className="inline-block mr-1" /> Floor Wise Summary
@@ -901,7 +901,7 @@ export function FloorAbstracts() {
                   >
                     <div className="bg-white border border-[#8c9ba8] p-3 shadow-sm rounded-sm">
                       <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200">
-                        <h3 className="font-bold text-[#002f6c] text-sm">{isEditing ? 'Edit Floor Abstract' : 'Create Floor Abstract'}</h3>
+                        <h3 className="font-bold text-[var(--color-sap-blue-val)] text-sm">{isEditing ? 'Edit Floor Abstract' : 'Create Floor Abstract'}</h3>
                         <button onClick={() => { resetForm(); setIsAdding(false); }} className="text-gray-500 hover:text-gray-800 text-xs flex items-center transition-colors">
                           <X size={16} />
                         </button>
@@ -991,7 +991,7 @@ export function FloorAbstracts() {
         {projectId && category && (
           <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden">
             <div className="bg-[#eef2f6] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
-              <h3 className="font-bold text-[#002f6c] text-sm">Worker Distribution</h3>
+              <h3 className="font-bold text-[var(--color-sap-blue-val)] text-sm">Worker Distribution</h3>
               <button onClick={handleAddWorker} className="sap-btn sap-btn-blue text-xs flex items-center h-6">
                 <Plus size={12} className="mr-1" /> Add Worker
               </button>
@@ -1151,7 +1151,7 @@ export function FloorAbstracts() {
 
         {/* Existing Records List */}
         <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden mt-4">
-          <div className="bg-[#002f6c] text-white px-3 py-2 flex justify-between items-center sap-header">
+          <div className="bg-[var(--color-sap-blue-val)] text-white px-3 py-2 flex justify-between items-center sap-header">
             <h3 className="font-bold text-sm">Saved Floor Abstracts</h3>
             {!isReadOnly && (
               <button onClick={() => setIsAdding(true)} className="sap-btn-primary bg-[#004085] hover:bg-[#003366] text-white border-none py-1 px-2 text-xs flex items-center cursor-pointer shadow-sm">
@@ -1230,7 +1230,7 @@ export function FloorAbstracts() {
                 return (
                   <div key={record.id} className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden flex flex-col">
                     <div 
-                      className="bg-[#002f6c] text-white px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-[#003b86] transition-colors"
+                      className="bg-[var(--color-sap-blue-val)] text-white px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-[#003b86] transition-colors"
                       onClick={() => toggleCardExpand(record.id)}
                     >
                       <div className="flex items-center space-x-4">
@@ -1260,15 +1260,15 @@ export function FloorAbstracts() {
                     <div className="bg-[#eef2f6] px-3 py-2 border-b border-[#8c9ba8] grid grid-cols-5 gap-2 text-xs">
                        <div className="bg-white p-1 border border-gray-200 rounded">
                          <div className="text-gray-500 mb-0.5">Total Workers</div>
-                         <div className="font-bold font-mono text-[#002f6c]">{record.workers.length}</div>
+                         <div className="font-bold font-mono text-[var(--color-sap-blue-val)]">{record.workers.length}</div>
                        </div>
                        <div className="bg-white p-1 border border-gray-200 rounded">
                          <div className="text-gray-500 mb-0.5">Average Rate</div>
-                         <div className="font-bold font-mono text-[#002f6c]">₹{record.averageRate?.toFixed(2) || 'N/A'}</div>
+                         <div className="font-bold font-mono text-[var(--color-sap-blue-val)]">₹{record.averageRate?.toFixed(2) || 'N/A'}</div>
                        </div>
                        <div className="bg-white p-1 border border-gray-200 rounded">
                          <div className="text-gray-500 mb-0.5">Total Hajira</div>
-                         <div className="font-bold font-mono text-[#002f6c]">{record.totalHajira?.toFixed(2) || record.flatHajira?.toFixed(2) || '0.00'}</div>
+                         <div className="font-bold font-mono text-[var(--color-sap-blue-val)]">{record.totalHajira?.toFixed(2) || record.flatHajira?.toFixed(2) || '0.00'}</div>
                        </div>
                        <div className={`p-1 border rounded ${hasMismatch ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}>
                          <div className="text-gray-500 mb-0.5">Total Payable</div>
@@ -1329,7 +1329,7 @@ export function FloorAbstracts() {
 
         {/* Project Summary section at bottom of entries */}
         {filteredRecords.length > 0 && (
-          <div className="bg-[#002f6c] text-white p-3 rounded-sm shadow-sm mt-6 mb-4 grid grid-cols-6 gap-4 text-center divide-x divide-blue-800">
+          <div className="bg-[var(--color-sap-blue-val)] text-white p-3 rounded-sm shadow-sm mt-6 mb-4 grid grid-cols-6 gap-4 text-center divide-x divide-blue-800">
             <div>
                <div className="text-blue-300 text-[10px] uppercase font-bold tracking-wider mb-1">Total Floors</div>
                <div className="text-xl font-mono">{projectSummary.totalFloors}</div>
@@ -1361,7 +1361,7 @@ export function FloorAbstracts() {
         {activeTab === 'worker-summary' && (
           /* Worker Summary View */
           <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden mt-4">
-             <div className="bg-[#eef2f6] text-[#002f6c] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
+             <div className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] px-3 py-2 border-b border-[#8c9ba8] flex justify-between items-center">
                 <h3 className="font-bold text-sm">Worker Wise Summary</h3>
              </div>
              <div className="overflow-x-auto">
@@ -1382,7 +1382,7 @@ export function FloorAbstracts() {
                    ) : workerSummary.map(ws => (
                      <tr key={ws.workerSysId} className="hover:bg-gray-50 divide-x divide-gray-200">
                        <td className="px-3 py-1.5 font-mono text-gray-600">{ws.workerId}</td>
-                       <td className="px-3 py-1.5 font-bold text-[#002f6c]">{ws.name}</td>
+                       <td className="px-3 py-1.5 font-bold text-[var(--color-sap-blue-val)]">{ws.name}</td>
                        <td className="px-3 py-1.5 text-right font-mono text-blue-700">{ws.totalHajira.toFixed(2)}</td>
                        <td className="px-3 py-1.5 text-right font-mono">₹{(ws.totalHajira > 0 ? (ws.payableAmount / ws.totalHajira) : 0).toFixed(2)}</td>
                        <td className="px-3 py-1.5 text-center font-mono">{ws.floorsWorked}</td>
@@ -1396,7 +1396,7 @@ export function FloorAbstracts() {
         )}
         {activeTab === 'floor-summary' && (
            <div className="bg-white border border-[#8c9ba8] shadow-sm rounded-sm overflow-hidden mt-4">
-              <div className="bg-[#eef2f6] text-[#002f6c] px-3 py-2 border-b border-[#8c9ba8] flex flex-wrap gap-2 justify-between items-center">
+              <div className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] px-3 py-2 border-b border-[#8c9ba8] flex flex-wrap gap-2 justify-between items-center">
                  <h3 className="font-bold text-sm flex flex-wrap items-center gap-3">
                    <span>Floor Wise Summary</span>
                    <div className="flex items-center space-x-1">

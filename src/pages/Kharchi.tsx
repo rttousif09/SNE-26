@@ -218,14 +218,14 @@ export const Kharchi: React.FC = () => {
           <div className="flex space-x-2">
             <button 
               onClick={() => setViewMode('pivot')} 
-              className={`sap-btn flex items-center space-x-1 ${viewMode === 'pivot' ? 'bg-[#0056b3] text-white' : ''}`}
+              className={`sap-btn flex items-center space-x-1 ${viewMode === 'pivot' ? 'bg-[var(--btn-hover-top)] text-white' : ''}`}
             >
               <TableIcon size={14} className={viewMode === 'pivot' ? 'text-white' : 'text-[#0056b3]'}/>
               <span>Report View</span>
             </button>
             <button 
               onClick={() => setViewMode('list')} 
-              className={`sap-btn flex items-center space-x-1 ${viewMode === 'list' ? 'bg-[#0056b3] text-white' : ''}`}
+              className={`sap-btn flex items-center space-x-1 ${viewMode === 'list' ? 'bg-[var(--btn-hover-top)] text-white' : ''}`}
             >
               <ListIcon size={14} className={viewMode === 'list' ? 'text-white' : 'text-[#0056b3]'}/>
               <span>Entry List</span>
@@ -379,7 +379,7 @@ export const Kharchi: React.FC = () => {
                       {uniqueDates.length > 0 && (
                         <td className="border border-[#444]"></td>
                       )}
-                      <td className="border border-[#444] px-3 py-2 text-right font-black text-[#002f6c] bg-gray-200">
+                      <td className="border border-[#444] px-3 py-2 text-right font-black text-[var(--color-sap-blue-val)] bg-gray-200">
                         {grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>

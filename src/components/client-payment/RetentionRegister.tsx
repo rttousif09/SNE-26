@@ -28,7 +28,7 @@ export const RetentionRegister = ({ data, onAddRetentionPayment }: { data: any[]
             
             return (
               <motion.tr key={row.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }} className="hover:bg-orange-50/30">
-                <td className="px-2 py-1.5 font-mono font-semibold text-[#002f6c] border-r border-[#bcc5cf]">{row.billNo}</td>
+                <td className="px-2 py-1.5 font-mono font-semibold text-[var(--color-sap-blue-val)] border-r border-[#bcc5cf]">{row.billNo}</td>
                 <td className="px-2 py-1.5 border-r border-[#bcc5cf] font-semibold">{row.siteName}</td>
                 <td className="px-2 py-1.5 border-r border-[#bcc5cf]">{row.date}</td>
                 <td className="px-2 py-1.5 text-right font-mono border-r border-[#bcc5cf]">{row.gross.toLocaleString('en-IN')}</td>

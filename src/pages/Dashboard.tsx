@@ -655,7 +655,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
                       }`}
                     >
                       <div className="flex items-start space-x-3">
-                        <div className="w-4 h-4 rounded-full bg-[#0056b3] border border-blue-400 shrink-0 flex items-center justify-center mt-0.5 shadow-sm">
+                        <div className="w-4 h-4 rounded-full bg-[var(--btn-hover-top)] border border-blue-400 shrink-0 flex items-center justify-center mt-0.5 shadow-sm">
                           {!darkMode && (
                             <span className="w-1.5 h-1.5 rounded-full bg-white" />
                           )}

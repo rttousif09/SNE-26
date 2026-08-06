@@ -379,7 +379,7 @@ export const LabourRequirementPlanning: React.FC = () => {
               className="bg-white border border-[#8c9ba8] p-3 shadow-xs space-y-3 prose-xs text-[11px] font-sans print:hidden"
               onSubmit={handleCreateOrUpdate}
             >
-              <div className="sap-header p-1 font-bold text-[#002f6c] bg-slate-150 border-[#8c9ba8] border-b text-[10.5px]">
+              <div className="sap-header p-1 font-bold text-[var(--color-sap-blue-val)] bg-slate-150 border-[#8c9ba8] border-b text-[10.5px]">
                 {editingId ? 'Modify Manpower Schedules Form' : 'Register New Project Site Labour Requirement Program'}
               </div>
 
@@ -746,7 +746,7 @@ export const LabourRequirementPlanning: React.FC = () => {
       {/* 4. Live Allocation Radar Tab Pane */}
       {subTab === 'dashboard' && (
         <div className="flex-1 flex flex-col space-y-3">
-          <div className="sap-header p-1.5 font-bold text-[#002f6c] bg-slate-150 border-[#8c9ba8] border-b text-[10.5px]">
+          <div className="sap-header p-1.5 font-bold text-[var(--color-sap-blue-val)] bg-slate-150 border-[#8c9ba8] border-b text-[10.5px]">
             SITE-WISE LABOUR RADAR METRICS (Category Breakdowns)
           </div>
 
@@ -826,7 +826,7 @@ export const LabourRequirementPlanning: React.FC = () => {
                         setTransferToProjectId(p.id);
                         setSubTab('transfers');
                       }}
-                      className="bg-[#0056b3] text-white border border-[#004085] hover:bg-[#004085] px-2.5 py-1 text-[9.5px] font-bold rounded-xs flex items-center space-x-1 cursor-pointer"
+                      className="bg-[var(--btn-hover-top)] text-white border border-[#004085] hover:bg-[#004085] px-2.5 py-1 text-[9.5px] font-bold rounded-xs flex items-center space-x-1 cursor-pointer"
                     >
                       <span>⚡ Mobilize Support here</span>
                       <ArrowRight size={10} />
@@ -884,7 +884,7 @@ export const LabourRequirementPlanning: React.FC = () => {
             {/* A: Requirements log report */}
             {reportType === 'requirement' && (
               <div className="space-y-2">
-                <span className="font-bold block text-medium text-[#002f6c] border-b text-[12px] pb-1">CHRONOLOGICAL MANPOWER REQUIREMENTS LEDGER</span>
+                <span className="font-bold block text-medium text-[var(--color-sap-blue-val)] border-b text-[12px] pb-1">CHRONOLOGICAL MANPOWER REQUIREMENTS LEDGER</span>
                 <table className="w-full border-collapse border border-slate-900 text-[10px]">
                   <thead className="bg-slate-100 text-slate-800 font-mono font-bold">
                     <tr className="divide-x divide-slate-400">
@@ -925,7 +925,7 @@ export const LabourRequirementPlanning: React.FC = () => {
             {/* B: Availability Census report */}
             {reportType === 'availability' && (
               <div className="space-y-2">
-                <span className="font-bold block text-medium text-[#002f6c] border-b text-[12px] pb-1">SITE-WISE LABOUR AVAILABILITY & STOCK MATRIX</span>
+                <span className="font-bold block text-medium text-[var(--color-sap-blue-val)] border-b text-[12px] pb-1">SITE-WISE LABOUR AVAILABILITY & STOCK MATRIX</span>
                 <table className="w-full border-collapse border border-slate-900 text-[10px]">
                   <thead className="bg-slate-100 text-slate-800 font-mono font-bold">
                     <tr className="divide-x divide-slate-400">
@@ -1015,7 +1015,7 @@ export const LabourRequirementPlanning: React.FC = () => {
             {/* D: Site-wise manpower matrix */}
             {reportType === 'sitewise' && (
               <div className="space-y-2">
-                <span className="font-bold block text-medium text-[#002f6c] border-b text-[12px] pb-1">SITE-WISE MANPOWER REGISTER STATEMENT</span>
+                <span className="font-bold block text-medium text-[var(--color-sap-blue-val)] border-b text-[12px] pb-1">SITE-WISE MANPOWER REGISTER STATEMENT</span>
                 <table className="w-full border-collapse border border-slate-900 text-[10px]">
                   <thead className="bg-slate-100 font-mono font-bold">
                     <tr>
@@ -1059,7 +1059,7 @@ export const LabourRequirementPlanning: React.FC = () => {
             
             {/* Mobilization wizard */}
             <div className="bg-white border border-[#abc0d5] p-3 shadow-xs space-y-3 prose-xs text-[11px] font-sans h-fit rounded-xs">
-              <div className="sap-header p-1 font-bold text-[#002f6c] bg-slate-150 border-[#8c9ba8] border-b text-[10.5px]">
+              <div className="sap-header p-1 font-bold text-[var(--color-sap-blue-val)] bg-slate-150 border-[#8c9ba8] border-b text-[10.5px]">
                 ⚡ INSTANT MOBILIZATION COMMAND WIZARD
               </div>
 
@@ -1131,7 +1131,7 @@ export const LabourRequirementPlanning: React.FC = () => {
 
             {/* Transfer Activity log */}
             <div className="bg-white border border-[#bcc5cf] p-2.5 md:col-span-2 space-y-3 rounded-xs flex flex-col">
-              <div className="sap-header p-1 font-bold text-[#002f6c] bg-slate-150 border-[#bcc5cf] border-b text-[10px] uppercase">
+              <div className="sap-header p-1 font-bold text-[var(--color-sap-blue-val)] bg-slate-150 border-[#bcc5cf] border-b text-[10px] uppercase">
                 📋 MOBILIZATION LEDGER HISTORY LOG
               </div>
 
