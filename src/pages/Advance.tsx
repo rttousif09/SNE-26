@@ -384,7 +384,7 @@ export const Advance: React.FC = () => {
           </div>
 
           <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
-            <thead className="sap-header">
+            <thead className="bg-[#eef2f6] text-[11px] font-semibold text-slate-700">
               <tr>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Sr No</th>
                 <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">ID No</th>

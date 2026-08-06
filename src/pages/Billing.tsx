@@ -2327,8 +2327,9 @@ export const Billing: React.FC = () => {
         </div>
       )}
 
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
-        <thead className="sap-header">
+        <thead className="bg-[#eef2f6] text-[11px] font-semibold text-slate-700 sticky top-0 z-10 shadow-sm">
           <tr>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Sr No</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project</th>
@@ -2490,6 +2491,7 @@ export const Billing: React.FC = () => {
           </tr>
         </tfoot>
       </table>
+</div>
         </>
       ) : activeTab === 'retention' ? (
         <div className="space-y-4 print:space-y-0">

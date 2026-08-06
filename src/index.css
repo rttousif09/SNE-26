@@ -130,8 +130,6 @@ body {
   font-weight: 600;
   padding: 8px 16px;
   border-bottom: 1px solid var(--color-sap-border-val);
-  display: flex;
-  align-items: center;
 }
 .sap-header-light {
   background-color: var(--color-sap-bg-val);
@@ -146,7 +144,6 @@ body {
   display: grid;
   grid-template-columns: 200px 1fr;
   row-gap: 12px;
-  align-items: center;
   background-color: transparent;
   padding: 16px;
   border: none;

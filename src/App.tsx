@@ -812,7 +812,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
               <div className="flex-1 p-2 overflow-y-auto text-[11px] sap-panel">
                 {bottomTab === 'properties' && (
                   <table className="w-full text-left border-collapse border border-[#8c9ba8]">
-                    <thead className="sap-header">
+                    <thead className="bg-[#eef2f6] text-[11px] font-semibold text-slate-700">
                       <tr>
                         <th className="border border-[#8c9ba8] px-2 py-0.5 font-normal w-1/3">Property</th>
                         <th className="border border-[#8c9ba8] px-2 py-0.5 font-normal">Value</th>
