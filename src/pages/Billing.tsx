@@ -1397,8 +1397,8 @@ export const Billing: React.FC = () => {
       </div>
 
       {activeTab === 'records' ? (
-        <>
-          <div className="flex items-center space-x-2 mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1 justify-between">
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2 bg-[#eef2f6] border border-[#8c9ba8] p-1 justify-between">
         <div className="flex items-center space-x-2">
           {!isReadOnly ? (
             <>
@@ -1475,7 +1475,7 @@ export const Billing: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-1.5 mb-4 bg-gray-50 p-2 border border-[#8c9ba8]">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-1.5 bg-gray-50 p-2 border border-[#8c9ba8]">
         <div className="sap-panel p-1.5 flex flex-col bg-white">
           <span className="font-semibold text-gray-600 leading-tight">Current Month Billing</span>
           <span className="text-xs font-bold text-[#0056b3] mt-0.5">
@@ -1791,7 +1791,7 @@ export const Billing: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleAddMeasurementItem}
-                  className="bg-blue-600 hover:bg-blue-750 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-700 shadow-sm transition-colors cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-750 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-700 border-b-2 border-slate-200 transition-colors cursor-pointer"
                 >
                   + Add Item Row
                 </button>
@@ -2113,7 +2113,7 @@ export const Billing: React.FC = () => {
           </form>
 
           {formData.projectId && formData.billType === 'Running Account' && (
-            <details className="mt-4 border border-gray-200 rounded group bg-white shadow-sm">
+            <details className="mt-4 border border-gray-200 rounded group bg-white border-b-2 border-slate-200">
               <summary className="p-2 bg-gray-50 text-[10px] font-bold text-gray-700 cursor-pointer flex justify-between items-center group-open:border-b border-gray-200 uppercase tracking-wider select-none hover:bg-gray-100 transition-colors">
                 <div className="flex items-center gap-1.5">
                   <History size={13} className="text-indigo-600" />
@@ -2166,7 +2166,7 @@ export const Billing: React.FC = () => {
       
       {/* Historical Deductions Trend Analysis Chart */}
       {filteredBillings.length > 0 && (
-        <div className="mb-4 bg-white border border-[#8c9ba8] p-3 text-sans shadow-3xs rounded print:hidden">
+        <div className="bg-white border border-[#8c9ba8] p-3 text-sans shadow-3xs rounded print:hidden">
           <div className="flex flex-wrap items-center justify-between border-b border-slate-200 pb-2 mb-3 gap-2">
             <div>
               <h3 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
@@ -2329,7 +2329,7 @@ export const Billing: React.FC = () => {
 
       <div className="overflow-x-auto">
       <table className="w-full border-collapse border border-[#8c9ba8] bg-white">
-        <thead className="bg-[#eef2f6] text-[11px] font-semibold text-slate-700 sticky top-0 z-10 shadow-sm">
+        <thead className="bg-[#eef2f6] text-[11px] font-semibold text-slate-700 sticky top-0 z-10 border-b-2 border-slate-200">
           <tr>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Sr No</th>
             <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Project</th>
@@ -2492,11 +2492,11 @@ export const Billing: React.FC = () => {
         </tfoot>
       </table>
 </div>
-        </>
+        </div>
       ) : activeTab === 'retention' ? (
         <div className="space-y-4 print:space-y-0">
           {/* Site-wise Retention Header / Project Selector */}
-          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
               <select
@@ -2530,7 +2530,7 @@ export const Billing: React.FC = () => {
           </div>
 
           {/* Retention Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-blue-500 shadow-xs">
               <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Cumulative Retention Deducted</span>
               <span className="text-sm font-black text-[#0056b3] mt-1">
@@ -2669,7 +2669,7 @@ export const Billing: React.FC = () => {
       ) : activeTab === 'tds' ? (
         <div className="space-y-4 print:space-y-0">
           {/* Site-wise TDS Header / Project Selector */}
-          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
               <select
@@ -2703,7 +2703,7 @@ export const Billing: React.FC = () => {
           </div>
 
           {/* TDS Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-red-500 shadow-xs">
               <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Cumulative TDS Amount</span>
               <span className="text-sm font-black text-red-650 mt-1">
@@ -2814,7 +2814,7 @@ export const Billing: React.FC = () => {
       ) : activeTab === 'debit' ? (
         <div className="space-y-4 print:space-y-0">
           {/* Site-wise Debit Header / Project Selector */}
-          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
               <select
@@ -2849,7 +2849,7 @@ export const Billing: React.FC = () => {
           </div>
 
           {/* Debit Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-purple-500 shadow-xs">
               <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Total Debit Adjustments</span>
               <span className="text-sm font-black text-purple-700 mt-1">
@@ -2963,7 +2963,7 @@ export const Billing: React.FC = () => {
       ) : activeTab === 'hold' ? (
         <div className="space-y-4 print:space-y-0">
           {/* Site-wise Hold Header / Project Selector */}
-          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
               <select
@@ -2998,7 +2998,7 @@ export const Billing: React.FC = () => {
           </div>
 
           {/* Hold Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-amber-500 shadow-xs">
               <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Total Hold Deductions</span>
               <span className="text-sm font-black text-amber-750 mt-1">
@@ -3133,7 +3133,7 @@ export const Billing: React.FC = () => {
       ) : activeTab === 'gst' ? (
         <div className="space-y-4 print:space-y-0">
           {/* Site-wise GST Header / Project Selector */}
-          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
               <select
@@ -3168,7 +3168,7 @@ export const Billing: React.FC = () => {
           </div>
 
           {/* GST Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sap-panel p-2.5 flex flex-col bg-white border-l-4 border-l-emerald-500 shadow-xs">
               <span className="font-bold text-slate-500 text-[10px] uppercase tracking-wider leading-tight">Total GST Amount</span>
               <span className="text-sm font-black text-emerald-750 mt-1">
@@ -3667,7 +3667,7 @@ export const Billing: React.FC = () => {
                 <img
                   src={previewFile.url}
                   alt={previewFile.name}
-                  className="max-h-[65vh] max-w-full object-contain rounded border border-slate-200 shadow-sm"
+                  className="max-h-[65vh] max-w-full object-contain rounded border border-slate-200 border-b-2 border-slate-200"
                 />
               ) : previewFile.type === 'application/pdf' ? (
                 <iframe
@@ -3676,7 +3676,7 @@ export const Billing: React.FC = () => {
                   className="w-full h-[65vh] border border-slate-200 rounded shadow-inner bg-white"
                 />
               ) : (
-                <div className="text-center py-10 bg-white rounded-sm p-8 border border-slate-200 max-w-md shadow-sm">
+                <div className="text-center py-10 bg-white rounded-sm p-8 border border-slate-200 max-w-md border-b-2 border-slate-200">
                   <Paperclip size={40} className="mx-auto text-slate-350 mb-3" />
                   <h4 className="font-bold text-slate-700 text-sm mb-1">Preview Unavailable</h4>
                   <p className="text-slate-500 text-xs mb-4">
