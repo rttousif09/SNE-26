@@ -75,44 +75,187 @@ body {
   font-size: 14px;
 }
 
-/* Classic SAP / Web 1.0 3D Button */
+/* Classic SAP GUI / Bellevue & Signature Form Theme */
 .sap-btn {
-  background: var(--btn-gradient-top);
-  border: 1px solid var(--btn-gradient-top);
-  border-radius: 4px;
-  padding: 4px 12px;
-  color: #ffffff;
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 1px solid #8c9ba8;
+  border-radius: 2px;
+  padding: 3px 10px;
+  color: #1e293b;
   cursor: pointer;
-  box-shadow: none;
-  font-weight: normal;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  font-weight: 600;
+  font-size: 11px;
   font-family: var(--font-sans);
-  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
 }
 .sap-btn:hover {
-  background: var(--btn-hover-top);
-  border-color: var(--btn-hover-top);
+  background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+  border-color: #0056b3;
+  color: #0056b3;
 }
 .sap-btn:active {
-  background: var(--btn-active);
-  box-shadow: none;
+  background: #cbd5e1;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
-/* Classic Web 1.0 3D Input */
-.sap-input {
-  background-color: var(--input-bg);
-  border: 1px solid #ccc;
-  padding: 4px 8px;
+.sap-btn-primary {
+  background: linear-gradient(180deg, #0066cc 0%, #0056b3 100%);
+  border: 1px solid #003d80;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+.sap-btn-primary:hover {
+  background: linear-gradient(180deg, #0052a3 0%, #004085 100%);
+  border-color: #002f6c;
+  color: #ffffff !important;
+}
+
+.sap-btn-amber {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border: 1px solid #b45309;
+  color: #000000 !important;
+  font-weight: 700;
+}
+.sap-btn-amber:hover {
+  background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+  color: #000000 !important;
+}
+
+/* Authentic SAP GUI Input with Light Yellow Focus Box Highlight */
+.sap-input,
+.sap-form input[type="text"],
+.sap-form input[type="number"],
+.sap-form input[type="date"],
+.sap-form input[type="email"],
+.sap-form input[type="password"],
+.sap-form select,
+.sap-form textarea {
+  background-color: #ffffff;
+  border: 1px solid #8c9ba8;
+  padding: 3px 6px;
   border-radius: 2px;
-  color: var(--text-primary);
+  color: #000000;
   font-family: var(--font-sans);
+  font-size: 11px;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.sap-input:focus {
-  outline: none;
-  background-color: var(--input-focus-bg);
-  border: 1px solid var(--color-sap-blue-val);
+
+.sap-input:focus,
+.sap-form input:focus,
+.sap-form select:focus,
+.sap-form textarea:focus,
+input.sap-active-field,
+select.sap-active-field,
+.sap-table-grid input:focus,
+.excel-grid input:focus {
+  outline: none !important;
+  background-color: #fffde7 !important; /* Authentic SAP active input box yellow background */
+  border: 1px solid #d97706 !important;
+  box-shadow: inset 0 0 0 1px #d97706, 0 0 0 2px rgba(217, 119, 6, 0.2) !important;
+  color: #000000 !important;
 }
-.sap-input:read-only, .sap-input:disabled {
-  background-color: #f3f4f6;
+
+.sap-input:read-only, 
+.sap-input:disabled,
+.sap-form input:read-only,
+.sap-form input:disabled,
+.sap-form select:disabled {
+  background-color: #eef2f6 !important;
+  color: #475569 !important;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+/* SAP GUI Title / Screen Banner */
+.sap-title-banner {
+  background: linear-gradient(180deg, #d2dfed 0%, #b8ceea 100%);
+  border: 1px solid #8c9ba8;
+  color: #002f6c;
+  padding: 6px 12px;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 2px 2px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* SAP Group Box / Fieldset Container */
+.sap-fieldset {
+  border: 1px solid #8c9ba8;
+  background-color: #f4f7fa;
+  border-radius: 2px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sap-fieldset-header {
+  background: linear-gradient(180deg, #d2dfed 0%, #c8d7e6 100%);
+  color: #002f6c;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-bottom: 1px solid #8c9ba8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sap-fieldset-body {
+  padding: 10px 12px;
+  background-color: #ffffff;
+}
+
+/* SAP Condition Supplements / Table Grid */
+.sap-table-grid {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #8c9ba8;
+  font-size: 11px;
+}
+
+.sap-table-grid th {
+  background: linear-gradient(180deg, #d2dfed 0%, #c8d7e6 100%);
+  border: 1px solid #8c9ba8;
+  padding: 4px 8px;
+  font-weight: 700;
+  color: #002f6c;
+  text-align: left;
+  user-select: none;
+}
+
+.sap-table-grid td {
+  border: 1px solid #8c9ba8;
+  padding: 3px 6px;
+  background-color: #ffffff;
+}
+
+.sap-table-grid tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+
+.sap-table-grid tr:hover td {
+  background-color: #e6f2ff;
+}
+
+/* SAP Command Bar / Transaction Toolbar */
+.sap-command-bar {
+  background-color: #eef2f6;
+  border: 1px solid #8c9ba8;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
 }
 
 /* Classic Panel */

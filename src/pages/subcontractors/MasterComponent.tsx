@@ -277,12 +277,15 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
       {/* Master Registration Screen Overlays */}
       {isEditingMaster && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white border-2 border-gray-300 w-full max-w-3xl rounded shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-[#1f2937] text-white px-4 py-2.5 flex items-center justify-between border-b border-[#374151]">
-              <span className="font-bold text-xs uppercase tracking-widest">{editingMasterId ? 'Edit Subcontractor Master Profile' : 'Register New Subcontractor Profile'}</span>
-              <button type="button" onClick={() => setIsEditingMaster(false)} className="text-gray-400 hover:text-white"><X size={16}/></button>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-3xl rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="sap-title-banner">
+              <span className="font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <Briefcase size={14} className="text-[#002f6c]" />
+                <span>{editingMasterId ? 'Edit Subcontractor Master Profile (MK02)' : 'Register New Subcontractor Profile (MK01)'}</span>
+              </span>
+              <button type="button" onClick={() => setIsEditingMaster(false)} className="text-[#002f6c] hover:bg-slate-300/50 p-0.5 rounded"><X size={16}/></button>
             </div>
-            <form onSubmit={handleSaveMaster} className="p-4 space-y-4 overflow-y-auto flex-1">
+            <form onSubmit={handleSaveMaster} className="sap-form p-3 space-y-3 overflow-y-auto flex-1 text-[11px]">
               {/* Section 1: Contractor Details */}
               <div className="border border-amber-300 bg-amber-50/20 p-3 rounded">
                 <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2.5 border-b border-amber-200 pb-1 flex items-center gap-1.5">

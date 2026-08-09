@@ -394,259 +394,277 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
       {/* Billing Overlay Dialog */}
       {isEditingBill && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white border-2 border-gray-300 w-full max-w-2xl rounded shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-[#1f2937] text-white px-4 py-2.5 flex items-center justify-between border-b border-[#374151]">
-              <span className="font-bold text-xs uppercase tracking-widest">{editingBillId ? 'Edit Certified Contractor Bill' : 'Record Certified Contractor Bill'}</span>
-              <button type="button" onClick={() => setIsEditingBill(false)} className="text-gray-400 hover:text-white"><X size={16}/></button>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="sap-title-banner">
+              <span className="font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <Receipt size={14} className="text-[#002f6c]" />
+                <span>{editingBillId ? 'Edit Certified Contractor Bill (PB00)' : 'Create Gross Price Condition / Contractor Bill (PB00)'}</span>
+              </span>
+              <button type="button" onClick={() => setIsEditingBill(false)} className="text-[#002f6c] hover:bg-slate-300/50 p-0.5 rounded"><X size={16}/></button>
             </div>
-            <form onSubmit={handleSaveBill} className="p-4 space-y-4 overflow-y-auto flex-1 text-[10px]">
+            <form onSubmit={handleSaveBill} className="sap-form p-3 space-y-3 overflow-y-auto flex-1 text-[11px]">
               {/* Project and partner specs */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
-                    <Building2 size={10} className="text-amber-500" />
-                    <span>Project *</span>
-                  </label>
-                  <select 
-                    value={billForm.projectId}
-                    onChange={(e) => setBillForm({ ...billForm, projectId: e.target.value })}
-                    className="w-full bg-white border border-gray-300 p-1 rounded font-semibold outline-none focus:border-amber-500 text-[10px]"
-                  >
-                    <option value="" disabled>Select Site Location</option>
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+              <div className="sap-fieldset">
+                <div className="sap-fieldset-header">
+                  <span>Variable Key / Partner Specifications</span>
                 </div>
-                <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
-                    <User size={10} className="text-amber-500" />
-                    <span>Subcontractor *</span>
-                  </label>
-                  <select 
-                    value={billForm.subcontractorId}
-                    onChange={(e) => setBillForm({ ...billForm, subcontractorId: e.target.value })}
-                    className="w-full bg-white border border-gray-300 p-1 rounded font-semibold outline-none focus:border-amber-500 text-[10px]"
-                  >
-                    <option value="" disabled>Select Master Partner</option>
-                    {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
-                    <Calendar size={10} className="text-amber-500" />
-                    <span>Bill Date *</span>
-                  </label>
-                  <input 
-                    type="date" 
-                    value={billForm.billDate}
-                    onChange={(e) => setBillForm({ ...billForm, billDate: e.target.value })}
-                    className="w-full bg-white border border-gray-300 p-1 rounded font-mono outline-none focus:border-amber-500 text-[10px]"
-                  />
+                <div className="sap-fieldset-body grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
+                      <Building2 size={11} className="text-[#0056b3]" />
+                      <span>Project *</span>
+                    </label>
+                    <select 
+                      value={billForm.projectId}
+                      onChange={(e) => setBillForm({ ...billForm, projectId: e.target.value })}
+                      className="w-full sap-input font-semibold"
+                    >
+                      <option value="" disabled>Select Site Location</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
+                      <User size={11} className="text-[#0056b3]" />
+                      <span>Subcontractor *</span>
+                    </label>
+                    <select 
+                      value={billForm.subcontractorId}
+                      onChange={(e) => setBillForm({ ...billForm, subcontractorId: e.target.value })}
+                      className="w-full sap-input font-semibold"
+                    >
+                      <option value="" disabled>Select Master Partner</option>
+                      {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
+                      <Calendar size={11} className="text-[#0056b3]" />
+                      <span>Bill Date *</span>
+                    </label>
+                    <input 
+                      type="date" 
+                      value={billForm.billDate}
+                      onChange={(e) => setBillForm({ ...billForm, billDate: e.target.value })}
+                      className="w-full sap-input font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Work details & automatic numbering code override */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
-                    <FileKey size={10} className="text-amber-500" />
-                    <span>Bill Reference Number</span>
-                  </label>
-                  <input 
-                    type="text" 
-                    placeholder="Auto-assigned unless overridden" 
-                    value={billForm.billNo}
-                    onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
-                    className="w-full bg-[#f3f4f6] border border-gray-300 p-1 rounded font-bold font-mono outline-none text-gray-800 focus:border-amber-500 text-[10px]"
-                  />
+              <div className="sap-fieldset">
+                <div className="sap-fieldset-header">
+                  <span>Condition Details & Document Attachment</span>
                 </div>
-                <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
-                    <Upload size={10} className="text-amber-500" />
-                    <span>Hard Copy Bill Doc Scan</span>
-                  </label>
-                  <label className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-center text-gray-600 font-semibold p-1 rounded block cursor-pointer transition text-[10px] py-[4px]">
-                    <Upload size={10} className="inline mr-1 text-gray-500" />
-                    {billForm.attachmentUpload ? "✓ Change Archived File" : "Select & Convert Attachment File"}
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      onChange={(e) => handleFileUpload(e, 'attachmentUpload')}
-                    />
-                  </label>
-                </div>
-              </div>
+                <div className="sap-fieldset-body space-y-2.5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
+                        <FileKey size={11} className="text-[#0056b3]" />
+                        <span>Bill Reference Number</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="Auto-assigned unless overridden" 
+                        value={billForm.billNo}
+                        onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
+                        className="w-full sap-input font-bold font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
+                        <Upload size={11} className="text-[#0056b3]" />
+                        <span>Hard Copy Bill Doc Scan</span>
+                      </label>
+                      <label className="sap-btn w-full justify-center text-center cursor-pointer py-1">
+                        <Upload size={11} className="inline mr-1" />
+                        {billForm.attachmentUpload ? "✓ Change Archived File" : "Select & Convert Attachment File"}
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          onChange={(e) => handleFileUpload(e, 'attachmentUpload')}
+                        />
+                      </label>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
-                  <FileText size={10} className="text-amber-500" />
-                  <span>Description of Certified Civil / Works</span>
-                </label>
-                <textarea 
-                  rows={2}
-                  placeholder="Detail block location, floor levels, specifications, item measurements..." 
-                  value={billForm.workDescription}
-                  onChange={(e) => setBillForm({ ...billForm, workDescription: e.target.value })}
-                  className="w-full bg-white border border-gray-300 p-1 rounded outline-none focus:border-amber-500 text-[10px]"
-                />
+                  <div>
+                    <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
+                      <FileText size={11} className="text-[#0056b3]" />
+                      <span>Description of Certified Civil / Works</span>
+                    </label>
+                    <textarea 
+                      rows={2}
+                      placeholder="Detail block location, floor levels, specifications, item measurements..." 
+                      value={billForm.workDescription}
+                      onChange={(e) => setBillForm({ ...billForm, workDescription: e.target.value })}
+                      className="w-full sap-input"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Interactive financial computation grid */}
-              <div className="border border-amber-300 bg-amber-50/10 p-3 rounded space-y-2">
-                <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-2 border-b border-amber-200 pb-1 flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-amber-500" />
-                  <span>Ledger Accrual Computations</span>
-                </h4>
-                
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
-                      <DollarSign size={9} className="text-amber-500" />
-                      <span>1. Gross Certified *</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-1.5 top-1 font-bold text-gray-400">₹</span>
+              <div className="sap-fieldset">
+                <div className="sap-fieldset-header">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-[#002f6c]" />
+                    <span>Condition Supplements / Ledger Accrual Computations</span>
+                  </span>
+                </div>
+                <div className="sap-fieldset-body">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block text-gray-700 font-bold uppercase text-[9.5px] flex items-center gap-1 mb-1">
+                        <DollarSign size={10} className="text-[#0056b3]" />
+                        <span>1. Gross Certified *</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1 font-bold text-gray-500">₹</span>
+                        <input 
+                          type="number" 
+                          placeholder="0.00" 
+                          value={billForm.grossAmount}
+                          onChange={(e) => handleGrossOrRatesChange('gross', e.target.value)}
+                          className="w-full sap-input py-1 pl-6 font-bold font-mono text-gray-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold uppercase text-[9.5px] flex items-center gap-1 mb-1">
+                        <Percent size={10} className="text-[#0056b3]" />
+                        <span>2. Retention Deduct</span>
+                      </label>
+                      <div className="flex space-x-1">
+                        <select 
+                          value={taxConfig.retentionRate}
+                          onChange={(e) => handleGrossOrRatesChange('retRate', e.target.value)}
+                          className="sap-input font-mono"
+                        >
+                          <option value="0">0%</option>
+                          <option value="2.5">2.5%</option>
+                          <option value="5">5%</option>
+                          <option value="10">10%</option>
+                        </select>
+                        <input 
+                          type="number" 
+                          value={billForm.retentionAmount}
+                          onChange={(e) => setBillForm({ ...billForm, retentionAmount: e.target.value })}
+                          className="w-full sap-input font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold uppercase text-[9.5px] flex items-center gap-1 mb-1">
+                        <Percent size={10} className="text-[#0056b3]" />
+                        <span>3. TDS Reserve</span>
+                      </label>
+                      <div className="flex space-x-1">
+                        <select 
+                          value={taxConfig.tdsRate}
+                          onChange={(e) => handleGrossOrRatesChange('tdsRate', e.target.value)}
+                          className="sap-input font-mono"
+                        >
+                          <option value="0">0%</option>
+                          <option value="1">1%</option>
+                          <option value="2">2%</option>
+                          <option value="5">5%</option>
+                        </select>
+                        <input 
+                          type="number" 
+                          value={billForm.tdsAmount}
+                          onChange={(e) => setBillForm({ ...billForm, tdsAmount: e.target.value })}
+                          className="w-full sap-input font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold uppercase text-[9.5px] flex items-center gap-1 mb-1">
+                        <Percent size={10} className="text-[#0056b3]" />
+                        <span>4. GST Accrual</span>
+                      </label>
+                      <div className="flex space-x-1">
+                        <select 
+                          value={taxConfig.gstRate}
+                          onChange={(e) => handleGrossOrRatesChange('gstRate', e.target.value)}
+                          className="sap-input font-mono"
+                        >
+                          <option value="0">0%</option>
+                          <option value="5">5%</option>
+                          <option value="12">12%</option>
+                          <option value="18">18%</option>
+                        </select>
+                        <input 
+                          type="number" 
+                          value={billForm.gstAmount}
+                          onChange={(e) => setBillForm({ ...billForm, gstAmount: e.target.value })}
+                          className="w-full sap-input font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold uppercase text-[9.5px] flex items-center gap-1 mb-1">
+                        <Receipt size={10} className="text-[#0056b3]" />
+                        <span>5. Recovery / Debits</span>
+                      </label>
                       <input 
                         type="number" 
-                        placeholder="0.00" 
-                        value={billForm.grossAmount}
-                        onChange={(e) => handleGrossOrRatesChange('gross', e.target.value)}
-                        className="w-full bg-white border border-gray-300 py-1 pl-5 pr-1 rounded font-bold font-mono outline-none text-gray-800 focus:border-amber-500 text-[10px]"
+                        placeholder="For materials provided" 
+                        value={billForm.recoveryAmount}
+                        onChange={(e) => handleGrossOrRatesChange('recovery', e.target.value)}
+                        className="w-full sap-input font-mono font-bold"
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
-                      <Percent size={9} className="text-amber-500" />
-                      <span>2. Retention Deduct</span>
-                    </label>
-                    <div className="flex space-x-1">
-                      <select 
-                        value={taxConfig.retentionRate}
-                        onChange={(e) => handleGrossOrRatesChange('retRate', e.target.value)}
-                        className="bg-white border rounded font-mono p-0.5 text-[10.5px]"
-                      >
-                        <option value="0">0%</option>
-                        <option value="2.5">2.5%</option>
-                        <option value="5">5%</option>
-                        <option value="10">10%</option>
-                      </select>
-                      <input 
-                        type="number" 
-                        value={billForm.retentionAmount}
-                        onChange={(e) => setBillForm({ ...billForm, retentionAmount: e.target.value })}
-                        className="w-full bg-gray-50 border p-1 rounded font-mono font-bold text-[10px]"
-                      />
+                    <div className="bg-[#002f6c] text-white p-2 rounded border border-[#001d45] flex flex-col justify-center">
+                      <span className="text-[8px] uppercase font-bold text-amber-300 flex items-center gap-1">
+                        <ShieldCheck size={10} className="text-amber-300 animate-pulse" />
+                        <span>6. NET CLEARANCE AMOUNT</span>
+                      </span>
+                      <span className="text-sm font-extrabold font-mono text-white mt-0.5">₹{parseFloat(billForm.netPayableAmount || '0').toLocaleString()}</span>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
-                      <Percent size={9} className="text-amber-500" />
-                      <span>3. TDS Reserve</span>
-                    </label>
-                    <div className="flex space-x-1">
-                      <select 
-                        value={taxConfig.tdsRate}
-                        onChange={(e) => handleGrossOrRatesChange('tdsRate', e.target.value)}
-                        className="bg-white border rounded font-mono p-0.5 text-[10.5px]"
-                      >
-                        <option value="0">0%</option>
-                        <option value="1">1%</option>
-                        <option value="2">2%</option>
-                        <option value="5">5%</option>
-                      </select>
-                      <input 
-                        type="number" 
-                        value={billForm.tdsAmount}
-                        onChange={(e) => setBillForm({ ...billForm, tdsAmount: e.target.value })}
-                        className="w-full bg-gray-50 border p-1 rounded font-mono font-bold text-[10px]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
-                      <Percent size={9} className="text-amber-500" />
-                      <span>4. GST Accrual</span>
-                    </label>
-                    <div className="flex space-x-1">
-                      <select 
-                        value={taxConfig.gstRate}
-                        onChange={(e) => handleGrossOrRatesChange('gstRate', e.target.value)}
-                        className="bg-white border rounded font-mono p-0.5 text-[10.5px]"
-                      >
-                        <option value="0">0%</option>
-                        <option value="5">5%</option>
-                        <option value="12">12%</option>
-                        <option value="18">18%</option>
-                      </select>
-                      <input 
-                        type="number" 
-                        value={billForm.gstAmount}
-                        onChange={(e) => setBillForm({ ...billForm, gstAmount: e.target.value })}
-                        className="w-full bg-gray-50 border p-1 rounded font-mono font-bold text-[10px]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-500 font-bold uppercase text-[9px] flex items-center gap-1">
-                      <Receipt size={9} className="text-amber-500" />
-                      <span>5. Recovery / Debits</span>
-                    </label>
-                    <input 
-                      type="number" 
-                      placeholder="For materials provided" 
-                      value={billForm.recoveryAmount}
-                      onChange={(e) => handleGrossOrRatesChange('recovery', e.target.value)}
-                      className="w-full bg-white border border-gray-300 p-1 rounded font-mono font-bold outline-none focus:border-amber-500 text-[10px]"
-                    />
-                  </div>
-
-                  <div className="bg-[#1e293b] text-white p-2.5 rounded border border-gray-800 flex flex-col justify-center">
-                    <span className="text-[8px] uppercase font-bold text-amber-400 flex items-center gap-1">
-                      <ShieldCheck size={8} className="text-amber-400 animate-pulse" />
-                      <span>6. NET CONTRACTOR CLEARANCE</span>
-                    </span>
-                    <span className="text-sm font-extrabold font-mono text-white mt-0.5">₹{parseFloat(billForm.netPayableAmount || '0').toLocaleString()}</span>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-500 font-bold uppercase mb-0.5 flex items-center gap-1">
-                    <ShieldCheck size={10} className="text-amber-500" />
+                  <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
+                    <ShieldCheck size={11} className="text-[#0056b3]" />
                     <span>Transition Status</span>
                   </label>
                   <select 
                     value={billForm.status}
                     onChange={(e) => setBillForm({ ...billForm, status: e.target.value as any })}
-                    className="w-full bg-white border border-gray-300 p-1 rounded font-semibold outline-none focus:border-amber-500 text-[10px]"
+                    className="w-full sap-input font-semibold"
                   >
                     <option value="Draft">Draft (Held back from books)</option>
                     <option value="Approved">Approved (Reflected in book balance)</option>
                     <option value="Posted & Locked">Posted & Locked (Accrued & Locked)</option>
                   </select>
                 </div>
-                <div className="flex items-end text-rose-800 bg-rose-50 p-2 border border-rose-100 text-[8.5px] font-bold">
-                  <ShieldAlert size={14} className="mr-1.5 flex-shrink-0 text-rose-500 animate-pulse" />
+                <div className="flex items-center text-rose-800 bg-rose-50 p-2 border border-rose-200 text-[9px] font-bold rounded-xs">
+                  <ShieldAlert size={14} className="mr-1.5 flex-shrink-0 text-rose-600 animate-pulse" />
                   <span>WARNING: Setting status to 'Posted & Locked' blocks any further modifications on this record permanently.</span>
                 </div>
               </div>
 
-              <div className="bg-[#f9fafb] border-t p-2 flex justify-end space-x-2">
+              <div className="bg-[#eef2f6] border-t border-[#8c9ba8] p-2.5 flex justify-end space-x-2 -mx-3 -mb-3 rounded-b-xs">
                 <button 
                   type="button" 
                   onClick={() => setIsEditingBill(false)}
-                  className="border border-[#d1d5db] text-gray-700 bg-white hover:bg-gray-50 px-3 py-1.5 rounded font-bold text-xs"
+                  className="sap-btn"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
-                  className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold px-4 py-1.5 rounded flex items-center space-x-1 text-xs"
+                  className="sap-btn sap-btn-amber"
                 >
                   <Save size={12} />
                   <span>Save Contractor Bill</span>
