@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { Save, Plus, Trash2, Printer, FileSpreadsheet, Calendar, Clock } from 'lucide-react';
 import { BulkUploadModal } from '../components/BulkUploadModal';
@@ -112,7 +113,7 @@ export const DLR: React.FC = () => {
           </div>
           <div className="flex items-center space-x-2">
             <span className="font-semibold text-gray-700">Filter Site:</span>
-            <select
+            <SAPSelect
               className="sap-input"
               value={filterProject}
               onChange={(e) => setFilterProject(e.target.value)}
@@ -121,7 +122,7 @@ export const DLR: React.FC = () => {
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SAPSelect>
           </div>
         </div>
 
@@ -239,9 +240,9 @@ export const DLR: React.FC = () => {
                   <button onClick={() => setIsEditing(null)} className="text-red-500 hover:text-red-700">Cancel</button>
                 </td>
                 <td className="p-1">
-                  <select className="sap-input w-full" value={editForm.projectId} onChange={e => setEditForm({...editForm, projectId: e.target.value})}>
+                  <SAPSelect className="sap-input w-full" value={editForm.projectId} onChange={e => setEditForm({...editForm, projectId: e.target.value})}>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  </SAPSelect>
                 </td>
                 <td className="p-1 text-right"><input type="number" min="0" className="sap-input w-16 text-right inline-block" value={editForm.carpenter} onChange={e => setEditForm({...editForm, carpenter: parseInt(e.target.value)||0})} /></td>
                 <td className="p-1 text-right"><input type="number" min="0" className="sap-input w-16 text-right inline-block" value={editForm.fitter} onChange={e => setEditForm({...editForm, fitter: parseInt(e.target.value)||0})} /></td>
@@ -265,9 +266,9 @@ export const DLR: React.FC = () => {
                        <button onClick={() => setIsEditing(null)} className="text-red-500 hover:text-red-700">Cancel</button>
                     </td>
                     <td className="p-1">
-                      <select className="sap-input w-full" value={editForm.projectId} onChange={e => setEditForm({...editForm, projectId: e.target.value})}>
+                      <SAPSelect className="sap-input w-full" value={editForm.projectId} onChange={e => setEditForm({...editForm, projectId: e.target.value})}>
                         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
+                      </SAPSelect>
                     </td>
                     <td className="p-1 text-right"><input type="number" min="0" className="sap-input w-16 text-right inline-block" value={editForm.carpenter} onChange={e => setEditForm({...editForm, carpenter: parseInt(e.target.value)||0})} /></td>
                     <td className="p-1 text-right"><input type="number" min="0" className="sap-input w-16 text-right inline-block" value={editForm.fitter} onChange={e => setEditForm({...editForm, fitter: parseInt(e.target.value)||0})} /></td>

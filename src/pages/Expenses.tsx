@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { ExpenseEntry } from '../types';
 import { 
@@ -862,7 +863,7 @@ export const Expenses: React.FC = () => {
             />
           </div>
 
-          <select 
+          <SAPSelect 
             value={projectIdFilter} 
             onChange={(e) => setProjectIdFilter(e.target.value)}
             className="border border-[#8c9ba8] bg-white p-0.5 rounded shadow-sm outline-none"
@@ -871,7 +872,7 @@ export const Expenses: React.FC = () => {
             {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </SAPSelect>
 
           <label className="flex items-center space-x-1 cursor-pointer text-gray-600 text-[10px] font-semibold">
             <input 
@@ -883,7 +884,7 @@ export const Expenses: React.FC = () => {
             <span>Show Completed</span>
           </label>
 
-          <select 
+          <SAPSelect 
             value={categoryFilter} 
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="border border-[#8c9ba8] bg-white p-0.5 rounded shadow-sm outline-none"
@@ -899,7 +900,7 @@ export const Expenses: React.FC = () => {
             <option value="workerPayment">Worker Payment</option>
             <option value="stationery">Stationery</option>
             <option value="others">Others</option>
-          </select>
+          </SAPSelect>
         </div>
       </div>
 
@@ -993,7 +994,7 @@ export const Expenses: React.FC = () => {
                   <Building2 size={11} className="text-blue-500" />
                   <span>PROJECT LINK (OPTIONAL)</span>
                 </label>
-                <select 
+                <SAPSelect 
                   value={formData.projectId}
                   onChange={(e) => {
                     const selectedPr = e.target.value;
@@ -1012,7 +1013,7 @@ export const Expenses: React.FC = () => {
                   {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
-                </select>
+                </SAPSelect>
               </div>
 
               {transactionType === 'spent' ? (
@@ -1022,7 +1023,7 @@ export const Expenses: React.FC = () => {
                       <Tag size={11} className="text-blue-500" />
                       <span>EXPENSE CATEGORY</span>
                     </label>
-                    <select 
+                    <SAPSelect 
                       value={formData.category}
                       onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                       className="w-full border border-gray-300 p-1 bg-white outline-none h-[23px]"
@@ -1036,7 +1037,7 @@ export const Expenses: React.FC = () => {
                       <option value="workerPayment">Worker Payment</option>
                       <option value="stationery">Stationery</option>
                       <option value="others">Others</option>
-                    </select>
+                    </SAPSelect>
                   </div>
 
                   <div>
@@ -1366,7 +1367,7 @@ export const Expenses: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white border-2 border-red-600 p-4 max-w-sm w-full shadow-2xl rounded text-gray-800"
+              className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-sm rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px]"
             >
               <div className="flex items-center space-x-2 text-red-600 border-b pb-2 mb-3 font-bold uppercase text-[12px]">
                 <Trash2 size={16} />

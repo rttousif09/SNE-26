@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck, History, Eye } from 'lucide-react';
@@ -637,7 +638,7 @@ export const Approvals: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-600 mb-1">Worker:</label>
-                    <select
+                    <SAPSelect
                       required
                       className="sap-input"
                       value={formData.workerId}
@@ -647,11 +648,11 @@ export const Approvals: React.FC = () => {
                       {workers.map(w => (
                         <option key={w.id} value={w.id}>{w.name} ({w.workerId})</option>
                       ))}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-600 mb-1">Project Site:</label>
-                    <select
+                    <SAPSelect
                       required
                       className="sap-input"
                       value={formData.projectId}
@@ -661,7 +662,7 @@ export const Approvals: React.FC = () => {
                       {projects.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
-                    </select>
+                    </SAPSelect>
                   </div>
                 </div>
 
@@ -1474,7 +1475,7 @@ export const Approvals: React.FC = () => {
               initial={{ scale: 0.95, opacity: 0 }} 
               animate={{ scale: 1, opacity: 1 }} 
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border-2 border-[#8c9ba8] shadow-2xl max-w-md w-full rounded p-4 text-[11px]"
+              className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-md rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10"
             >
               <div className="flex items-center justify-between border-b pb-2 mb-3 bg-[#eef2f6] p-1.5 border border-[#8c9ba8] rounded-sm">
                 <span className="font-bold text-[var(--color-sap-blue-val)] uppercase tracking-wide">

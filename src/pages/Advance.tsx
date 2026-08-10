@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { Save, Edit, X, Trash2, FileSpreadsheet } from 'lucide-react';
@@ -197,7 +198,7 @@ export const Advance: React.FC = () => {
       <div className="mb-4 sap-panel p-2 flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <label className="font-semibold">Select Project:</label>
-          <select 
+          <SAPSelect 
             className="sap-input w-64" 
             value={selectedProject} 
             onChange={e => setSelectedProject(e.target.value)}
@@ -206,7 +207,7 @@ export const Advance: React.FC = () => {
             {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </SAPSelect>
           <label className="flex items-center space-x-1 ml-4 cursor-pointer text-gray-600">
             <input 
               type="checkbox" 
@@ -247,10 +248,10 @@ export const Advance: React.FC = () => {
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-x-4 gap-y-2 max-w-2xl">
             <div className="flex items-center">
               <label className="w-32">Worker:</label>
-              <select required className="sap-input flex-1" value={formData.workerId} onChange={e => setFormData({...formData, workerId: e.target.value})}>
+              <SAPSelect required className="sap-input flex-1" value={formData.workerId} onChange={e => setFormData({...formData, workerId: e.target.value})}>
                 <option value="">Select Worker</option>
                 {projectWorkers.map(w => <option key={w.id} value={w.id}>{w.name} ({w.workerId})</option>)}
-              </select>
+              </SAPSelect>
             </div>
             <div className="flex items-center">
               <label className="w-32">Amount:</label>
@@ -262,11 +263,11 @@ export const Advance: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Paid By:</label>
-              <select required className="sap-input flex-1" value={formData.paidBy} onChange={e => setFormData({...formData, paidBy: e.target.value})}>
+              <SAPSelect required className="sap-input flex-1" value={formData.paidBy} onChange={e => setFormData({...formData, paidBy: e.target.value})}>
                 <option value="Saddam Hussain">Saddam Hussain</option>
                 <option value="Tousif Reja">Tousif Reja</option>
                 <option value="Other">Other</option>
-              </select>
+              </SAPSelect>
             </div>
             {formData.paidBy === 'Other' && (
               <div className="flex items-center col-span-2">

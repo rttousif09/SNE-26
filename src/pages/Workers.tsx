@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, Search, Printer, FileSpreadsheet, Briefcase, User, Calendar, CreditCard, DollarSign, ArrowRight, Building2, FileKey, ShieldCheck, Tag, FolderOpen } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -721,7 +722,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
             </div>
             <div className="flex items-center space-x-1.5 pr-1">
               <span className="font-semibold text-gray-700">Project:</span>
-              <select
+              <SAPSelect
                 className="sap-input w-40 text-[11px]"
                 value={selectedFilterProject}
                 onChange={e => setSelectedFilterProject(e.target.value)}
@@ -731,7 +732,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
-              </select>
+              </SAPSelect>
               <label className="flex items-center space-x-1 ml-2 mr-1 cursor-pointer">
                 <input 
                   type="checkbox" 
@@ -807,17 +808,17 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                     <Building2 size={11} className="text-blue-500" />
                     <span>Project / Site:</span>
                   </label>
-                  <select required className="sap-input flex-1 text-[11px]" value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
+                  <SAPSelect required className="sap-input flex-1 text-[11px]" value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
                     <option value="">Select Site Project</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
                 <div className="flex items-center space-x-2">
                   <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
                     <Briefcase size={11} className="text-blue-500" />
                     <span>Role / Desg:</span>
                   </label>
-                  <select required className="sap-input flex-1 font-sans" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})}>
+                  <SAPSelect required className="sap-input flex-1 font-sans" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})}>
                     <option value="">Select Role...</option>
                     <option value="Carpenter">Carpenter</option>
                     <option value="Semi Carpenter">Semi Carpenter</option>
@@ -831,7 +832,7 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
                     <option value="Sr. Engineer">Sr. Engineer</option>
                     <option value="Cook">Cook</option>
                     <option value="Storeman">Storeman</option>
-                  </select>
+                  </SAPSelect>
                 </div>
                 <div className="flex items-center space-x-2">
                   <label className="w-28 font-semibold text-gray-700 flex items-center gap-1 shrink-0">
@@ -913,12 +914,12 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
               }} className="space-y-3">
                 <div className="flex flex-col space-y-1 text-[11px]">
                   <label className="font-semibold text-gray-700">Select New Site *</label>
-                  <select required className="sap-input" value={transferForm.toProjectId} onChange={e => setTransferForm({...transferForm, toProjectId: e.target.value})}>
+                  <SAPSelect required className="sap-input" value={transferForm.toProjectId} onChange={e => setTransferForm({...transferForm, toProjectId: e.target.value})}>
                     <option value="">-- Select Destination Site --</option>
                     {projects.filter(p => p.id !== transferModalData.projectId).map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
                 <div className="flex flex-col space-y-1 text-[11px]">
                   <label className="font-semibold text-gray-700">Transfer Date *</label>

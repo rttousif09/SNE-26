@@ -55,7 +55,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ isLocked, onUnlock }) =>
             initial={{ scale: 0.9, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="bg-white p-8 rounded-sm shadow-2xl w-[400px] border-t-4 border-blue-500 overflow-hidden relative"
+            className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10"
           >
             {/* Background design */}
             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">

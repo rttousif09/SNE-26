@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { BOQ, BOQItem, BOQRevision, BOQExtraItem, BOQAuditLog } from '../types';
 import { 
@@ -561,7 +562,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-semibold text-slate-600">Active Project:</span>
-            <select
+            <SAPSelect
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
               className="bg-slate-100 border border-slate-300 rounded text-xs px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
@@ -570,7 +571,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
               {activeProjects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SAPSelect>
           </div>
 
           <button
@@ -803,7 +804,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                 />
               </div>
 
-              <select
+              <SAPSelect
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="bg-slate-50 border border-slate-300 rounded text-xs px-2.5 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
@@ -814,7 +815,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                 <option value="Approved">Approved</option>
                 <option value="Revised">Revised</option>
                 <option value="Closed">Closed</option>
-              </select>
+              </SAPSelect>
             </div>
           </div>
 
@@ -1215,7 +1216,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
       {/* MODAL 1: Create / Edit / View BOQ Master Form */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-slate-300 w-full max-w-5xl overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-5xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="px-6 py-4 bg-[#f8fafc] border-b border-slate-200 flex justify-between items-center">
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 📂 {isViewing ? 'View BOQ Master Specifications' : selectedBOQ ? 'Update BOQ Specifications' : 'Draft New BOQ Master'}
@@ -1238,7 +1239,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded border border-slate-200">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Target Project</label>
-                  <select
+                  <SAPSelect
                     value={formProjectId}
                     onChange={(e) => handleFormProjectChange(e.target.value)}
                     disabled={isViewing || !!selectedBOQ}
@@ -1249,7 +1250,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                     {activeProjects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
@@ -1350,7 +1351,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                     </div>
                     <div>
                       <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Unit</label>
-                      <select
+                      <SAPSelect
                         value={itemUnit}
                         onChange={(e) => setItemUnit(e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1"
@@ -1372,7 +1373,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                         <option value="Trips">Trips</option>
                         <option value="Days">Days</option>
                         <option value="Months">Months</option>
-                      </select>
+                      </SAPSelect>
                     </div>
                     <div>
                       <label className="block text-[11px] text-slate-500 font-medium mb-0.5">BOQ Quantity</label>
@@ -1515,7 +1516,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
       {/* MODAL 2: Add Extra Variation Item Modal */}
       {isExtraModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-slate-300 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-md rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="px-5 py-3.5 bg-amber-50 border-b border-amber-200 flex justify-between items-center">
               <h2 className="text-sm font-bold text-amber-900 flex items-center gap-1.5">
                 ⚠️ Register Variation / Extra Contract Item
@@ -1551,7 +1552,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">UoM</label>
-                  <select
+                  <SAPSelect
                     value={extraUnit}
                     onChange={(e) => setExtraUnit(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
@@ -1573,7 +1574,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                     <option value="Trips">Trips</option>
                     <option value="Days">Days</option>
                     <option value="Months">Months</option>
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
@@ -1634,7 +1635,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
       {/* MODAL 3: Simulate Quantities Updates */}
       {isSimulateModalOpen && simItem && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-slate-300 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-150">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-sm rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="px-5 py-3.5 bg-blue-50 border-b border-blue-200 flex justify-between items-center">
               <h2 className="text-sm font-bold text-blue-900 flex items-center gap-1.5">
                 📊 Log Physical {simItem.type === 'executed' ? 'Physical Execution' : 'Billing Certification'}

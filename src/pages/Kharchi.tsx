@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
+import { F4Help } from '../components/F4Help';
 import { Save, Edit, X, Trash2, Table as TableIcon, List as ListIcon, Printer, FileSpreadsheet } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
@@ -166,16 +168,17 @@ export const Kharchi: React.FC = () => {
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <label className="font-semibold text-gray-700">Select Project:</label>
-            <select 
+            <SAPSelect 
               className="sap-input w-64 text-[#0056b3] font-bold" 
               value={selectedProject} 
               onChange={e => setSelectedProject(e.target.value)}
+              labelTitle="Select Project"
             >
               <option value="">-- Select Project --</option>
-              {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+              {projects.filter(p => showCompleted ? true : p.status !== 'Completed').map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
               ))}
-            </select>
+            </SAPSelect>
           </div>
           <label className="flex items-center space-x-1 ml-2 cursor-pointer text-gray-600 print:hidden">
             <input 
@@ -279,10 +282,10 @@ export const Kharchi: React.FC = () => {
           <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
             <div className="flex flex-col">
               <label className="mb-1 text-gray-700">Worker:</label>
-              <select required className="sap-input w-48" value={formData.workerId} onChange={e => setFormData({...formData, workerId: e.target.value})}>
+              <SAPSelect required className="sap-input w-48" value={formData.workerId} onChange={e => setFormData({...formData, workerId: e.target.value})}>
                 <option value="">Select Worker...</option>
                 {projectWorkers.map(w => <option key={w.id} value={w.id}>{w.name} ({w.workerId})</option>)}
-              </select>
+              </SAPSelect>
             </div>
             <div className="flex flex-col">
               <label className="mb-1 text-gray-700">Date (Sunday):</label>

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { 
   Plus, Trash2, Edit, Printer, FileSpreadsheet, Search, AlertTriangle, 
@@ -813,20 +814,20 @@ export const EquipmentAssetManagement: React.FC = () => {
               {/* Category Filter */}
               <div className="flex items-center space-x-1">
                 <span className="text-slate-500 font-bold">Category:</span>
-                <select 
+                <SAPSelect 
                   value={filterCategory} 
                   onChange={(e) => setFilterCategory(e.target.value)} 
                   className="bg-white border rounded-sm border-slate-300 text-[10px] p-0.5"
                 >
                   <option value="all">All Categories</option>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                </SAPSelect>
               </div>
 
               {/* Site Location Filter */}
               <div className="flex items-center space-x-1">
                 <span className="text-slate-500 font-bold">Site:</span>
-                <select 
+                <SAPSelect 
                   value={filterSite} 
                   onChange={(e) => setFilterSite(e.target.value)} 
                   className="bg-white border rounded-sm border-slate-300 text-[10px] p-0.5"
@@ -834,20 +835,20 @@ export const EquipmentAssetManagement: React.FC = () => {
                   <option value="all">All Sites</option>
                   <option value="general_pool">General Storage Pool</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                </SAPSelect>
               </div>
 
               {/* Status Condition Filter */}
               <div className="flex items-center space-x-1">
                 <span className="text-slate-500 font-bold">Status:</span>
-                <select 
+                <SAPSelect 
                   value={filterStatus} 
                   onChange={(e) => setFilterStatus(e.target.value)} 
                   className="bg-white border rounded-sm border-slate-300 text-[10px] p-0.5"
                 >
                   <option value="all">All Statuses</option>
                   {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                </SAPSelect>
               </div>
             </div>
 
@@ -1019,7 +1020,7 @@ export const EquipmentAssetManagement: React.FC = () => {
               <form onSubmit={handleSaveTransfer} className="space-y-3 pt-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Select Asset to Move:</label>
-                  <select 
+                  <SAPSelect 
                     value={targetAssetForTransfer?.id || ''} 
                     onChange={(e) => {
                       const selected = assets.find(a => a.id === e.target.value);
@@ -1034,7 +1035,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                         {a.name} ({a.assetCode}) - Currently: {getProjectName(a.currentSiteId)}
                       </option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 {targetAssetForTransfer && (
@@ -1047,7 +1048,7 @@ export const EquipmentAssetManagement: React.FC = () => {
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Destisnation Site Location:</label>
-                  <select 
+                  <SAPSelect 
                     value={transferForm.toSiteId} 
                     onChange={(e) => setTransferForm(s => ({ ...s, toSiteId: e.target.value }))}
                     className="w-full bg-white border rounded-sm p-1 text-[11px]"
@@ -1055,7 +1056,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                   >
                     <option value="general_pool">General Storage Pool (Inventory Pool)</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
@@ -1166,7 +1167,7 @@ export const EquipmentAssetManagement: React.FC = () => {
               <form onSubmit={handleSaveMaintenance} className="space-y-3 pt-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Asset Requiring Service:</label>
-                  <select 
+                  <SAPSelect 
                     value={targetAssetForMaintenance?.id || ''} 
                     onChange={(e) => {
                       const selected = assets.find(a => a.id === e.target.value);
@@ -1181,7 +1182,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                         {a.name} ({a.assetCode}) - Status: {a.status}
                       </option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
@@ -1197,7 +1198,7 @@ export const EquipmentAssetManagement: React.FC = () => {
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Maintenance Type:</label>
-                  <select 
+                  <SAPSelect 
                     value={maintenanceForm.maintenanceType} 
                     onChange={(e) => setMaintenanceForm(s => ({ ...s, maintenanceType: e.target.value }))}
                     className="w-full bg-white border rounded-sm p-1 text-[11px]"
@@ -1207,7 +1208,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                     <option value="Repair">Breakdown Repair (Active Fix)</option>
                     <option value="Calibration">Inspection & Calibration</option>
                     <option value="Upkeep">Safety Inspections</option>
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
@@ -1333,7 +1334,7 @@ export const EquipmentAssetManagement: React.FC = () => {
               
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-slate-500">Audit specific asset:</span>
-                <select 
+                <SAPSelect 
                   value={ledgerSelectedAssetId} 
                   onChange={(e) => setLedgerSelectedAssetId(e.target.value)}
                   className="bg-white border rounded-sm p-1 text-[11px] max-w-xs font-semibold"
@@ -1344,7 +1345,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                       [{a.assetCode}] - {a.name}
                     </option>
                   ))}
-                </select>
+                </SAPSelect>
               </div>
             </div>
           </div>
@@ -1477,8 +1478,8 @@ export const EquipmentAssetManagement: React.FC = () => {
       {/* MODAL 1: ADD / UPDATE ASSET */}
       {isAssetModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded shadow-xl border border-slate-300 flex flex-col text-[11px] font-sans">
-            <div className="bg-[var(--btn-hover-top)] text-white p-2.5 flex items-center justify-between font-bold text-[11px]">
+          <div className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-lg rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px]">
+            <div className="sap-title-banner">
               <span>{editingAssetId ? 'EDIT CAPITAL ASSET PARAMETERS' : 'REGISTER NEW FIELD ASSET'}</span>
               <button onClick={() => setIsAssetModalOpen(false)} className="hover:opacity-80"><X size={14} /></button>
             </div>
@@ -1497,14 +1498,14 @@ export const EquipmentAssetManagement: React.FC = () => {
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Category Designation:</label>
-                  <select 
+                  <SAPSelect 
                     value={assetForm.category} 
                     onChange={(e) => setAssetForm(s => ({ ...s, category: e.target.value as AssetCategory }))}
                     className="w-full bg-white border rounded-sm p-1"
                     required
                   >
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
               </div>
 
@@ -1571,7 +1572,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Initial Location Site:</label>
-                  <select 
+                  <SAPSelect 
                     value={assetForm.currentSiteId} 
                     onChange={(e) => setAssetForm(s => ({ ...s, currentSiteId: e.target.value }))}
                     className="w-full bg-white border rounded-sm p-1"
@@ -1579,32 +1580,32 @@ export const EquipmentAssetManagement: React.FC = () => {
                   >
                     <option value="general_pool">General Storage Pool (Inventory Pool)</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Current Status / Condition:</label>
-                  <select 
+                  <SAPSelect 
                     value={assetForm.status} 
                     onChange={(e) => setAssetForm(s => ({ ...s, status: e.target.value as AssetStatus }))}
                     className="w-full bg-white border rounded-sm p-1"
                     required
                   >
                     {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-0.5">Assigned Operator (Worker):</label>
-                  <select 
+                  <SAPSelect 
                     value={assetForm.assignedTo} 
                     onChange={(e) => setAssetForm(s => ({ ...s, assignedTo: e.target.value }))}
                     className="w-full bg-white border rounded-sm p-1"
                   >
                     <option value="">No assigned operator (Idle)</option>
                     {workers.map(w => <option key={w.id} value={w.name}>{w.name} ({w.designation})</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
               </div>
 
@@ -1632,8 +1633,8 @@ export const EquipmentAssetManagement: React.FC = () => {
       {/* MODAL 2: QUICK MOBILIZATION MOVES (TRANSFER) */}
       {isTransferModalOpen && targetAssetForTransfer && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded shadow-xl border border-slate-300 flex flex-col text-[11px]">
-            <div className="bg-emerald-700 text-white p-2 flex items-center justify-between font-bold text-[11px]">
+          <div className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-sm rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px]">
+            <div className="sap-title-banner">
               <span>TRANSFER DEPLOYMENT GATEPASS</span>
               <button onClick={() => setIsTransferModalOpen(false)} className="hover:opacity-80"><X size={14} /></button>
             </div>
@@ -1646,7 +1647,7 @@ export const EquipmentAssetManagement: React.FC = () => {
 
               <div>
                 <label className="block font-bold text-slate-700 mb-0.5">Mobilize to Site Location:</label>
-                <select 
+                <SAPSelect 
                   value={transferForm.toSiteId} 
                   onChange={(e) => setTransferForm(s => ({ ...s, toSiteId: e.target.value }))}
                   className="w-full bg-white border rounded-sm p-1 text-[11px]"
@@ -1654,7 +1655,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                 >
                   <option value="general_pool">General Storage Pool (Return to Inventory)</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                </SAPSelect>
               </div>
 
               <div>
@@ -1704,8 +1705,8 @@ export const EquipmentAssetManagement: React.FC = () => {
       {/* MODAL 3: MAINTENANCE REPAIR LOG */}
       {isMaintenanceModalOpen && targetAssetForMaintenance && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded shadow-xl border border-slate-300 flex flex-col text-[11px]">
-            <div className="bg-amber-700 text-white p-2 flex items-center justify-between font-bold text-[11px]">
+          <div className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-sm rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px]">
+            <div className="sap-title-banner">
               <span>PLAN UPKEEP SERVICING LOG</span>
               <button onClick={() => setIsMaintenanceModalOpen(false)} className="hover:opacity-80"><X size={14} /></button>
             </div>
@@ -1728,7 +1729,7 @@ export const EquipmentAssetManagement: React.FC = () => {
 
               <div>
                 <label className="block font-bold text-slate-700 mb-0.5">Checkup Type:</label>
-                <select 
+                <SAPSelect 
                   value={maintenanceForm.maintenanceType} 
                   onChange={(e) => setMaintenanceForm(s => ({ ...s, maintenanceType: e.target.value }))}
                   className="w-full bg-white border rounded-sm p-1 text-[11px]"
@@ -1737,7 +1738,7 @@ export const EquipmentAssetManagement: React.FC = () => {
                   <option value="Preventive">Preventive Tuneup (Overhaul)</option>
                   <option value="Repair">Breakdown Repair (Action Fix)</option>
                   <option value="Calibration">Inspection & Calibration</option>
-                </select>
+                </SAPSelect>
               </div>
 
               <div>

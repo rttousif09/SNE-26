@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { SAPSelect } from './SAPSelect';
 import Papa from 'papaparse';
 import { read, utils, write } from 'xlsx';
 import { 
@@ -605,7 +606,7 @@ export function BulkUploadModal({
                             {getColumnFriendlyDescription(expectedKey)}
                           </p>
                           <div className="relative mt-1">
-                            <select
+                            <SAPSelect
                               value={mappings[expectedKey] || ''}
                               onChange={(e) => handleMapChange(expectedKey, e.target.value)}
                               className="w-full border border-slate-300 rounded px-1.5 py-1 text-[10px] font-bold bg-white outline-hidden hover:border-slate-400 focus:border-indigo-500 transition cursor-pointer appearance-none pr-6"
@@ -616,7 +617,7 @@ export function BulkUploadModal({
                                   {header}
                                 </option>
                               ))}
-                            </select>
+                            </SAPSelect>
                             <div className="absolute right-1.5 top-2 pointer-events-none text-slate-400">
                               <ChevronDown size={11} />
                             </div>

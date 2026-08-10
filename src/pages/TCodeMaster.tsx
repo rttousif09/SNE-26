@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { 
   getTCodeList, 
   saveTCodeList, 
@@ -344,7 +345,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
             </div>
             <div>
               <label className="block font-bold text-blue-900 mb-1">Parent Module Group:*</label>
-              <select 
+              <SAPSelect 
                 className="sap-input w-full"
                 value={newModule}
                 onChange={(e) => setNewModule(e.target.value)}
@@ -363,7 +364,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
                 <option value="Reports">Reports</option>
                 <option value="Approvals">Approvals</option>
                 <option value="Settings">Settings</option>
-              </select>
+              </SAPSelect>
             </div>
           </div>
 
@@ -444,7 +445,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
               <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
                 <div className="flex items-center space-x-1.5">
                   <span className="font-bold text-slate-700">Module:</span>
-                  <select 
+                  <SAPSelect 
                     className="sap-input py-1 px-2"
                     value={moduleFilter}
                     onChange={(e) => setModuleFilter(e.target.value)}
@@ -452,12 +453,12 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
                     {modules.map(mod => (
                       <option key={mod} value={mod}>{mod}</option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
                 
                 <div className="flex items-center space-x-1.5">
                   <span className="font-bold text-slate-700">Status:</span>
-                  <select 
+                  <SAPSelect 
                     className="sap-input py-1 px-2"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -465,7 +466,7 @@ export const TCodeMaster: React.FC<TCodeMasterProps> = ({ user: propUser }) => {
                     <option value="All">All Statuses</option>
                     <option value="Active">Active Only</option>
                     <option value="Inactive">Inactive Only</option>
-                  </select>
+                  </SAPSelect>
                 </div>
               </div>
             </div>

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
+import { F4Help } from '../components/F4Help';
 import { Play, Calendar as CalIcon, AlertTriangle, CheckCircle, Info, Zap, RefreshCw, BarChart2 } from 'lucide-react';
 
 export function DailySiteSummary() {
@@ -65,7 +67,7 @@ export function DailySiteSummary() {
         <div className="flex items-center space-x-2 text-[10px]">
           <div>
             <label className="font-bold mr-1">Project:</label>
-            <select 
+            <SAPSelect 
               value={selectedProject} 
               onChange={e => setSelectedProject(e.target.value)}
               className="border border-[#8c9ba8] bg-white p-0.5 rounded shadow-sm outline-none"
@@ -74,7 +76,7 @@ export function DailySiteSummary() {
               {projects.filter(p => !p.status || p.status === 'Ongoing').map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SAPSelect>
           </div>
           <div>
             <label className="font-bold mr-1 ml-2">Date:</label>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { SAPSelect } from '../../components/SAPSelect';
 import { motion } from 'motion/react';
 import { 
   Users, Plus, Search, Edit, Trash2, Save, X, Upload, 
@@ -365,14 +366,14 @@ export const MasterComponent: React.FC<MasterComponentProps> = ({
                       <ShieldCheck size={10} className="text-amber-500" />
                       <span>Status</span>
                     </label>
-                    <select 
+                    <SAPSelect 
                       value={masterForm.status}
                       onChange={(e) => setMasterForm({ ...masterForm, status: e.target.value as any })}
                       className="w-full bg-white border border-gray-300 p-1 rounded font-semibold outline-none focus:border-amber-500 text-[10px]"
                     >
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
-                    </select>
+                    </SAPSelect>
                   </div>
                 </div>
                 <div className="mt-2.5">

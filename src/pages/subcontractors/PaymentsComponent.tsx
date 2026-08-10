@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SAPSelect } from '../../components/SAPSelect';
 import { Plus, Save, Trash2, CreditCard, Users, Building2, Calendar, Banknote } from 'lucide-react';
 import { Project, Subcontractor, SubcontractorPayment } from '../../types';
 
@@ -154,7 +155,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
             <Users size={12} className="text-amber-500" />
             <span>1. Subcontractor Target *</span>
           </span>
-          <select 
+          <SAPSelect 
             value={selectedSubcontractorId}
             onChange={(e) => {
               setSelectedSubcontractorId(e.target.value);
@@ -164,7 +165,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
           >
             <option value="">-- Choose Contractor partner --</option>
             {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
-          </select>
+          </SAPSelect>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -172,7 +173,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
             <Building2 size={12} className="text-amber-500" />
             <span>2. Assign Project *</span>
           </span>
-          <select 
+          <SAPSelect 
             value={selectedProjectId}
             onChange={(e) => {
               setSelectedProjectId(e.target.value);
@@ -182,7 +183,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
           >
             <option value="">-- Choose Site Location --</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          </SAPSelect>
         </div>
 
         <div className="flex-1"></div>
@@ -273,7 +274,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
                           </div>
                         </td>
                         <td className="p-1 border border-gray-300 w-44">
-                          <select 
+                          <SAPSelect 
                             value={row.paymentMode}
                             disabled={!!row.delete}
                             onChange={(e) => handleGridCellChange(idx, 'paymentMode', e.target.value)}
@@ -283,7 +284,7 @@ export const PaymentsComponent: React.FC<PaymentsComponentProps> = ({
                             <option value="Cash">Cash Outflow</option>
                             <option value="Cheque">Cheque Draft</option>
                             <option value="Other">Other Mode</option>
-                          </select>
+                          </SAPSelect>
                         </td>
                         <td className="p-1 border border-gray-300">
                           <input 

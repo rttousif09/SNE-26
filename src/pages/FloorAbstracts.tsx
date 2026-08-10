@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../store';
 import { Project, Worker, FloorAbstract, FloorAbstractWorker } from '../types';
@@ -910,17 +911,17 @@ export function FloorAbstracts() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div>
               <label className="sap-label">Project *</label>
-              <select className="sap-input" value={projectId} onChange={(e) => {
+              <SAPSelect className="sap-input" value={projectId} onChange={(e) => {
                 setProjectId(e.target.value);
                 setTowerName('');
               }}>
                 <option value="">Select Project</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              </SAPSelect>
             </div>
             <div>
               <label className="sap-label">Tower / Block</label>
-              <select 
+              <SAPSelect 
                 className="sap-input" 
                 value={towerName} 
                 onChange={(e) => setTowerName(e.target.value)}
@@ -928,24 +929,24 @@ export function FloorAbstracts() {
               >
                 <option value="">{!projectId ? 'Choose Project First' : availableTowers.length === 0 ? 'No Towers Listed' : 'All Towers / Select'}</option>
                 {availableTowers.map(tow => <option key={tow} value={tow}>{tow}</option>)}
-              </select>
+              </SAPSelect>
             </div>
             <div>
               <label className="sap-label">Category *</label>
-              <select className="sap-input" value={category} onChange={(e) => {
+              <SAPSelect className="sap-input" value={category} onChange={(e) => {
                 setCategory(e.target.value as 'Amount' | 'Hajira');
                 setRowWorkers([]);
               }}>
                 <option value="Amount">Amount</option>
                 <option value="Hajira">Hajira</option>
-              </select>
+              </SAPSelect>
             </div>
             <div>
               <label className="sap-label">Level *</label>
-              <select className="sap-input" value={level} onChange={(e) => setLevel(e.target.value)}>
+              <SAPSelect className="sap-input" value={level} onChange={(e) => setLevel(e.target.value)}>
                 <option value="">Select Level</option>
                 {LEVEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              </SAPSelect>
             </div>
           </div>
 
@@ -1029,7 +1030,7 @@ export function FloorAbstracts() {
                      return (
                        <tr key={index} className="hover:bg-[#e6f2ff]">
                          <td className="border border-[#8c9ba8] p-1">
-                           <select 
+                           <SAPSelect 
                              className="sap-input !h-6 w-full" 
                              value={w.workerId} 
                              onChange={(e) => {
@@ -1040,7 +1041,7 @@ export function FloorAbstracts() {
                            >
                              <option value="">Select Worker</option>
                              {projectWorkers.map(pw => <option key={pw.id} value={pw.id}>{pw.name} ({pw.workerId})</option>)}
-                           </select>
+                           </SAPSelect>
                          </td>
                          <td className="border border-[#8c9ba8] px-2 py-1 bg-gray-50 text-gray-700 whitespace-nowrap">
                            {workerInfo?.workerId || '-'}
@@ -1178,19 +1179,19 @@ export function FloorAbstracts() {
             
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">Floor Level</label>
-              <select 
+              <SAPSelect 
                 className="sap-input w-full bg-white font-normal" 
                 value={filterLevel} 
                 onChange={(e) => setFilterLevel(e.target.value)}
               >
                 <option value="">All Levels</option>
                 {LEVEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              </SAPSelect>
             </div>
             
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">Category Basis</label>
-              <select 
+              <SAPSelect 
                 className="sap-input w-full bg-white font-normal" 
                 value={filterCategory} 
                 onChange={(e) => setFilterCategory(e.target.value)}
@@ -1198,19 +1199,19 @@ export function FloorAbstracts() {
                 <option value="">All Categories</option>
                 <option value="Amount">Amount Basis</option>
                 <option value="Hajira">Hajira Basis</option>
-              </select>
+              </SAPSelect>
             </div>
 
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">Tower / Block</label>
-              <select 
+              <SAPSelect 
                 className="sap-input w-full bg-white font-normal" 
                 value={filterTower} 
                 onChange={(e) => setFilterTower(e.target.value)}
               >
                 <option value="">All Towers</option>
                 {filterTowersList.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              </SAPSelect>
             </div>
           </div>
           
@@ -1401,7 +1402,7 @@ export function FloorAbstracts() {
                    <span>Floor Wise Summary</span>
                    <div className="flex items-center space-x-1">
                      <span className="text-xs text-gray-500 font-normal font-mono">Project:</span>
-                     <select 
+                     <SAPSelect 
                        className="sap-input text-xs w-56 font-normal !h-7 bg-white" 
                        value={projectId} 
                        onChange={e => {
@@ -1411,19 +1412,19 @@ export function FloorAbstracts() {
                      >
                        <option value="">-- Select Project --</option>
                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                     </select>
+                     </SAPSelect>
                    </div>
                    {projectId && (
                      <div className="flex items-center space-x-1">
                        <span className="text-xs text-gray-500 font-normal font-mono">Level:</span>
-                       <select 
+                       <SAPSelect 
                          className="sap-input text-xs w-48 font-normal !h-7 bg-white" 
                          value={summaryLevelFilter} 
                          onChange={e => setSummaryLevelFilter(e.target.value)}
                        >
                          <option value="">-- Select Level --</option>
                          {LEVEL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                       </select>
+                       </SAPSelect>
                      </div>
                    )}
                  </h3>

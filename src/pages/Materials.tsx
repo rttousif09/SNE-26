@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimateBadge } from '../components/AnimatedERP';
@@ -1096,22 +1097,22 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Item Category *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={masterForm.category} onChange={e => setMasterForm({ ...masterForm, category: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={masterForm.category} onChange={e => setMasterForm({ ...masterForm, category: e.target.value })}>
                       {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Material Type *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={masterForm.materialType} onChange={e => setMasterForm({ ...masterForm, materialType: e.target.value as 'Consumable' | 'Returnable' })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={masterForm.materialType} onChange={e => setMasterForm({ ...masterForm, materialType: e.target.value as 'Consumable' | 'Returnable' })}>
                       <option value="Consumable">Consumable</option>
                       <option value="Returnable">Returnable</option>
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Unit of Measure *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={masterForm.unit} onChange={e => setMasterForm({ ...masterForm, unit: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={masterForm.unit} onChange={e => setMasterForm({ ...masterForm, unit: e.target.value })}>
                       {ITEM_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                 </div>
                 <div className="text-xs">
@@ -1214,10 +1215,10 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Allocated Project Site *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={receiptForm.projectId} onChange={e => setReceiptForm({ ...receiptForm, projectId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={receiptForm.projectId} onChange={e => setReceiptForm({ ...receiptForm, projectId: e.target.value })}>
                       <option value="">-- Choose Project --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Issued by *</label>
@@ -1240,14 +1241,14 @@ export const Materials: React.FC = () => {
                     {receiptLineItems.map((line, index) => (
                       <div key={line.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 text-xs mb-2 items-start border-b border-blue-100 pb-2">
                         <div className="col-span-3">
-                          <select className="w-full p-1.5 border rounded bg-white" value={line.itemId} onChange={e => {
+                          <SAPSelect className="w-full p-1.5 border rounded bg-white" value={line.itemId} onChange={e => {
                             const newLines = [...receiptLineItems];
                             newLines[index].itemId = e.target.value;
                             setReceiptLineItems(newLines);
                           }}>
                             <option value="">-- Choose item --</option>
                             {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                          </select>
+                          </SAPSelect>
                         </div>
                         <div className="col-span-2">
                           <input type="number" min="0" placeholder="Qty" className="w-full p-1.5 border rounded" value={line.qty || ''} onChange={e => {
@@ -1293,10 +1294,10 @@ export const Materials: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs mt-2 border-t pt-2">
                     <div>
                       <label className="block text-gray-700 font-bold mb-1">Material Item Specification *</label>
-                      <select className="w-full p-2 border rounded bg-white" value={receiptForm.itemId} onChange={e => setReceiptForm({ ...receiptForm, itemId: e.target.value })}>
+                      <SAPSelect className="w-full p-2 border rounded bg-white" value={receiptForm.itemId} onChange={e => setReceiptForm({ ...receiptForm, itemId: e.target.value })}>
                         <option value="">-- Choose item --</option>
                         {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                      </select>
+                      </SAPSelect>
                     </div>
                     <div>
                       <label className="block text-gray-700 font-bold mb-1">Quantity Received *</label>
@@ -1396,17 +1397,17 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Allocated Project Site *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={returnForm.projectId} onChange={e => setReturnForm({ ...returnForm, projectId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={returnForm.projectId} onChange={e => setReturnForm({ ...returnForm, projectId: e.target.value })}>
                       <option value="">-- Choose Project --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Material Item *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={returnForm.itemId} onChange={e => setReturnForm({ ...returnForm, itemId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={returnForm.itemId} onChange={e => setReturnForm({ ...returnForm, itemId: e.target.value })}>
                       <option value="">-- Choose item --</option>
                       {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Quantity Returned *</label>
@@ -1563,24 +1564,24 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Source Complex (From Site) *</label>
-                    <select className="w-full p-2 border rounded bg-white font-semibold" value={transferForm.fromProjectId} onChange={e => setTransferForm({ ...transferForm, fromProjectId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white font-semibold" value={transferForm.fromProjectId} onChange={e => setTransferForm({ ...transferForm, fromProjectId: e.target.value })}>
                       <option value="">-- Choose Origin site --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Destination Complex (To Site) *</label>
-                    <select className="w-full p-2 border rounded bg-white font-semibold" value={transferForm.toProjectId} onChange={e => setTransferForm({ ...transferForm, toProjectId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white font-semibold" value={transferForm.toProjectId} onChange={e => setTransferForm({ ...transferForm, toProjectId: e.target.value })}>
                       <option value="">-- Choose Destination site --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Material Item *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={transferForm.itemId} onChange={e => setTransferForm({ ...transferForm, itemId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={transferForm.itemId} onChange={e => setTransferForm({ ...transferForm, itemId: e.target.value })}>
                       <option value="">-- Choose item --</option>
                       {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Quantity Transferred *</label>
@@ -1668,17 +1669,17 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Incident Project Site *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={lossForm.projectId} onChange={e => setLossForm({ ...lossForm, projectId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={lossForm.projectId} onChange={e => setLossForm({ ...lossForm, projectId: e.target.value })}>
                       <option value="">-- Choose Project --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Damaged/Lost Material Item *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={lossForm.itemId} onChange={e => setLossForm({ ...lossForm, itemId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={lossForm.itemId} onChange={e => setLossForm({ ...lossForm, itemId: e.target.value })}>
                       <option value="">-- Choose Item --</option>
                       {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Qty Damaged/Lost *</label>
@@ -1782,17 +1783,17 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Purchase Site Allocation *</label>
-                    <select className="w-full p-2 border rounded bg-white" value={purchaseForm.projectId} onChange={e => setPurchaseForm({ ...purchaseForm, projectId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white" value={purchaseForm.projectId} onChange={e => setPurchaseForm({ ...purchaseForm, projectId: e.target.value })}>
                       <option value="">-- Choose Target Project Site --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Inward Material item *</label>
-                    <select className="w-full p-2 border rounded bg-white font-semibold" value={purchaseForm.itemId} onChange={e => setPurchaseForm({ ...purchaseForm, itemId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white font-semibold" value={purchaseForm.itemId} onChange={e => setPurchaseForm({ ...purchaseForm, itemId: e.target.value })}>
                       <option value="">-- Select Master specifications --</option>
                       {materialItems.map(i => <option key={i.id} value={i.id}>{i.itemName} ({i.unit})</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Quantity Purchased *</label>
@@ -1904,16 +1905,16 @@ export const Materials: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Site Allocation *</label>
-                    <select className="w-full p-2 border rounded bg-white font-semibold" value={equipmentForm.currentSiteId} onChange={e => setEquipmentForm({ ...equipmentForm, currentSiteId: e.target.value })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white font-semibold" value={equipmentForm.currentSiteId} onChange={e => setEquipmentForm({ ...equipmentForm, currentSiteId: e.target.value })}>
                       <option value="">-- Choose Allocation --</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Current Operational Status</label>
-                    <select className="w-full p-2 border rounded bg-white font-bold" value={equipmentForm.status} onChange={e => setEquipmentForm({ ...equipmentForm, status: e.target.value as any })}>
+                    <SAPSelect className="w-full p-2 border rounded bg-white font-bold" value={equipmentForm.status} onChange={e => setEquipmentForm({ ...equipmentForm, status: e.target.value as any })}>
                       {ASSET_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2 text-xs pt-2">
@@ -2012,12 +2013,12 @@ export const Materials: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-gray-600 font-bold mb-0.5">Mode *</label>
-                      <select className="w-full p-2 border rounded bg-white font-semibold" value={paymentForm.paymentMode} onChange={e => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })}>
+                      <SAPSelect className="w-full p-2 border rounded bg-white font-semibold" value={paymentForm.paymentMode} onChange={e => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })}>
                         <option value="Bank Transfer">Bank Transfer</option>
                         <option value="Cash">Cash Handover</option>
                         <option value="Cheque">Cheque Draft</option>
                         <option value="UPI">UPI Digital Payment</option>
-                      </select>
+                      </SAPSelect>
                     </div>
                     <div>
                       <label className="block text-gray-600 font-bold mb-0.5 font-mono">Invoice Reference</label>
@@ -2167,7 +2168,7 @@ export const Materials: React.FC = () => {
 
       {isReturnableModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white border border-[#b2c0cc] w-full max-w-lg shadow-xl rounded-xs overflow-hidden flex flex-col">
+          <div className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-lg rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px]">
             <div className="bg-purple-900 text-white px-4 py-3 border-b border-purple-950 flex justify-between items-center font-sans">
               <div className="flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider">
                 <Plus size={14} /> Log Returnable Material Transaction
@@ -2214,19 +2215,19 @@ export const Materials: React.FC = () => {
 
                 <div>
                   <label className="block text-gray-700 font-bold mb-1">Allocated Project Site *</label>
-                  <select 
+                  <SAPSelect 
                     className="w-full p-2 border rounded bg-white font-semibold text-slate-800" 
                     value={returnableForm.projectId} 
                     onChange={e => setReturnableForm(prev => ({ ...prev, projectId: e.target.value }))}
                   >
                     <option value="">-- Select Project Site --</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
                   <label className="block text-gray-700 font-bold mb-1">Returnable Material Item *</label>
-                  <select 
+                  <SAPSelect 
                     className="w-full p-2 border rounded bg-white font-semibold text-slate-800" 
                     value={returnableForm.itemId} 
                     onChange={e => setReturnableForm(prev => ({ ...prev, itemId: e.target.value }))}
@@ -2235,7 +2236,7 @@ export const Materials: React.FC = () => {
                     {materialItems
                       .filter(i => i.materialType === 'Returnable')
                       .map(i => <option key={i.id} value={i.id}>{i.itemName} [{i.itemCode || 'No Code'}] ({i.unit})</option>)}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -2288,7 +2289,7 @@ export const Materials: React.FC = () => {
                 {returnableForm.type === 'Return' && (
                   <div>
                     <label className="block text-gray-700 font-bold mb-1">Packaging / Safety Material Condition *</label>
-                    <select 
+                    <SAPSelect 
                       className="w-full p-2 border rounded bg-white text-slate-800"
                       value={returnableForm.condition}
                       onChange={e => setReturnableForm(prev => ({ ...prev, condition: e.target.value as any }))}
@@ -2296,7 +2297,7 @@ export const Materials: React.FC = () => {
                       <option value="Good">Good/Reusable</option>
                       <option value="Damaged">Damaged</option>
                       <option value="Scrap">Waste/Scrap</option>
-                    </select>
+                    </SAPSelect>
                   </div>
                 )}
 

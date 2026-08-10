@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { PDFExportButton } from '../components/PDFExportButton';
@@ -947,14 +948,14 @@ export const WorkerLedger: React.FC = () => {
                   {/* Project site */}
                   <div className="flex flex-col">
                     <label className="text-gray-500 font-bold mb-1">Site / Project</label>
-                    <select 
+                    <SAPSelect 
                       className="bg-white border border-gray-300 rounded-[4px] px-1.5 py-1 focus:outline-none focus:border-[#0a6ed1]"
                       value={filterProject}
                       onChange={e => setFilterProject(e.target.value)}
                     >
                       <option value="All">All Sites</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
 
                   {/* Date range start */}
@@ -982,7 +983,7 @@ export const WorkerLedger: React.FC = () => {
                   {/* Transaction Type */}
                   <div className="flex flex-col">
                     <label className="text-gray-500 font-bold mb-1">Tx Type</label>
-                    <select 
+                    <SAPSelect 
                       className="bg-white border border-gray-300 rounded-[4px] px-1.5 py-1 focus:outline-none focus:border-[#0a6ed1]"
                       value={filterTxType}
                       onChange={e => setFilterTxType(e.target.value)}
@@ -994,13 +995,13 @@ export const WorkerLedger: React.FC = () => {
                       <option value="Mess Deduction">Mess Deduction</option>
                       <option value="Worker Payment">Worker Payment</option>
                       <option value="Adjustment">Adjustment</option>
-                    </select>
+                    </SAPSelect>
                   </div>
 
                   {/* Fin Year */}
                   <div className="flex flex-col">
                     <label className="text-gray-500 font-bold mb-1">Fin Year</label>
-                    <select 
+                    <SAPSelect 
                       className="bg-white border border-gray-300 rounded-[4px] px-1.5 py-1 focus:outline-none focus:border-[#0a6ed1]"
                       value={filterFinYear}
                       onChange={e => setFilterFinYear(e.target.value)}
@@ -1009,13 +1010,13 @@ export const WorkerLedger: React.FC = () => {
                       <option value="2026-27">2026-27</option>
                       <option value="2025-26">2025-26</option>
                       <option value="2024-25">2024-25</option>
-                    </select>
+                    </SAPSelect>
                   </div>
 
                   {/* Month */}
                   <div className="flex flex-col">
                     <label className="text-gray-500 font-bold mb-1">Month</label>
-                    <select 
+                    <SAPSelect 
                       className="bg-white border border-gray-300 rounded-[4px] px-1.5 py-1 focus:outline-none focus:border-[#0a6ed1]"
                       value={filterMonth}
                       onChange={e => setFilterMonth(e.target.value)}
@@ -1033,7 +1034,7 @@ export const WorkerLedger: React.FC = () => {
                       <option value="10">October</option>
                       <option value="11">November</option>
                       <option value="12">December</option>
-                    </select>
+                    </SAPSelect>
                   </div>
 
                 </div>
@@ -1855,7 +1856,7 @@ export const WorkerLedger: React.FC = () => {
       {/* MODAL 1: Manual Ledger Entry Posting */}
       {showManualEntryModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
-          <div className="bg-white border border-gray-300 shadow-xl w-full max-w-sm rounded-[8px]">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-sm rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="bg-gray-150 p-3 rounded-t-[8px] border-b border-gray-200 flex items-center justify-between">
               <span className="font-bold uppercase text-[10.5px] text-[#0a6ed1] flex items-center space-x-1">
                 <Sliders className="w-3.5 h-3.5" />
@@ -1978,7 +1979,7 @@ export const WorkerLedger: React.FC = () => {
       {/* MODAL 2: Execute Wage Holds */}
       {showHoldModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
-          <div className="bg-white border border-gray-300 shadow-xl w-full max-w-sm rounded-[8px]">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-sm rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="bg-amber-50 p-3 rounded-t-[8px] border-b border-amber-250 flex items-center justify-between">
               <span className="font-bold flex items-center space-x-1 uppercase text-[10.5px] text-amber-900">
                 <Lock className="w-3.5 h-3.5 text-amber-700" />
@@ -2055,7 +2056,7 @@ export const WorkerLedger: React.FC = () => {
       {/* MODAL 3: Release Wage Holds Authorization */}
       {releasingHoldId && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
-          <div className="bg-white border border-gray-300 shadow-xl w-full max-w-sm rounded-[8px]">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-sm rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="bg-green-50 p-3 rounded-t-[8px] border-b border-green-250 flex items-center justify-between">
               <span className="font-bold flex items-center space-x-1 uppercase text-[10.5px] text-green-900">
                 <Unlock className="w-3.5 h-3.5 text-green-700" />

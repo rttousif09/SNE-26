@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from './SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { CheckCircle, AlertOctagon, UserCheck, Calendar, MapPin, Search } from 'lucide-react';
@@ -130,7 +131,7 @@ export const WorkerAttendanceLog: React.FC = () => {
         <div className="flex items-center space-x-1.5 shrink-0">
           <MapPin size={13} className="text-red-700" />
           <span className="text-[10px] uppercase font-black tracking-wider text-gray-700 font-mono">Site/Project:</span>
-          <select 
+          <SAPSelect 
             className="sap-input py-0.5 text-[11px] font-bold min-w-[200px]"
             value={selectedProjectId}
             onChange={(e) => {
@@ -142,7 +143,7 @@ export const WorkerAttendanceLog: React.FC = () => {
             {projects.filter(p => !p.status || p.status === 'Ongoing').map(p => (
               <option key={p.id} value={p.id}>{p.name} (Client: {p.clientName || 'General'})</option>
             ))}
-          </select>
+          </SAPSelect>
         </div>
 
         {selectedProjectId && (

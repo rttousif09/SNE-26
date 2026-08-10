@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
+import { F4Help } from '../components/F4Help';
 import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet, FolderOpen } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkWorkerPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
@@ -521,7 +523,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       <div className="sap-panel p-2.5 flex flex-wrap items-center gap-4 bg-[#f8f9fa] border border-[#8c9ba8]">
         <div className="flex items-center space-x-2">
           <label className="font-bold text-gray-700">Project Site:</label>
-          <select 
+          <SAPSelect 
             className="sap-input w-48 font-semibold" 
             value={selectedProject} 
             onChange={e => {
@@ -533,7 +535,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </SAPSelect>
           <label className="flex items-center space-x-1 ml-4 cursor-pointer text-gray-600">
             <input 
               type="checkbox" 
@@ -562,7 +564,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             
             <div className="flex items-center space-x-2">
               <label className="font-bold text-gray-700">Work Category:</label>
-              <select 
+              <SAPSelect 
                 className="sap-input w-40 font-semibold" 
                 value={selectedCategory} 
                 onChange={e => {
@@ -572,12 +574,12 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
               >
                 <option value="Monthly work">Monthly work</option>
                 <option value="Contract work">Contract work</option>
-              </select>
+              </SAPSelect>
             </div>
             
             <div className="flex items-center space-x-2">
               <label className="font-bold text-gray-700">Tower/Block:</label>
-              <select 
+              <SAPSelect 
                 className="sap-input w-40 font-semibold text-indigo-700 bg-indigo-50 border-indigo-300" 
                 value={selectedTower} 
                 onChange={e => {
@@ -589,7 +591,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 {availableTowers.map(t => (
                   <option key={t} value={t}>{t}</option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
             
             <div className="flex items-center space-x-2">
@@ -668,7 +670,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             <div className="grid grid-cols-3 gap-3">
               <div className="flex flex-col">
                 <label className="font-semibold text-gray-600 mb-1">Select Worker:</label>
-                <select 
+                <SAPSelect 
                   required 
                   className="sap-input" 
                   value={formData.workerId} 
@@ -676,7 +678,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 >
                   <option value="">-- Choose Worker --</option>
                   {projectWorkers.map(w => <option key={w.id} value={w.id}>{w.name} ({w.workerId})</option>)}
-                </select>
+                </SAPSelect>
               </div>
 
               <div className="flex flex-col">
@@ -901,7 +903,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             <div className="grid grid-cols-3 gap-3">
               <div className="flex flex-col">
                 <label className="font-semibold text-gray-600 mb-1">Tower / Block:</label>
-                <select 
+                <SAPSelect 
                   className="sap-input font-semibold" 
                   value={formData.towerName} 
                   onChange={e => setFormData({...formData, towerName: e.target.value})}
@@ -911,7 +913,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   {availableTowers.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
-                </select>
+                </SAPSelect>
               </div>
 
               <div className="flex flex-col">
@@ -989,14 +991,14 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
 
               <div className="flex flex-col">
                 <label className="font-semibold text-gray-700 mb-1">Payment Status:</label>
-                <select 
+                <SAPSelect 
                   className="sap-input font-bold text-blue-700"
                   value={formData.paymentStatus}
                   onChange={e => setFormData({...formData, paymentStatus: e.target.value})}
                 >
                   <option value="Pending">Pending</option>
                   <option value="Paid">Paid</option>
-                </select>
+                </SAPSelect>
               </div>
             </div>
 
@@ -1297,7 +1299,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       {/* Supply Work Details Modal */}
       {showSupplyModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="bg-[#eef2f6] px-4 py-3 border-b flex justify-between items-center">
               <h3 className="font-bold text-gray-800 text-sm">Add Supply Work Details</h3>
               <button 
@@ -1667,7 +1669,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       {/* Floor Abstract Selection Popup */}
       {showFloorAbstractPopup && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-400">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-4xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             {/* Header */}
             <div className="bg-[var(--color-sap-blue-val)] text-white px-3.5 py-2 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-xs uppercase tracking-wider">Import Flat/Floor Abstract Records</h3>
@@ -1684,7 +1686,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             <div className="bg-[#eef2f6] border-b border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-gray-700">Filter Level:</span>
-                <select
+                <SAPSelect
                   className="sap-input w-44 bg-white font-normal"
                   value={floorFilterLevel}
                   onChange={e => setFloorFilterLevel(e.target.value)}
@@ -1693,7 +1695,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   {uniqueLevelsForWorker.map(lvl => (
                     <option key={lvl} value={lvl}>{lvl}</option>
                   ))}
-                </select>
+                </SAPSelect>
               </div>
 
               <div className="text-[10px] text-gray-600 font-bold font-mono">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { SAPSelect } from '../../components/SAPSelect';
 import { motion } from 'motion/react';
 import { 
   Plus, Search, Edit, Trash2, Save, X, Upload, ShieldAlert,
@@ -339,18 +340,18 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
         <div className="flex flex-wrap gap-2.5 items-center">
           <div>
             <span className="text-gray-400 font-bold mr-1 uppercase">Filter Project</span>
-            <select 
+            <SAPSelect 
               value={billingProjectFilter}
               onChange={(e) => setBillingProjectFilter(e.target.value)}
               className="border border-gray-300 rounded p-0.5 text-[10px]"
             >
               <option value="all">All Projects</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            </SAPSelect>
           </div>
           <div>
             <span className="text-gray-400 font-bold mr-1 uppercase">Bill Status</span>
-            <select 
+            <SAPSelect 
               value={billingStatusFilter}
               onChange={(e) => setBillingStatusFilter(e.target.value)}
               className="border border-gray-300 rounded p-0.5 text-[10px]"
@@ -359,7 +360,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
               <option value="Draft">Draft</option>
               <option value="Approved">Approved (Accrued to Ledger)</option>
               <option value="Posted & Locked">Posted & Locked (Accrued & Locked)</option>
-            </select>
+            </SAPSelect>
           </div>
         </div>
 
@@ -414,28 +415,28 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                       <Building2 size={11} className="text-[#0056b3]" />
                       <span>Project *</span>
                     </label>
-                    <select 
+                    <SAPSelect 
                       value={billForm.projectId}
                       onChange={(e) => setBillForm({ ...billForm, projectId: e.target.value })}
                       className="w-full sap-input font-semibold"
                     >
                       <option value="" disabled>Select Site Location</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
                       <User size={11} className="text-[#0056b3]" />
                       <span>Subcontractor *</span>
                     </label>
-                    <select 
+                    <SAPSelect 
                       value={billForm.subcontractorId}
                       onChange={(e) => setBillForm({ ...billForm, subcontractorId: e.target.value })}
                       className="w-full sap-input font-semibold"
                     >
                       <option value="" disabled>Select Master Partner</option>
                       {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div>
                     <label className="block text-gray-700 font-bold uppercase mb-1 flex items-center gap-1">
@@ -538,7 +539,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                         <span>2. Retention Deduct</span>
                       </label>
                       <div className="flex space-x-1">
-                        <select 
+                        <SAPSelect 
                           value={taxConfig.retentionRate}
                           onChange={(e) => handleGrossOrRatesChange('retRate', e.target.value)}
                           className="sap-input font-mono"
@@ -547,7 +548,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                           <option value="2.5">2.5%</option>
                           <option value="5">5%</option>
                           <option value="10">10%</option>
-                        </select>
+                        </SAPSelect>
                         <input 
                           type="number" 
                           value={billForm.retentionAmount}
@@ -563,7 +564,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                         <span>3. TDS Reserve</span>
                       </label>
                       <div className="flex space-x-1">
-                        <select 
+                        <SAPSelect 
                           value={taxConfig.tdsRate}
                           onChange={(e) => handleGrossOrRatesChange('tdsRate', e.target.value)}
                           className="sap-input font-mono"
@@ -572,7 +573,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                           <option value="1">1%</option>
                           <option value="2">2%</option>
                           <option value="5">5%</option>
-                        </select>
+                        </SAPSelect>
                         <input 
                           type="number" 
                           value={billForm.tdsAmount}
@@ -588,7 +589,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                         <span>4. GST Accrual</span>
                       </label>
                       <div className="flex space-x-1">
-                        <select 
+                        <SAPSelect 
                           value={taxConfig.gstRate}
                           onChange={(e) => handleGrossOrRatesChange('gstRate', e.target.value)}
                           className="sap-input font-mono"
@@ -597,7 +598,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                           <option value="5">5%</option>
                           <option value="12">12%</option>
                           <option value="18">18%</option>
-                        </select>
+                        </SAPSelect>
                         <input 
                           type="number" 
                           value={billForm.gstAmount}
@@ -638,7 +639,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                     <ShieldCheck size={11} className="text-[#0056b3]" />
                     <span>Transition Status</span>
                   </label>
-                  <select 
+                  <SAPSelect 
                     value={billForm.status}
                     onChange={(e) => setBillForm({ ...billForm, status: e.target.value as any })}
                     className="w-full sap-input font-semibold"
@@ -646,7 +647,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                     <option value="Draft">Draft (Held back from books)</option>
                     <option value="Approved">Approved (Reflected in book balance)</option>
                     <option value="Posted & Locked">Posted & Locked (Accrued & Locked)</option>
-                  </select>
+                  </SAPSelect>
                 </div>
                 <div className="flex items-center text-rose-800 bg-rose-50 p-2 border border-rose-200 text-[9px] font-bold rounded-xs">
                   <ShieldAlert size={14} className="mr-1.5 flex-shrink-0 text-rose-600 animate-pulse" />

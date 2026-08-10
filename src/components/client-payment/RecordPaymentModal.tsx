@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../SAPSelect';
 import { motion } from 'motion/react';
 import { Save, X, Landmark, Percent, Ban, HelpCircle, FileClock, Building2, Tag, Calendar, DollarSign, Link, CreditCard, Wallet, Notebook } from 'lucide-react';
 import { Project, Billing } from '../../types';
@@ -81,9 +82,9 @@ export const RecordPaymentModal = ({
       <motion.div
         initial={{ opacity: 0, y: 10, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="sap-panel relative z-10 w-full max-w-2xl bg-white rounded-sm shadow-2xl border-t-4 border-t-[#0056b3]"
+        className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px]"
       >
-        <div className="border-b border-gray-200 bg-gray-50 px-4 py-2.5 flex justify-between items-center">
+        <div className="sap-title-banner">
           <div>
             <h2 className="text-[var(--color-sap-blue-val)] font-bold text-sm flex items-center space-x-1.5">
               <Landmark size={14} className="text-[#0056b3]" />
@@ -106,7 +107,7 @@ export const RecordPaymentModal = ({
                 <Building2 size={11} className="text-blue-500" />
                 <span>Project / Site <span className="text-red-500">*</span></span>
               </label>
-              <select
+              <SAPSelect
                 required
                 className="sap-input font-bold text-[var(--color-sap-blue-val)]"
                 value={formData.projectId}
@@ -118,7 +119,7 @@ export const RecordPaymentModal = ({
                     {proj.name} ({proj.clientName || 'No Client'})
                   </option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
 
             {/* Category Selection */}
@@ -127,7 +128,7 @@ export const RecordPaymentModal = ({
                 <Tag size={11} className="text-blue-500" />
                 <span>Category <span className="text-red-500">*</span></span>
               </label>
-              <select
+              <SAPSelect
                 required
                 className="sap-input font-semibold"
                 value={formData.category}
@@ -145,7 +146,7 @@ export const RecordPaymentModal = ({
                 <option value="GST">GST Payment</option>
                 <option value="Retention">Retention Release</option>
                 <option value="Others">Others</option>
-              </select>
+              </SAPSelect>
             </div>
 
             {/* Payment Date */}
@@ -188,7 +189,7 @@ export const RecordPaymentModal = ({
                   <Link size={11} className="text-blue-500" />
                   <span>Link Bill (Optional)</span>
                 </label>
-                <select
+                <SAPSelect
                   disabled={!formData.projectId}
                   className="sap-input"
                   value={formData.billId}
@@ -200,7 +201,7 @@ export const RecordPaymentModal = ({
                       {bill.billNo} - Val: ₹{(bill.amount || 0).toLocaleString('en-IN')} ({bill.month})
                     </option>
                   ))}
-                </select>
+                </SAPSelect>
                 {!formData.projectId && (
                   <span className="text-[9px] text-gray-400">Select a project first to load bills</span>
                 )}
@@ -213,7 +214,7 @@ export const RecordPaymentModal = ({
                 <Wallet size={11} className="text-blue-500" />
                 <span>Payment Mode</span>
               </label>
-              <select
+              <SAPSelect
                 className="sap-input"
                 value={formData.paymentMode}
                 onChange={(e) => setFormData({ ...formData, paymentMode: e.target.value })}
@@ -224,7 +225,7 @@ export const RecordPaymentModal = ({
                 <option value="Cheque">Cheque</option>
                 <option value="Cash">Cash</option>
                 <option value="Adjusted">Adjusted / Credit Note</option>
-              </select>
+              </SAPSelect>
             </div>
 
             {/* Bank Name */}

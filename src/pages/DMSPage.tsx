@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { 
   Folder, FolderOpen, FileText, Search, Grid, List, Plus, 
   Trash2, Download, Eye, Link2, Clock, CheckCircle, AlertTriangle, 
@@ -1357,7 +1358,7 @@ export const DMSPage: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Associated Project</label>
-                      <select 
+                      <SAPSelect 
                         value={filterProject}
                         onChange={(e) => setFilterProject(e.target.value)}
                         className="w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -1366,12 +1367,12 @@ export const DMSPage: React.FC = () => {
                         {projects.map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
-                      </select>
+                      </SAPSelect>
                     </div>
 
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Expiry Status Tracker</label>
-                      <select 
+                      <SAPSelect 
                         value={filterExpiry}
                         onChange={(e) => setFilterExpiry(e.target.value as any)}
                         className="w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -1380,12 +1381,12 @@ export const DMSPage: React.FC = () => {
                         <option value="expiring-30">Expiring in 30 Days</option>
                         <option value="expiring-15">Expiring in 15 Days</option>
                         <option value="expired">Expired Documents Only</option>
-                      </select>
+                      </SAPSelect>
                     </div>
 
                     <div>
                       <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Approval Workflow Status</label>
-                      <select 
+                      <SAPSelect 
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value)}
                         className="w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -1396,7 +1397,7 @@ export const DMSPage: React.FC = () => {
                         <option value="Approved">Approved</option>
                         <option value="Rejected">Rejected</option>
                         <option value="Archived">Archived</option>
-                      </select>
+                      </SAPSelect>
                     </div>
 
                     <div className="flex gap-2">
@@ -1584,7 +1585,7 @@ export const DMSPage: React.FC = () => {
 
               {/* RIGHT EXPANDABLE PREVIEW AND DETAIL DRAWER PANEL */}
               {selectedDocument && (
-                <div className="w-full lg:w-96 shrink-0 bg-white border-l border-[#a3b1c2] flex flex-col shadow-xl">
+                <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
                   
                   {/* Panel Header */}
                   <div className="bg-[#e2eaf0] p-4 border-b border-[#a3b1c2] flex items-center justify-between shrink-0">
@@ -1840,7 +1841,7 @@ export const DMSPage: React.FC = () => {
                         <div className="space-y-2 pt-2 border-t border-gray-100">
                           <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Associate this file with a system record</label>
                           <div className="grid grid-cols-2 gap-2">
-                            <select 
+                            <SAPSelect 
                               value={linkEntityType}
                               onChange={(e) => {
                                 setLinkEntityType(e.target.value as any);
@@ -1854,10 +1855,10 @@ export const DMSPage: React.FC = () => {
                               <option value="bill">Client Billing</option>
                               <option value="payment">Client Receipt</option>
                               <option value="boq">BOQ Contract</option>
-                            </select>
+                            </SAPSelect>
 
                             {/* Dynamic selection dropdown based on type */}
-                            <select
+                            <SAPSelect
                               value={linkEntityId}
                               onChange={(e) => setLinkEntityId(e.target.value)}
                               className="border border-gray-300 rounded p-1 text-[11px]"
@@ -1881,7 +1882,7 @@ export const DMSPage: React.FC = () => {
                               {linkEntityType === 'boq' && boqs.map(q => (
                                 <option key={q.id} value={q.id}>{q.boqNo} - {q.clientName}</option>
                               ))}
-                            </select>
+                            </SAPSelect>
                           </div>
                           
                           <input 
@@ -1967,7 +1968,7 @@ export const DMSPage: React.FC = () => {
       {/* MODAL WINDOW: DOCUMENT UPLOAD FLOW */}
       {isUploadOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-lg rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             
             <div className="bg-[#e2eaf0] px-5 py-4 border-b border-[#a3b1c2] flex items-center justify-between">
               <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider font-mono flex items-center gap-1.5">
@@ -2035,7 +2036,7 @@ export const DMSPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Associated Project (Optional)</label>
-                  <select 
+                  <SAPSelect 
                     value={formProject}
                     onChange={(e) => setFormProject(e.target.value)}
                     className="w-full border border-gray-300 rounded p-2 text-xs focus:ring-1 focus:ring-blue-500"
@@ -2044,12 +2045,12 @@ export const DMSPage: React.FC = () => {
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">DMS Category Location</label>
-                  <select 
+                  <SAPSelect 
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value as any)}
                     className="w-full border border-gray-300 rounded p-2 text-xs focus:ring-1 focus:ring-blue-500"
@@ -2058,12 +2059,12 @@ export const DMSPage: React.FC = () => {
                     <option value="Worker Documents">Worker Documents</option>
                     <option value="Subcontractor Documents">Subcontractor Documents</option>
                     <option value="Company Documents">Company Documents</option>
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Document Sub-Type classification</label>
-                  <select 
+                  <SAPSelect 
                     value={formDocType}
                     onChange={(e) => setFormDocType(e.target.value)}
                     className="w-full border border-gray-300 rounded p-2 text-xs focus:ring-1 focus:ring-blue-500"
@@ -2112,7 +2113,7 @@ export const DMSPage: React.FC = () => {
                         <option value="Other Documents">Other Documents</option>
                       </>
                     )}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div>
@@ -2184,7 +2185,7 @@ export const DMSPage: React.FC = () => {
       {/* MODAL WINDOW: REVISION MANAGER (ADD NEW VERSION) */}
       {isVersionModalOpen && selectedDocument && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-w-md w-full overflow-hidden">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-md rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             
             <div className="bg-[#e2eaf0] px-5 py-4 border-b border-[#a3b1c2] flex items-center justify-between">
               <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider font-mono flex items-center gap-1.5">

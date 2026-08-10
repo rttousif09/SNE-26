@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SAPSelect } from '../../components/SAPSelect';
 import { Printer, Building, Users, Building2, Calendar } from 'lucide-react';
 import { Project, Subcontractor, SubcontractorLedger } from '../../types';
 
@@ -125,7 +126,7 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
             <Users size={12} className="text-amber-500" />
             <span>Subcontractor Master *</span>
           </span>
-          <select 
+          <SAPSelect 
             value={selectedSubcontractorId}
             onChange={(e) => {
               setSelectedSubcontractorId(e.target.value);
@@ -135,7 +136,7 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
           >
             <option value="">-- Choose master cred partner --</option>
             {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
-          </select>
+          </SAPSelect>
         </div>
 
         <div className="flex items-center space-x-1.5">
@@ -143,14 +144,14 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
             <Building2 size={12} className="text-amber-500" />
             <span>Site Filter</span>
           </span>
-          <select 
+          <SAPSelect 
             value={ledgerFilters.projectId}
             onChange={(e) => setLedgerFilters(prev => ({ ...prev, projectId: e.target.value }))}
             className="border border-gray-300 rounded p-1 text-[10px] bg-white outline-none focus:border-amber-500"
           >
             <option value="all">All Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          </SAPSelect>
         </div>
 
         <div className="flex items-center space-x-1.5">

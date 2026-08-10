@@ -1,3 +1,18 @@
+
+@font-face {
+  font-family: "72";
+  src: url("https://sapui5.hana.ondemand.com/resources/sap/ui/core/themes/base/fonts/72-Regular.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "72";
+  src: url("https://sapui5.hana.ondemand.com/resources/sap/ui/core/themes/base/fonts/72-Bold.woff2") format("woff2");
+  font-weight: bold;
+  font-style: normal;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
@@ -8,7 +23,7 @@
   --color-sap-border: var(--color-sap-border-val);
   --color-sap-highlight: var(--color-sap-highlight-val);
   
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "72", "72-Black", "72-Bold", "72full", Arial, Helvetica, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -126,14 +141,8 @@ body {
 }
 
 /* Authentic SAP GUI Input with Light Yellow Focus Box Highlight */
-.sap-input,
-.sap-form input[type="text"],
-.sap-form input[type="number"],
-.sap-form input[type="date"],
-.sap-form input[type="email"],
-.sap-form input[type="password"],
-.sap-form select,
-.sap-form textarea {
+
+.sap-input, :where(input[type="text"], input[type="number"], input[type="date"], input[type="email"], input[type="password"], select, textarea):not(.no-sap) {
   background-color: #ffffff;
   border: 1px solid #8c9ba8;
   padding: 3px 6px;
@@ -144,12 +153,76 @@ body {
   transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
+:where(input[type="text"], input[type="number"], input[type="date"], input[type="email"], input[type="password"], select, textarea):not(.no-sap):focus,
 .sap-input:focus,
-.sap-form input:focus,
-.sap-form select:focus,
-.sap-form textarea:focus,
-input.sap-active-field,
-select.sap-active-field,
+.sap-active-field,
+.sap-table-grid input:focus,
+.excel-grid input:focus {
+  outline: none !important;
+  background-color: #fffde7 !important;
+  border: 1px solid #d97706 !important;
+  box-shadow: inset 0 0 0 1px #d97706, 0 0 0 2px rgba(217, 119, 6, 0.2) !important;
+  color: #000000 !important;
+}
+
+:where(input[type="text"], input[type="number"], input[type="date"], select, textarea):disabled,
+:where(input[type="text"], input[type="number"], input[type="date"], textarea):read-only {
+  background-color: #eef2f6 !important;
+  color: #475569 !important;
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+/* SAP GUI Title / Screen Banner */
+.sap-title-banner {
+  background: linear-gradient(180deg, #d2dfed 0%, #b8ceea 100%);
+  border-bottom: 1px solid #8c9ba8;
+  color: #002f6c !important;
+  padding: 6px 12px;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 2px 2px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.sap-title-banner * {
+  color: #002f6c !important;
+}
+
+/* SAP Group Box / Fieldset Container */
+.sap-fieldset {
+  border: 1px solid #8c9ba8;
+  background-color: #f4f7fa;
+  border-radius: 2px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sap-fieldset-header {
+  background: linear-gradient(180deg, #d2dfed 0%, #c8d7e6 100%);
+  color: #002f6c;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-bottom: 1px solid #8c9ba8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sap-fieldset-body {
+  padding: 10px 12px;
+  background-color: #ffffff;
+}
+
+/* SAP Condition Supplements / Table Grid */
 .sap-table-grid input:focus,
 .excel-grid input:focus {
   outline: none !important;

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { SAPSelect } from './SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, ChevronDown, ChevronUp, ChevronsUpDown, Download, Printer, 
@@ -818,7 +819,7 @@ export function ERPTable<T extends Record<string, any>>({
                     {/* Row Actions cell */}
                     {rowActions.length > 0 && (
                       <td 
-                        className="px-3 py-1.5 whitespace-nowrap text-center sticky right-0 bg-white group-hover:bg-slate-50 z-11 border-l border-gray-200 shadow-2xl"
+                        className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10"
                         onClick={(e) => e.stopPropagation()} // bypass row navigation
                       >
                         <div className="inline-flex space-x-1 justify-center">
@@ -981,7 +982,7 @@ export function ERPTable<T extends Record<string, any>>({
           {/* Page size dropdown */}
           <div className="flex items-center space-x-1.5 text-[10px]">
             <span className="text-gray-400 font-bold">Rows:</span>
-            <select 
+            <SAPSelect 
               value={pageSize === 'all' ? 'all' : pageSize} 
               onChange={(e) => {
                 const val = e.target.value;
@@ -995,7 +996,7 @@ export function ERPTable<T extends Record<string, any>>({
               <option value={50}>50</option>
               <option value={100}>100</option>
               <option value="all">All</option>
-            </select>
+            </SAPSelect>
           </div>
 
           {/* Page buttons */}

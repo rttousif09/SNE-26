@@ -632,7 +632,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             </button>
 
             {isThemeDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#8c9ba8] shadow-2xl rounded-sm z-50 animate-fade-in text-slate-800 p-2 divide-y divide-gray-100 flex flex-col">
+              <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
                 <div className="pb-1.5 mb-1.5">
                   <span className="font-bold text-[9px] uppercase tracking-wide text-gray-500 block">Workspace Display Theme</span>
                   <span className="text-[8px] text-gray-400">Calibrate screen brightness for optimal task efficiency</span>
@@ -710,7 +710,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             </button>
 
             {isMsgOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white border border-[#8c9ba8] shadow-2xl rounded-sm z-50 animate-fade-in divide-y divide-gray-100 flex flex-col text-slate-800">
+              <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
                 <div className="bg-gradient-to-r from-[#0056b3] to-[#002f6c] text-white px-3 py-1.5 flex items-center justify-between select-none">
                   <span className="font-bold text-[9px] uppercase tracking-wide">System Messages Inbox</span>
                 </div>
@@ -740,7 +740,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             </button>
 
             {isNotifOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white border border-[#8c9ba8] shadow-2xl rounded-sm z-50 animate-fade-in divide-y divide-gray-100 flex flex-col max-h-[85vh]">
+              <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
                 <div className="bg-gradient-to-r from-[#0056b3] to-[#002f6c] text-white px-3 py-2 flex items-center justify-between select-none shrink-0">
                   <span className="font-bold text-[10px] uppercase tracking-wide flex items-center">
                     <Bell size={12} className="mr-1.5" /> System Alerts & Notifications
@@ -1432,7 +1432,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       
       {unauthorizedTCode && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[999999] backdrop-blur-sm">
-          <div className="bg-white border-2 border-red-600 rounded-lg shadow-2xl w-[450px] overflow-hidden">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             {/* Title Bar */}
             <div className="bg-red-600 text-white px-4 py-2.5 flex items-center space-x-2 font-mono font-bold text-xs tracking-wide">
               <ShieldAlert size={14} />
@@ -1471,7 +1471,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {invalidTCode && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[999999] backdrop-blur-sm">
-          <div className="bg-white border-2 border-amber-600 rounded-lg shadow-2xl w-[450px] overflow-hidden">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             {/* Title Bar */}
             <div className="bg-amber-600 text-white px-4 py-2.5 flex items-center space-x-2 font-mono font-bold text-xs tracking-wide">
               <AlertCircle size={14} />

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from './SAPSelect';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, Search, ArrowRight, Calendar, User, Briefcase, ChevronRight, AlertTriangle, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -386,7 +387,7 @@ export const LabourRequirementPlanning: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <div className="flex flex-col">
                   <label className="font-semibold mb-0.5">Project / Site Name *</label>
-                  <select
+                  <SAPSelect
                     className="sap-input text-[11px] p-1 border font-sans"
                     value={formData.projectId}
                     onChange={e => setFormData({ ...formData, projectId: e.target.value })}
@@ -396,7 +397,7 @@ export const LabourRequirementPlanning: React.FC = () => {
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold mb-0.5">Tower Name (Optional)</label>
@@ -452,7 +453,7 @@ export const LabourRequirementPlanning: React.FC = () => {
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold mb-0.5">Shift Assignment *</label>
-                  <select
+                  <SAPSelect
                     className="sap-input text-[11px]"
                     value={formData.shift}
                     onChange={e => setFormData({ ...formData, shift: e.target.value as 'Day' | 'Night' })}
@@ -460,7 +461,7 @@ export const LabourRequirementPlanning: React.FC = () => {
                   >
                     <option value="Day">☀️ Day Shift</option>
                     <option value="Night">🌙 Night Shift</option>
-                  </select>
+                  </SAPSelect>
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold mb-0.5">Core Assignment Remarks</label>
@@ -526,7 +527,7 @@ export const LabourRequirementPlanning: React.FC = () => {
           {/* Filtering Header Panel */}
           <div className="bg-[#f0f4f8] border border-[#bcc5cf] p-1.5 flex flex-wrap items-center gap-2 text-[10.5px] print:hidden">
             <span className="font-bold text-gray-600 block sm:inline">Filters:</span>
-            <select
+            <SAPSelect
               className="sap-input text-[10.5px] py-0.5"
               value={filterProject}
               onChange={e => setFilterProject(e.target.value)}
@@ -535,7 +536,7 @@ export const LabourRequirementPlanning: React.FC = () => {
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SAPSelect>
             <input
               type="text"
               placeholder="Filter by Activity..."
@@ -543,7 +544,7 @@ export const LabourRequirementPlanning: React.FC = () => {
               value={filterActivity}
               onChange={e => setFilterActivity(e.target.value)}
             />
-            <select
+            <SAPSelect
               className="sap-input text-[10.5px] py-0.5"
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value)}
@@ -552,7 +553,7 @@ export const LabourRequirementPlanning: React.FC = () => {
               {categoryLabels.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
-            </select>
+            </SAPSelect>
             <div className="flex items-center space-x-1">
               <span>Timeline:</span>
               <input
@@ -847,7 +848,7 @@ export const LabourRequirementPlanning: React.FC = () => {
           <div className="bg-[#f0f4f8] border border-[#bcc5cf] p-1.5 flex flex-wrap items-center justify-between gap-2 text-[10.5px] print:hidden">
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-gray-700">Audit Report Type:</span>
-              <select
+              <SAPSelect
                 className="sap-input text-[10.5px] py-0.5"
                 value={reportType}
                 onChange={e => setReportType(e.target.value as any)}
@@ -856,7 +857,7 @@ export const LabourRequirementPlanning: React.FC = () => {
                 <option value="availability">Active Availability Site Census Report</option>
                 <option value="shortage">High Deficiency Shortfall analysis Report</option>
                 <option value="sitewise">Site-wise Matrix Census ledger</option>
-              </select>
+              </SAPSelect>
             </div>
             
             <button
@@ -1073,7 +1074,7 @@ export const LabourRequirementPlanning: React.FC = () => {
               <form className="space-y-3" onSubmit={handlePerformTransfer}>
                 <div className="flex flex-col">
                   <label className="font-semibold mb-0.5">1. Select Worker to Mobilize *</label>
-                  <select
+                  <SAPSelect
                     className="sap-input text-[11px] p-1 border font-sans"
                     value={transferWorkerId}
                     onChange={e => setTransferWorkerId(e.target.value)}
@@ -1088,12 +1089,12 @@ export const LabourRequirementPlanning: React.FC = () => {
                         </option>
                       );
                     })}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div className="flex flex-col">
                   <label className="font-semibold mb-0.5">2. Target Destination Project *</label>
-                  <select
+                  <SAPSelect
                     className="sap-input text-[11px] p-1 border font-sans"
                     value={transferToProjectId}
                     onChange={e => setTransferToProjectId(e.target.value)}
@@ -1103,7 +1104,7 @@ export const LabourRequirementPlanning: React.FC = () => {
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
-                  </select>
+                  </SAPSelect>
                 </div>
 
                 <div className="flex flex-col">

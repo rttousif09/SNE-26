@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SAPSelect } from '../SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { Save, X } from 'lucide-react';
 
@@ -21,7 +22,7 @@ export const PaymentEntryModal = ({ bill, onClose, onSave }: { bill: any, onClos
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="sap-panel relative z-10 w-full max-w-2xl bg-white rounded-sm shadow-2xl border-t-4 border-t-[#0056b3]">
+      <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-xs shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px]">
         <div className="border-b border-gray-200 bg-gray-50 px-4 py-2 flex justify-between items-center">
           <div>
             <h2 className="text-[var(--color-sap-blue-val)] font-bold text-sm">Add Client Payment</h2>
@@ -47,14 +48,14 @@ export const PaymentEntryModal = ({ bill, onClose, onSave }: { bill: any, onClos
 
           <div className="flex flex-col space-y-1">
             <label className="font-semibold text-gray-700">Payment Mode</label>
-            <select className="sap-input" value={formData.paymentMode} onChange={e => setFormData({...formData, paymentMode: e.target.value})}>
+            <SAPSelect className="sap-input" value={formData.paymentMode} onChange={e => setFormData({...formData, paymentMode: e.target.value})}>
               <option value="NEFT">NEFT</option>
               <option value="RTGS">RTGS</option>
               <option value="IMPS">IMPS</option>
               <option value="Cheque">Cheque</option>
               <option value="Cash">Cash</option>
               <option value="Adjusted">Adjusted / Credit Note</option>
-            </select>
+            </SAPSelect>
           </div>
 
           <div className="flex flex-col space-y-1">

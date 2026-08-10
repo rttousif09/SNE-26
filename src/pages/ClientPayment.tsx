@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
+import { F4Help } from '../components/F4Help';
 import { ClientPayment as ClientPaymentType, Billing, Project } from '../types';
 import { 
   Landmark, 
@@ -396,14 +398,14 @@ export const ClientPayment = () => {
         {/* Quick select project filter right on the toolbar */}
         <div className="flex items-center space-x-1.5">
           <span className="font-bold text-[var(--color-sap-blue-val)] uppercase tracking-wide text-[8px]">Active Project:</span>
-          <select 
+          <SAPSelect 
             value={selectedProjectId} 
             onChange={e => setSelectedProjectId(e.target.value)}
             className="sap-input font-bold text-[var(--color-sap-blue-val)] py-0.5 text-[11px] w-48"
           >
             <option value="all">— All Accounts —</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          </SAPSelect>
         </div>
       </div>
 
@@ -571,14 +573,14 @@ export const ClientPayment = () => {
                   <Briefcase size={10} className="text-[#0056b3]" />
                   <span>Project / Site</span>
                 </label>
-                <select 
+                <SAPSelect 
                   value={selectedProjectId} 
                   onChange={e => setSelectedProjectId(e.target.value)}
                   className="sap-input w-full py-1 text-[11px]"
                 >
                   <option value="all">— All Accounts —</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                </SAPSelect>
               </div>
 
               {/* Date range from */}
@@ -630,7 +632,7 @@ export const ClientPayment = () => {
                   <Tag size={10} className="text-gray-400" />
                   <span>Category</span>
                 </label>
-                <select 
+                <SAPSelect 
                   value={filterCategory} 
                   onChange={e => setFilterCategory(e.target.value)}
                   className="sap-input w-full py-1 text-[11px]"
@@ -639,7 +641,7 @@ export const ClientPayment = () => {
                   <option value="Advance">Advance</option>
                   <option value="Against RA Bill">Against RA Bill</option>
                   <option value="Bill + GST">Bill + GST</option>
-                </select>
+                </SAPSelect>
               </div>
 
               {/* Search Query bar */}
@@ -1027,7 +1029,7 @@ const PaymentEntryFormModal = ({
             <label>
               Project / Site Name: <span className="text-red-500">*</span>
             </label>
-            <select
+            <SAPSelect
               required
               className="sap-input font-semibold text-[var(--color-sap-blue-val)] w-full"
               value={projectId}
@@ -1039,12 +1041,12 @@ const PaymentEntryFormModal = ({
                   {proj.name} ({proj.clientName || 'No Client Specified'})
                 </option>
               ))}
-            </select>
+            </SAPSelect>
 
             <label>
               Payment Category: <span className="text-red-500">*</span>
             </label>
-            <select
+            <SAPSelect
               required
               className="sap-input font-semibold text-[var(--color-sap-blue-val)] w-full"
               value={category}
@@ -1053,7 +1055,7 @@ const PaymentEntryFormModal = ({
               <option value="Against RA Bill">Against RA Bill</option>
               <option value="Advance">Advance</option>
               <option value="Bill + GST">Bill + GST</option>
-            </select>
+            </SAPSelect>
 
             <label>
               Payment Date: <span className="text-red-500">*</span>
@@ -1083,7 +1085,7 @@ const PaymentEntryFormModal = ({
             <label>
               Payment Mode:
             </label>
-            <select
+            <SAPSelect
               className="sap-input w-full"
               value={paymentMode}
               onChange={(e) => setPaymentMode(e.target.value)}
@@ -1093,7 +1095,7 @@ const PaymentEntryFormModal = ({
               <option value="Cheque">Demand Draft / Cheque</option>
               <option value="Cash">Cash Receipt</option>
               <option value="Adjusted">Adjusted / Credit Note</option>
-            </select>
+            </SAPSelect>
 
             <label>
               Clearing Bank Name:

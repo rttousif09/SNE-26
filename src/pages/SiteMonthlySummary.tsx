@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { Printer, Edit, RotateCcw, Undo, Check } from 'lucide-react';
@@ -231,7 +232,7 @@ export const SiteMonthlySummary: React.FC = () => {
       <div className="mb-4 sap-panel p-2 flex flex-wrap gap-4 items-center print:hidden shrink-0">
         <div className="flex items-center space-x-2">
           <label className="font-semibold text-gray-700">Select Project:</label>
-          <select 
+          <SAPSelect 
             className="sap-input w-64 text-[#0056b3] font-bold" 
             value={selectedProject} 
             onChange={e => {
@@ -241,7 +242,7 @@ export const SiteMonthlySummary: React.FC = () => {
           >
             <option value="">-- Select Project --</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          </SAPSelect>
         </div>
         
         {selectedProject && (

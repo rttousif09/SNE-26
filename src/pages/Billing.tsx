@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
+import { F4Help } from '../components/F4Help';
 import { Plus, X, Save, Edit, Trash2, Upload, Download, Paperclip, Printer, FileSpreadsheet, Eye, RefreshCw, History } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
@@ -1415,7 +1417,7 @@ export const Billing: React.FC = () => {
             <div className="font-semibold text-gray-700 px-1 py-0.5">Billing Directory (Read Only)</div>
           )}
           <div className="flex items-center space-x-2">
-            <select
+            <SAPSelect
               className="sap-input text-[11px] w-48"
               value={recordsProjectId}
               onChange={e => {
@@ -1427,7 +1429,7 @@ export const Billing: React.FC = () => {
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </SAPSelect>
           </div>
           
           <input
@@ -1563,10 +1565,10 @@ export const Billing: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Project:</label>
-              <select required className="sap-input flex-1" value={formData.projectId} onChange={e => handleProjectOrTypeChange('projectId', e.target.value)}>
+              <SAPSelect required className="sap-input flex-1" value={formData.projectId} onChange={e => handleProjectOrTypeChange('projectId', e.target.value)}>
                 <option value="">Select Project</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              </SAPSelect>
             </div>
             <div className="flex items-center">
               <label className="w-32">Bill No:</label>
@@ -1589,13 +1591,13 @@ export const Billing: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Bill Type:</label>
-              <select required className="sap-input flex-1" value={formData.billType} onChange={e => handleProjectOrTypeChange('billType', e.target.value)}>
+              <SAPSelect required className="sap-input flex-1" value={formData.billType} onChange={e => handleProjectOrTypeChange('billType', e.target.value)}>
                 <option value="Running Account">Running Account</option>
                 <option value="Final Bill">Final Bill</option>
                 <option value="Extra Item Bill">Extra Item Bill</option>
                 <option value="Additional Work Bill">Additional Work Bill</option>
                 <option value="Manpower Supply Bill">Manpower Supply Bill</option>
-              </select>
+              </SAPSelect>
             </div>
             <div className="flex items-center">
               <label className="w-32">Work Nature:</label>
@@ -1751,7 +1753,7 @@ export const Billing: React.FC = () => {
             </div>
             <div className="flex items-center">
               <label className="w-32">Retention Status:</label>
-              <select
+              <SAPSelect
                 className="sap-input flex-1"
                 value={formData.retentionStatus}
                 onChange={e => setFormData({...formData, retentionStatus: e.target.value})}
@@ -1759,11 +1761,11 @@ export const Billing: React.FC = () => {
                 <option value="Pending">Pending</option>
                 <option value="Partially Cleared">Partially Cleared</option>
                 <option value="Fully Resolved">Fully Resolved</option>
-              </select>
+              </SAPSelect>
             </div>
             <div className="flex items-center">
               <label className="w-32">Hold Status:</label>
-              <select
+              <SAPSelect
                 className="sap-input flex-1"
                 value={formData.holdStatus}
                 onChange={e => setFormData({...formData, holdStatus: e.target.value})}
@@ -1771,7 +1773,7 @@ export const Billing: React.FC = () => {
                 <option value="Pending">Pending</option>
                 <option value="Partially Cleared">Partially Cleared</option>
                 <option value="Fully Resolved">Fully Resolved</option>
-              </select>
+              </SAPSelect>
             </div>
             <div className="flex items-center">
               <label className="w-32">Billing Month:</label>
@@ -2499,7 +2501,7 @@ export const Billing: React.FC = () => {
           <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
-              <select
+              <SAPSelect
                 className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
                 value={summaryProjectId}
                 onChange={e => setSummaryProjectId(e.target.value)}
@@ -2510,7 +2512,7 @@ export const Billing: React.FC = () => {
                     🏗️ {p.name}
                   </option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
             
             <PDFExportButton
@@ -2672,7 +2674,7 @@ export const Billing: React.FC = () => {
           <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
-              <select
+              <SAPSelect
                 className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
                 value={summaryProjectId}
                 onChange={e => setSummaryProjectId(e.target.value)}
@@ -2683,7 +2685,7 @@ export const Billing: React.FC = () => {
                     🏗️ {p.name}
                   </option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
             
             <PDFExportButton
@@ -2817,7 +2819,7 @@ export const Billing: React.FC = () => {
           <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
-              <select
+              <SAPSelect
                 className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
                 value={summaryProjectId}
                 onChange={e => setSummaryProjectId(e.target.value)}
@@ -2828,7 +2830,7 @@ export const Billing: React.FC = () => {
                     🏗️ {p.name}
                   </option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
             
             <PDFExportButton
@@ -2966,7 +2968,7 @@ export const Billing: React.FC = () => {
           <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
-              <select
+              <SAPSelect
                 className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
                 value={summaryProjectId}
                 onChange={e => setSummaryProjectId(e.target.value)}
@@ -2977,7 +2979,7 @@ export const Billing: React.FC = () => {
                     🏗️ {p.name}
                   </option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
             
             <PDFExportButton
@@ -3136,7 +3138,7 @@ export const Billing: React.FC = () => {
           <div className="bg-[#f0f4f8] border border-[#8c9ba8] p-2.5 rounded shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">Select Site / Project:</span>
-              <select
+              <SAPSelect
                 className="sap-input font-bold text-[#0056b3] text-xs bg-white border-slate-400 focus:bg-white pr-6 py-1 cursor-pointer"
                 value={summaryProjectId}
                 onChange={e => setSummaryProjectId(e.target.value)}
@@ -3147,7 +3149,7 @@ export const Billing: React.FC = () => {
                     🏗️ {p.name}
                   </option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
             
             <PDFExportButton
@@ -3630,7 +3632,7 @@ export const Billing: React.FC = () => {
       {/* Document Preview Lightbox Modal */}
       {previewFile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-xs no-print">
-          <div className="bg-white rounded-md shadow-2xl w-full max-w-4xl mx-4 overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-4xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             {/* Modal Header */}
             <div className="bg-slate-50 border-b border-slate-100 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2 min-w-0">

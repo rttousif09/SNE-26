@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { FileText, Save, Plus, Trash2, Settings } from 'lucide-react';
@@ -73,7 +74,7 @@ export const BillTracking: React.FC = () => {
           <FileText className="mr-2" /> Floor Abstract (Client Bill Tracking)
         </h1>
         <div className="flex space-x-4">
-          <select 
+          <SAPSelect 
             value={selectedProjectId}
             onChange={(e) => setSelectedProjectId(e.target.value)}
             className="sap-input"
@@ -82,7 +83,7 @@ export const BillTracking: React.FC = () => {
             {projects.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </SAPSelect>
         </div>
       </div>
 

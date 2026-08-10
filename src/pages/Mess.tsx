@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { MessBooking, ExpenseEntry } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -329,7 +330,7 @@ export const Mess: React.FC = () => {
           <form onSubmit={handleSave} className="space-y-3">
             <div>
               <label className="block text-gray-700 font-semibold mb-1">Target Project</label>
-              <select
+              <SAPSelect
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
                 required
@@ -339,7 +340,7 @@ export const Mess: React.FC = () => {
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -574,7 +575,7 @@ export const Mess: React.FC = () => {
               </button>
 
               <span>Filter Project:</span>
-              <select
+              <SAPSelect
                 value={projectFilter}
                 onChange={(e) => setProjectFilter(e.target.value)}
                 className="bg-white border border-gray-400 p-0.5 text-[10px] font-normal"
@@ -583,7 +584,7 @@ export const Mess: React.FC = () => {
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
-              </select>
+              </SAPSelect>
             </div>
           </div>
 

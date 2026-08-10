@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { NumberingSettings, NumberingAuditLog } from '../types';
 import { 
@@ -299,7 +300,7 @@ export const NumberingSettingsPage: React.FC = () => {
                   <Filter className="h-3.5 w-3.5" />
                   Status:
                 </div>
-                <select
+                <SAPSelect
                   value={statusFilter}
                   onChange={(e: any) => setStatusFilter(e.target.value)}
                   className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-1.5 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -307,7 +308,7 @@ export const NumberingSettingsPage: React.FC = () => {
                   <option value="All">All Statuses</option>
                   <option value="Active">Active Only</option>
                   <option value="Inactive">Inactive Only</option>
-                </select>
+                </SAPSelect>
 
                 <div className="h-6 w-px bg-slate-200"></div>
 
@@ -530,7 +531,7 @@ export const NumberingSettingsPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Financial Year Format</label>
-                        <select
+                        <SAPSelect
                           value={editFyFormat}
                           onChange={(e: any) => setEditFyFormat(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-xs text-slate-700 font-medium focus:ring-1 focus:ring-indigo-500 focus:outline-none"
@@ -540,12 +541,12 @@ export const NumberingSettingsPage: React.FC = () => {
                           <option value="2025-26">2025-26</option>
                           <option value="FY25-26 font-semibold">FY25-26</option>
                           <option value="FY2025-26">FY2025-26</option>
-                        </select>
+                        </SAPSelect>
                       </div>
 
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Separator Char</label>
-                        <select
+                        <SAPSelect
                           value={editSeparator}
                           onChange={(e) => setEditSeparator(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 text-sm font-mono text-slate-800 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
@@ -555,7 +556,7 @@ export const NumberingSettingsPage: React.FC = () => {
                           <option value="_">Under ( _ )</option>
                           <option value=".">Dot ( . )</option>
                           <option value="">Blank (None)</option>
-                        </select>
+                        </SAPSelect>
                       </div>
                     </div>
 
@@ -807,7 +808,7 @@ export const NumberingSettingsPage: React.FC = () => {
           <motion.div 
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-xl shadow-xl border border-yellow-100 max-w-md w-full overflow-hidden"
+            className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-md rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10"
           >
             <div className="bg-gradient-to-r from-amber-500 to-yellow-600 p-4 text-white flex items-center gap-3">
               <div className="p-2 bg-white/20 rounded-lg">
@@ -861,7 +862,7 @@ export const NumberingSettingsPage: React.FC = () => {
           <motion.div 
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-xl shadow-xl border border-red-100 max-w-md w-full overflow-hidden"
+            className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-md rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10"
           >
             {/* Header with step indicator */}
             <div className="bg-gradient-to-r from-red-600 to-rose-700 p-4 text-white flex items-center justify-between">

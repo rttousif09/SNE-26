@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { Plus, X, Save, Edit, Trash2, Search, FileText, Info, FileSpreadsheet, Building2, User, Phone, MapPin, Calendar, CreditCard, ShieldCheck, Briefcase, FileKey, Layers, Tag, Upload } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -473,11 +474,11 @@ export const Projects: React.FC = () => {
                       <Tag size={10} className="text-blue-500" />
                       <span>4. Project Type</span>
                     </label>
-                    <select disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.projectType} onChange={e => setFormData({...formData, projectType: e.target.value as any})}>
+                    <SAPSelect disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.projectType} onChange={e => setFormData({...formData, projectType: e.target.value as any})}>
                       <option value="Residential">Residential</option>
                       <option value="Commercial">Commercial</option>
                       <option value="Government">Government</option>
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700 flex items-center gap-1">
@@ -505,13 +506,13 @@ export const Projects: React.FC = () => {
                       <ShieldCheck size={10} className="text-blue-600 animate-pulse" />
                       <span>8. Project Status *</span>
                     </label>
-                    <select required className="sap-input font-bold border-blue-400" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                    <SAPSelect required className="sap-input font-bold border-blue-400" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
                       <option value="Ongoing">Ongoing</option>
                       <option value="Completed">Completed</option>
                       <option value="On Hold">On Hold (Planned)</option>
                       <option value="Cancelled">Cancelled (Planned)</option>
                       <option value="Archived">Archived (Planned)</option>
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div className="flex flex-col">
                     <label className="font-semibold text-gray-700 flex items-center gap-1">
@@ -556,12 +557,12 @@ export const Projects: React.FC = () => {
                       <Tag size={10} className="text-purple-500" />
                       <span>3. Rate Type</span>
                     </label>
-                    <select disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.rateType} onChange={e => setFormData({...formData, rateType: e.target.value as any})}>
+                    <SAPSelect disabled={editingId ? projects.find(p => p.id === editingId)?.status === 'Completed' : false} className="sap-input" value={formData.rateType} onChange={e => setFormData({...formData, rateType: e.target.value as any})}>
                       <option value="Item Rate">Item Rate</option>
                       <option value="Supply">Supply</option>
                       <option value="BUA Basis">BUA Basis</option>
                       <option value="Lump-sum">Lump-sum</option>
-                    </select>
+                    </SAPSelect>
                   </div>
                   <div className="flex flex-col pt-1">
                     <label className="font-semibold text-gray-700 flex items-center gap-1">
@@ -681,7 +682,7 @@ export const Projects: React.FC = () => {
 
       {viewDetailsId && projects.find(p => p.id === viewDetailsId) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-          <div className="bg-white rounded-md shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-3xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
             <div className="bg-[var(--btn-hover-top)] text-white px-4 py-2 flex justify-between items-center shrink-0">
               <h3 className="font-bold">Project Details</h3>
               <button
