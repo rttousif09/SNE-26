@@ -1,5 +1,6 @@
 {
   "name": "Enterprise Resource Management",
   "description": "SAP-style business management software for projects, workers, billing, and payments.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

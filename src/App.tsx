@@ -36,7 +36,7 @@ import { NumberingSettingsPage } from './pages/NumberingSettings';
 import { Subcontractors } from './pages/subcontractors';
 import { DMSPage } from './pages/DMSPage';
 import { TCodeMaster } from './pages/TCodeMaster';
-import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud, Pin, FolderMinus, RefreshCw, Copy, Plus, Trash2, Clock, ChevronLeft, ChevronRight, Undo, AlertCircle } from 'lucide-react';
+import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud, Pin, FolderMinus, RefreshCw, Copy, Plus, Trash2, Clock, ChevronLeft, ChevronRight, Undo, AlertCircle, Home, ArrowLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
 import { SuccessToast } from './components/AnimatedERP';
@@ -570,19 +570,52 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         />
       </motion.div>
       <div className="flex flex-1 overflow-hidden">
-        <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.2 }} className="flex h-full print:hidden">
-          <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} />
-        </motion.div>
-        <div className="flex flex-col flex-1 overflow-hidden">
+        {currentTab === 'dashboard' && (
+          <motion.div 
+            initial={{ x: -20, opacity: 0 }} 
+            animate={{ x: 0, opacity: 1 }} 
+            exit={{ x: -20, opacity: 0 }}
+            transition={{ duration: 0.2 }} 
+            className="flex h-full print:hidden shrink-0"
+          >
+            <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} />
+          </motion.div>
+        )}
+        <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           {/* Editor Tabs */}
-          <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.3 }} className="flex items-end bg-[#eef2f6] pt-1 px-1 border-b border-[#8c9ba8] print:hidden shrink-0">
-            <div className="flex items-center bg-white border border-[#8c9ba8] border-b-transparent px-3 py-1 rounded-t-sm space-x-2 relative top-[1px] z-10">
-              <Server size={12} className="text-[#0056b3]" />
-              <span className="font-semibold text-[11px]">ERP_PRD - {getTabNameForType(currentTab)}</span>
-              <X size={12} className="text-gray-500 hover:text-red-500 cursor-pointer ml-2" />
+          <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.3 }} className="flex items-end justify-between bg-[#eef2f6] pt-1 px-1 border-b border-[#8c9ba8] print:hidden shrink-0">
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => setCurrentTab('dashboard')}
+                title="SAP Easy Access: Home / Workspace Modules (F3)"
+                className={`flex items-center px-3 py-1 rounded-t-[3px] space-x-1.5 border text-[11px] font-bold cursor-pointer transition-all relative top-[1px] z-10 ${
+                  currentTab === 'dashboard'
+                    ? 'bg-white border-[#8c9ba8] border-b-white text-[#0056b3] shadow-xs'
+                    : 'bg-gradient-to-b from-[#f0f4f9] to-[#d8e3ed] hover:from-white hover:to-[#e6f0fa] border-[#9cb0c2] text-slate-700'
+                }`}
+              >
+                <div className={`w-3.5 h-3.5 rounded-[2px] flex items-center justify-center ${currentTab === 'dashboard' ? 'bg-[#0056b3] text-white' : 'bg-slate-300 text-slate-700'}`}>
+                  <Home size={10} />
+                </div>
+                <span className="tracking-tight">Home (Easy Access)</span>
+              </button>
+
+              {currentTab !== 'dashboard' && (
+                <div className="flex items-center bg-white border border-[#8c9ba8] border-b-white px-3 py-1 rounded-t-[3px] space-x-2 relative top-[1px] z-10 shadow-xs">
+                  <Server size={12} className="text-[#0056b3]" />
+                  <span className="font-semibold text-[11px] text-slate-900">{getTabNameForType(currentTab)}</span>
+                  <button
+                    onClick={() => setCurrentTab('dashboard')}
+                    title="Close module and return to Home (F3)"
+                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded ml-1 cursor-pointer transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
             </div>
             
-            <div className="ml-10 mb-1 flex items-center space-x-2">
+            <div className="mb-1 flex items-center space-x-2">
               <button 
                 onClick={() => setIsHelpOpen(true)}
                 title="Keyboard Shortcut Help Guide (F1)"
@@ -738,25 +771,43 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           {/* Main Editor Area */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.4 }} className="flex-1 overflow-hidden flex flex-col bg-slate-100">
             {/* Breadcrumbs Banner */}
-            <div className="bg-[#f1f5f9] border-b border-[#cbd5e1] px-4 py-1.5 flex items-center space-x-1.5 text-[10px] text-slate-500 font-sans select-none shrink-0 print:hidden">
-              <span 
-                className="hover:text-blue-800 hover:underline cursor-pointer font-bold uppercase tracking-tight text-slate-400"
-                onClick={() => setCurrentTab('dashboard')}
-              >
-                SN ERP
-              </span>
-              <span className="text-slate-350">/</span>
-              {getBreadcrumbs(currentTab).map((crumb, idx, arr) => {
-                const isLast = idx === arr.length - 1;
-                return (
-                  <React.Fragment key={idx}>
-                    <span className={isLast ? 'text-[var(--color-sap-blue-val)] font-extrabold font-sans' : 'text-slate-600 font-medium'}>
-                      {crumb}
-                    </span>
-                    {!isLast && <span className="text-slate-300">/</span>}
-                  </React.Fragment>
-                );
-              })}
+            <div className="bg-[#f1f5f9] border-b border-[#cbd5e1] px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-500 font-sans select-none shrink-0 print:hidden">
+              <div className="flex items-center space-x-1.5 min-w-0">
+                <button 
+                  className="hover:text-blue-800 hover:underline cursor-pointer font-bold uppercase tracking-tight text-[#0056b3] flex items-center space-x-1"
+                  onClick={() => setCurrentTab('dashboard')}
+                  title="Go to Home (All Modules)"
+                >
+                  <Home size={11} />
+                  <span>Home</span>
+                </button>
+                <span className="text-slate-350">/</span>
+                {getBreadcrumbs(currentTab).map((crumb, idx, arr) => {
+                  const isLast = idx === arr.length - 1;
+                  return (
+                    <React.Fragment key={idx}>
+                      <span className={isLast ? 'text-[var(--color-sap-blue-val)] font-extrabold font-sans truncate' : 'text-slate-600 font-medium truncate'}>
+                        {crumb}
+                      </span>
+                      {!isLast && <span className="text-slate-300">/</span>}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {currentTab !== 'dashboard' && (
+                <button
+                  onClick={() => setCurrentTab('dashboard')}
+                  className="flex items-center space-x-1.5 px-2 py-0.5 bg-gradient-to-b from-[#ffffff] to-[#e4ebf5] hover:bg-[#cce8ff] border border-[#8c9ba8] hover:border-[#0056b3] rounded-[2px] text-[#00386b] text-[9px] font-bold cursor-pointer shadow-2xs active:translate-y-[0.5px] transition-all shrink-0 ml-2"
+                  title="Return to Home to select another module (F3)"
+                >
+                  <div className="w-3 h-3 bg-[#0056b3] text-white rounded-[2px] flex items-center justify-center">
+                    <Home size={8} />
+                  </div>
+                  <span>Switch Module (Home)</span>
+                  <kbd className="bg-white border border-slate-300 text-[#00386b] px-1 rounded-[2px] text-[8px] font-mono font-bold">F3</kbd>
+                </button>
+              )}
             </div>
 
             <main className="flex-1 overflow-y-auto bg-white p-2">

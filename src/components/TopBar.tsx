@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Download, Upload, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy, Settings, Star, ShieldAlert } from 'lucide-react';
+import { Download, Upload, Save, FolderOpen, File, ArrowLeft, ArrowRight, Building2, User, LogOut, ChevronDown, Printer, Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, Check, Search, Trash2, Clock, QrCode, Copy, Settings, Star, ShieldAlert, Home } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 import { useAppContext } from '../store';
 import { exportConsolidatedSitesReportToPDF, downloadPDF } from '../lib/pdfGenerator';
@@ -607,7 +607,11 @@ export const TopBar: React.FC<TopBarProps> = ({
     <div className="flex flex-col bg-[#eef2f6] border-b border-[#8c9ba8] select-none text-[11px]">
       {/* Brand & Profile Section */}
       <div className="bg-[var(--color-sap-blue-val)] text-white px-3 py-1 flex items-center justify-between border-b border-[#8c9ba8] shadow-sm">
-        <div className="flex items-center space-x-2">
+        <div 
+          onClick={() => onNavigate && onNavigate('dashboard')}
+          className="flex items-center space-x-2 cursor-pointer hover:opacity-90 transition-opacity"
+          title="Go to Home / Workspace Modules (F3)"
+        >
           <SNLogo size={22} className="text-white hover:scale-105 transition-transform" />
           <span className="font-mono text-xs font-black uppercase tracking-widest text-white">SN ENTERPRISES ERP</span>
           <span className="text-[9px] text-blue-200 bg-[#001f4d] px-1.5 py-0.5 rounded border border-blue-900 font-mono">ERP_PRD</span>
@@ -1015,14 +1019,32 @@ export const TopBar: React.FC<TopBarProps> = ({
       )}
 
       {/* Menu Bar */}
-      <div className="flex items-center px-2 py-0.5 text-[11px] space-x-3 select-none">
+      <div className="flex items-center px-2 py-0.5 text-[11px] space-x-2.5 select-none bg-[#e8eef5] border-b border-[#cbd8e6]">
+        {/* Menu (SAP Easy Access / Home) Button */}
+        <button
+          onClick={() => onNavigate && onNavigate('dashboard')}
+          title="SAP Easy Access: Return to Main Menu / Home (F3)"
+          className="flex items-center space-x-1.5 px-2 py-0.5 bg-gradient-to-b from-[#ffffff] via-[#ebf2f8] to-[#d6e3ee] hover:from-[#ffffff] hover:to-[#cce4f7] hover:border-[#0056b3] border border-[#6b8299] rounded-[2px] text-[#002f5a] font-bold text-[11px] shadow-2xs active:bg-[#c2dcfa] active:translate-y-[0.5px] cursor-pointer transition-all shrink-0"
+        >
+          <div className="flex items-center justify-center w-3.5 h-3.5 rounded-[2px] bg-[#0056b3] text-white shadow-2xs">
+            <Home size={10} className="text-white" />
+          </div>
+          <span className="font-bold text-[11px] text-[#002f5a] tracking-tight">Menu</span>
+          <kbd className="bg-[#d2dfed] text-[#00386b] text-[8px] font-mono font-bold px-1 py-0.2 rounded-[2px] border border-[#a2b8cf] shadow-2xs">F3</kbd>
+        </button>
+
         <span className="hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent px-1 cursor-default">File</span>
         <span className="hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent px-1 cursor-default">Edit</span>
         <div className="relative group">
           <span className="hover:bg-[#d9e4f1] hover:border-[#8c9ba8] border border-transparent px-1 cursor-pointer">Navigate</span>
           <div className="absolute left-0 mt-0.5 w-[220px] bg-[#f5f8fb] border border-[#8c9ba8] shadow-2xl hidden group-hover:block z-[9999] text-black">
-            <div className="bg-[var(--color-sap-blue-val)] text-white font-semibold text-[8px] px-2 py-0.5 select-none uppercase font-mono">F-Key Quick Jump</div>
+            <div className="bg-[var(--color-sap-blue-val)] text-white font-semibold text-[8px] px-2 py-0.5 select-none uppercase font-mono">Navigation & Shortcuts</div>
             <div className="max-h-80 overflow-y-auto cursor-pointer">
+              <button onClick={() => onNavigate && onNavigate('dashboard')} className="w-full text-left px-2 py-1.5 hover:bg-blue-600 hover:text-white text-[10px] flex items-center justify-between font-bold text-[#0056b3]">
+                <span>Menu / Home (Easy Access)</span>
+                <span className="bg-blue-100 text-blue-900 rounded px-1 text-[8px] font-mono select-none">F3</span>
+              </button>
+              <div className="border-t border-gray-200"></div>
               <button onClick={onShowHelp} className="w-full text-left px-2 py-1.5 hover:bg-blue-600 hover:text-white text-[10px] flex items-center justify-between">
                 <span>F1: Show Keyboard Help</span>
                 <span className="bg-gray-200 text-gray-800 rounded px-1 text-[8px] font-mono select-none">F1</span>
