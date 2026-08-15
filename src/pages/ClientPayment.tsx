@@ -42,6 +42,7 @@ export const ClientPayment = () => {
     billings, 
     clientPayments, 
     addClientPayment, 
+    updateClientPayment,
     deleteClientPayment 
   } = useAppContext();
 
@@ -56,6 +57,7 @@ export const ClientPayment = () => {
 
   // UI States
   const [isRecordModalOpen, setIsRecordModalOpen] = useState<boolean>(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState<boolean>(false);
   const [showFilters, setShowFilters] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'bills' | 'payments'>('bills');
@@ -262,24 +264,46 @@ export const ClientPayment = () => {
   // 4. Action Handlers
   // -----------------------------------------------------------------
   const handleOpenRecordPayment = () => {
+    setEditingPaymentId(null);
+    setIsRecordModalOpen(true);
+  };
+
+  const handleEditPayment = (payment: any) => {
+    setEditingPaymentId(payment.id);
     setIsRecordModalOpen(true);
   };
 
   const handleSavePayment = (formData: any) => {
-    addClientPayment({
-      projectId: formData.projectId,
-      amountReceived: Number(formData.amountReceived),
-      date: formData.date,
-      remarks: formData.remarks,
-      status: 'Received',
-      paymentMode: formData.paymentMode,
-      bankName: formData.bankName,
-      utrChequeNo: formData.utrChequeNo,
-      paymentReference: formData.paymentReference,
-      isRetentionPayment: formData.category === 'Retention' ? 1 : 0,
-      category: formData.category,
-      attachment: formData.attachmentName || undefined
-    });
+    if (editingPaymentId) {
+      updateClientPayment(editingPaymentId, {
+        projectId: formData.projectId,
+        amountReceived: Number(formData.amountReceived),
+        date: formData.date,
+        remarks: formData.remarks,
+        paymentMode: formData.paymentMode,
+        bankName: formData.bankName,
+        utrChequeNo: formData.utrChequeNo,
+        paymentReference: formData.paymentReference,
+        isRetentionPayment: formData.category === 'Retention' ? 1 : 0,
+        category: formData.category,
+        attachment: formData.attachmentName || undefined
+      });
+    } else {
+      addClientPayment({
+        projectId: formData.projectId,
+        amountReceived: Number(formData.amountReceived),
+        date: formData.date,
+        remarks: formData.remarks,
+        status: 'Received',
+        paymentMode: formData.paymentMode,
+        bankName: formData.bankName,
+        utrChequeNo: formData.utrChequeNo,
+        paymentReference: formData.paymentReference,
+        isRetentionPayment: formData.category === 'Retention' ? 1 : 0,
+        category: formData.category,
+        attachment: formData.attachmentName || undefined
+      });
+    }
     
     setIsRecordModalOpen(false);
   };
@@ -845,6 +869,13 @@ export const ClientPayment = () => {
                         <td className="p-2 border-r border-gray-200 font-sans text-gray-500 max-w-[100px] truncate">{p.enteredBy}</td>
                         <td className="p-1 text-center">
                           <button 
+                            onClick={() => handleEditPayment(p)}
+                            title="Edit receipt voucher entry"
+                            className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-sm cursor-pointer transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                          </button>
+                          <button 
                             onClick={() => handleDeleteReceipt(p.id)}
                             title="Delete receipt voucher entry"
                             className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm cursor-pointer transition-colors"
@@ -887,6 +918,7 @@ export const ClientPayment = () => {
             onClose={() => setIsRecordModalOpen(false)}
             onSave={handleSavePayment}
             projects={projects}
+            initialData={editingPaymentId ? clientPayments.find(p => p.id === editingPaymentId) : null}
           />
         )}
       </AnimatePresence>
@@ -934,13 +966,15 @@ interface PaymentEntryFormModalProps {
   onClose: () => void;
   onSave: (formData: any) => void;
   projects: Project[];
+  initialData?: any;
 }
 
 const PaymentEntryFormModal = ({
   isOpen,
   onClose,
   onSave,
-  projects
+  projects,
+  initialData
 }: PaymentEntryFormModalProps) => {
 
   const [projectId, setProjectId] = useState<string>('');
@@ -955,6 +989,21 @@ const PaymentEntryFormModal = ({
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [remarks, setRemarks] = useState<string>('');
   const [attachmentName, setAttachmentName] = useState<string>('');
+
+  React.useEffect(() => {
+    if (initialData) {
+      setProjectId(initialData.projectId || '');
+      setCategory(initialData.category || 'Against RA Bill');
+      setDate(initialData.date || new Date().toISOString().split('T')[0]);
+      setAmountReceived(initialData.amountReceived?.toString() || '');
+      setPaymentMode(initialData.paymentMode || 'NEFT');
+      setBankName(initialData.bankName || '');
+      setUtrChequeNo(initialData.utrChequeNo || '');
+      setPaymentReference(initialData.paymentReference || '');
+      setRemarks(initialData.remarks || '');
+      setAttachmentName(initialData.attachment || '');
+    }
+  }, [initialData]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1011,7 +1060,7 @@ const PaymentEntryFormModal = ({
           <div>
             <h2 className="text-[var(--color-sap-blue-val)] font-bold text-sm flex items-center space-x-1.5">
               <Landmark size={14} className="text-[#0056b3]" />
-              <span>Record Client Receipt Voucher</span>
+              <span>{initialData ? 'Edit Client Receipt Voucher' : 'Record Client Receipt Voucher'}</span>
             </h2>
             <p className="text-[10px] text-gray-500 font-mono mt-0.5">
               Secure Ledger Entry • Double-entry validation on current receivables
@@ -1155,7 +1204,7 @@ const PaymentEntryFormModal = ({
               type="submit"
               className="sap-btn bg-[var(--btn-hover-top)] text-white hover:bg-[#004494] px-5 py-1.5 font-bold cursor-pointer"
             >
-              Post Client Voucher
+              {initialData ? 'Update Client Voucher' : 'Post Client Voucher'}
             </button>
           </div>
         </form>

@@ -31,6 +31,7 @@ export const Mess: React.FC = () => {
   const [remarks, setRemarks] = useState<string>('');
   const [postToLedger, setPostToLedger] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Search/Filter list states
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
@@ -165,23 +166,67 @@ export const Mess: React.FC = () => {
       addExpenseEntry(newExpense);
     }
 
-    // Save mess booking calculation
-    const newBooking: Omit<MessBooking, 'id'> = {
-      projectId,
-      fromDate,
-      toDate,
-      workerCount,
-      ratePerWeek,
-      totalComputed,
-      amountPaid,
-      amountDue,
-      paidTo: paidTo || "N/A",
-      paymentDate: paymentDate || toDate,
-      remarks,
-      postedExpenseId
-    };
-
-    addMessBooking(newBooking);
+    if (editingId) {
+      const existing = messBookings.find(m => m.id === editingId);
+      if (existing?.postedExpenseId && !postToLedger) {
+        deleteExpenseEntry(existing.postedExpenseId);
+      } else if (!existing?.postedExpenseId && postToLedger) {
+        postedExpenseId = crypto.randomUUID();
+        const projectObj = projects.find(p => p.id === projectId);
+        const projectName = projectObj ? projectObj.name : "Selected Project";
+        const desc = `Mess Charge (${fromDate} to ${toDate}) | ${days} Days (~${weeks} Weeks) for ${workerCount} Workers @ ₹${ratePerWeek}/wk. Paid to: ${paidTo || "N/A"}. Due: ₹${amountDue}`;
+        const newExpense: ExpenseEntry = {
+          id: postedExpenseId,
+          date: paymentDate || toDate,
+          description: desc,
+          projectId: projectId,
+          kharchi: 0,
+          mess: amountPaid,
+          workerAdvance: 0,
+          tiffin: 0,
+          travel: 0,
+          machineryMaterial: 0,
+          workerPayment: 0,
+          stationery: 0,
+          others: 0,
+          crBalance: 0
+        };
+        addExpenseEntry(newExpense);
+      } else if (existing?.postedExpenseId && postToLedger) {
+        postedExpenseId = existing.postedExpenseId;
+      }
+      
+      updateMessBooking(editingId, {
+        projectId,
+        fromDate,
+        toDate,
+        workerCount,
+        ratePerWeek,
+        totalComputed,
+        amountPaid,
+        amountDue,
+        paidTo: paidTo || "N/A",
+        paymentDate: paymentDate || toDate,
+        remarks,
+        postedExpenseId
+      });
+      setEditingId(null);
+    } else {
+      addMessBooking({
+        projectId,
+        fromDate,
+        toDate,
+        workerCount,
+        ratePerWeek,
+        totalComputed,
+        amountPaid,
+        amountDue,
+        paidTo: paidTo || "N/A",
+        paymentDate: paymentDate || toDate,
+        remarks,
+        postedExpenseId
+      });
+    }
 
     // Reset Form
     setFromDate('');
@@ -190,6 +235,20 @@ export const Mess: React.FC = () => {
     setPaidTo('');
     setUserEditedPaid(false);
     setAmountPaid(0);
+  };
+
+  const handleEdit = (booking: MessBooking) => {
+    setProjectId(booking.projectId);
+    setFromDate(booking.fromDate);
+    setToDate(booking.toDate);
+    setWorkerCount(booking.workerCount);
+    setRatePerWeek(booking.ratePerWeek);
+    setAmountPaid(booking.amountPaid);
+    setPaidTo(booking.paidTo);
+    setPaymentDate(booking.paymentDate);
+    setRemarks(booking.remarks || '');
+    setPostToLedger(!!booking.postedExpenseId);
+    setEditingId(booking.id);
   };
 
   const handleDelete = (booking: MessBooking) => {
@@ -324,7 +383,7 @@ export const Mess: React.FC = () => {
         >
           <div className="bg-[#d9e4f1] border-b border-[#8c9ba8] -mx-3 -mt-3 p-1.5 mb-3 font-semibold text-gray-800 flex items-center space-x-1">
             <Calendar size={13} className="text-[#0056b3]" />
-            <span>Enter Mess Calculations</span>
+            <span>{editingId ? 'Edit Mess Calculations' : 'Enter Mess Calculations'}</span>
           </div>
 
           <form onSubmit={handleSave} className="space-y-3">
@@ -521,8 +580,8 @@ export const Mess: React.FC = () => {
               type="submit"
               className="w-full sap-btn flex items-center justify-center space-x-1 p-2 bg-[#eef2f6]"
             >
-              <Plus size={14} className="text-[#0056b3]" />
-              <span className="font-semibold text-[#0056b3]">Record Calculation & Ledger</span>
+              {editingId ? <CheckSquare size={14} className="text-[#0056b3]" /> : <Plus size={14} className="text-[#0056b3]" />}
+              <span className="font-semibold text-[#0056b3]">{editingId ? 'Update Calculation & Ledger' : 'Record Calculation & Ledger'}</span>
             </button>
           </form>
         </motion.div>
@@ -725,7 +784,14 @@ export const Mess: React.FC = () => {
                               </span>
                             )}
                           </td>
-                          <td className="border border-[#8c9ba8] p-1 text-center select-none">
+                          <td className="border border-[#8c9ba8] p-1 text-center select-none flex justify-center space-x-1">
+                            <button
+                              onClick={() => handleEdit(b)}
+                              className="p-1 text-gray-500 hover:text-blue-500 hover:bg-blue-50 rounded-xs cursor-pointer inline-flex items-center justify-center"
+                              title="Edit mess record"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
                             <button
                               onClick={() => handleDelete(b)}
                               className="p-1 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-xs cursor-pointer inline-flex items-center justify-center"
