@@ -136,7 +136,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
     { label: 'Floor Abstract', icon: Building2, tab: 'floor-abstracts', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
     { label: 'Create Bill', icon: Receipt, tab: 'billing', color: 'text-blue-600', bg: 'bg-blue-50/50 hover:bg-blue-100 border-blue-100' },
     { label: 'Client Payment', icon: DollarSign, tab: 'client-payment', color: 'text-emerald-600', bg: 'bg-emerald-50/50 hover:bg-emerald-100 border-emerald-100' },
-    { label: 'Add Expense', icon: Wallet, tab: 'expenses', color: 'text-purple-600', bg: 'bg-purple-50/50 hover:bg-purple-100 border-purple-100' }
+    { label: 'Add Expense', icon: Wallet, tab: 'expenses', color: 'text-purple-600', bg: 'bg-purple-50/50 hover:bg-purple-100 border-purple-100' },
+    { label: 'Graphs & Analytics', icon: BarChart3, tab: 'analytics', color: 'text-indigo-600', bg: 'bg-indigo-50/50 hover:bg-indigo-100 border-indigo-100' }
   ];
 
   const dynamicProjectRows = (projects || []).slice(0, 5).map((p: any) => {

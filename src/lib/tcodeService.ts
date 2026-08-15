@@ -107,6 +107,16 @@ export const DEFAULT_TCODES: TCode[] = [
   { code: "RPT03", name: "Client Reports", description: "Certified bills, outstanding summaries, and client audit records", module: "Reports", tab: "site-monthly-summary", props: { category: "client" }, isActive: true },
   { code: "RPT04", name: "Financial Reports", description: "Consolidated P&L, balance checks, and expenses trends dashboards", module: "Reports", tab: "expenses-summary", isActive: true },
   { code: "RPT05", name: "Project Reports", description: "Sites performance, start-to-end metrics, and status cards", module: "Reports", tab: "site-monthly-summary", isActive: true },
+  { code: "RPT06", name: "Graphs & Analytics", description: "Interactive SAP Business Intelligence & executive graphical reports", module: "Reports", tab: "analytics", props: { initialReportType: "all" }, isActive: true },
+  { code: "RPT07", name: "Financial Graphs", description: "Income vs expense cashflow trends, gross vs net billing analytics", module: "Reports", tab: "analytics", props: { initialReportType: "financial" }, isActive: true },
+  { code: "RPT08", name: "Project Graphs", description: "Site completion percentages, project budget comparisons & progress", module: "Reports", tab: "analytics", props: { initialReportType: "project" }, isActive: true },
+  { code: "RPT09", name: "Billing Graphs", description: "Monthly billing trend, TDS, GST, retention and bill status distribution", module: "Reports", tab: "analytics", props: { initialReportType: "billing" }, isActive: true },
+  { code: "RPT10", name: "Collection Graphs", description: "Client collections trend and client-wise outstanding balance bars", module: "Reports", tab: "analytics", props: { initialReportType: "collection" }, isActive: true },
+  { code: "RPT11", name: "Expense Graphs", description: "Operational site expenditures, category distribution and project expenses", module: "Reports", tab: "analytics", props: { initialReportType: "expense" }, isActive: true },
+  { code: "RPT12", name: "Worker Graphs", description: "Workforce status, wage disbursement trends and top earner rankings", module: "Reports", tab: "analytics", props: { initialReportType: "worker" }, isActive: true },
+  { code: "RPT13", name: "Attendance Graphs", description: "Daily attendance logs, DLR labour counts and overtime hours analysis", module: "Reports", tab: "analytics", props: { initialReportType: "attendance" }, isActive: true },
+  { code: "RPT14", name: "Subcontractor Graphs", description: "Contractor billed volumes, payments released and reconciliation dues", module: "Reports", tab: "analytics", props: { initialReportType: "subcontractor" }, isActive: true },
+  { code: "RPT15", name: "BOQ / Progress Graphs", description: "BOQ scheduled quantities vs executed work & progress monitoring", module: "Reports", tab: "analytics", props: { initialReportType: "boq" }, isActive: true },
 
   // Approvals
   { code: "APR01", name: "Pending Approvals", description: "Main check board for all authorizations (expenses, vouchers, bills)", module: "Approvals", tab: "approvals", isActive: true, requiredRoles: ["admin"] },

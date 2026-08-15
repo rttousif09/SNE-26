@@ -150,6 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       label: 'Reports',
       icon: <BarChart3 size={14} className="text-blue-600" />,
       items: [
+        { id: 'analytics', label: 'Graphs & Analytics (BI)', icon: <BarChart3 size={11} /> },
         { id: 'site-monthly-summary', label: 'Site Monthly Summary', icon: <FileText size={11} /> },
         { id: 'daily-site-summary', label: 'Daily Site Summary', icon: <ClipboardCheck size={11} /> },
         { id: 'bill-tracking', label: 'Bill Tracking Workflow', icon: <Activity size={11} /> },

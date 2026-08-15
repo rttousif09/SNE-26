@@ -36,6 +36,7 @@ import { NumberingSettingsPage } from './pages/NumberingSettings';
 import { Subcontractors } from './pages/subcontractors';
 import { DMSPage } from './pages/DMSPage';
 import { TCodeMaster } from './pages/TCodeMaster';
+import { AnalyticsReports } from './pages/analytics';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud, Pin, FolderMinus, RefreshCw, Copy, Plus, Trash2, Clock, ChevronLeft, ChevronRight, Undo, AlertCircle, Home, ArrowLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
@@ -127,6 +128,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'bill-tracking': return 'Bill Tracking Workflow';
       case 'floor-abstracts': return 'Floor Abstract';
       case 'financial-year-archive': return 'Financial Year Archive & Closing';
+      case 'analytics': return 'Graphs & Analytics Reports (BI)';
       case 'activity-log': return 'System Activity Log';
       case 'subcontractors': return 'Subcontractor Dashboard';
       case 'subcontractors-master': return 'Subcontractor Directory';
@@ -461,6 +463,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'site-monthly-summary': return <SiteMonthlySummary key={key} />;
       case 'daily-site-summary': return <DailySiteSummary key={key} />;
       case 'bill-tracking': return <BillTracking key={key} />;
+      case 'analytics': return <AnalyticsReports key={key} initialReportType={props.initialReportType} onNavigate={setCurrentTab} />;
       case 'floor-abstracts': return <FloorAbstracts key={key} />;
       case 'financial-year-archive': return <FinancialYearArchive key={key} />;
       case 'activity-log': return <ActivityLog key={key} />;
@@ -531,6 +534,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         return ['Expenses', 'Expenses Summary'];
       case 'site-monthly-summary':
         return ['Reports', 'Site Monthly Summary'];
+      case 'analytics':
+        return ['Reports', 'Graphs & Analytics (BI)'];
       case 'daily-site-summary':
         return ['Reports', 'Daily Site Summary'];
       case 'bill-tracking':
