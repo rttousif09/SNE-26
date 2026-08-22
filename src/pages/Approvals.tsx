@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
-import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck, History, Eye } from 'lucide-react';
+import { Plus, X, Save, Check, XCircle, Trash2, Bell, FileText, UserCheck, History, Eye, GitFork } from 'lucide-react';
 import { SheetPreviewModal } from '../components/SheetPreviewModal';
 
 interface AlertNotification {
@@ -769,44 +769,58 @@ export const Approvals: React.FC = () => {
                     </td>
                     {isOwner && (
                       <td className="border border-[#8c9ba8] px-2 py-1 text-center font-sans">
-                        {app.status === 'Pending' ? (
-                          <div className="flex items-center justify-center space-x-2">
-                            <button
-                              onClick={() => {
-                                setNoteModal({
-                                  id: app.id,
-                                  type: 'advance',
-                                  action: 'Approved',
-                                  details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`,
-                                  requestAmount: app.requestAmount || app.amount
-                                });
-                                setModalNotes('');
-                                setApprovedAmount((app.requestAmount || app.amount).toString());
-                              }}
-                              className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
-                            >
-                              <Check size={8} />
-                              <span>Approve</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setNoteModal({
-                                  id: app.id,
-                                  type: 'advance',
-                                  action: 'Rejected',
-                                  details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`
-                                });
-                                setModalNotes('');
-                              }}
-                              className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
-                            >
-                              <XCircle size={8} />
-                              <span>Reject</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 font-medium text-[10px]">Decided</span>
-                        )}
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if ((window as any).openDocumentFlow) {
+                                (window as any).openDocumentFlow(`APR-${app.id}`);
+                              }
+                            }}
+                            title="Inspect Worker Advance SAP Document Flow Chain"
+                            className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded cursor-pointer"
+                          >
+                            <GitFork size={11} />
+                          </button>
+                          {app.status === 'Pending' ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setNoteModal({
+                                    id: app.id,
+                                    type: 'advance',
+                                    action: 'Approved',
+                                    details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`,
+                                    requestAmount: app.requestAmount || app.amount
+                                  });
+                                  setModalNotes('');
+                                  setApprovedAmount((app.requestAmount || app.amount).toString());
+                                }}
+                                className="px-1.5 py-0.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                              >
+                                <Check size={8} />
+                                <span>Approve</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setNoteModal({
+                                    id: app.id,
+                                    type: 'advance',
+                                    action: 'Rejected',
+                                    details: `Worker Advance: ${getWorkerName(app.workerId)} - Site: ${getProjectName(app.projectId)} - Amount: ₹${app.amount.toLocaleString('en-IN')}`
+                                  });
+                                  setModalNotes('');
+                                }}
+                                className="px-1.5 py-0.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded flex items-center space-x-1 cursor-pointer text-[9px]"
+                              >
+                                <XCircle size={8} />
+                                <span>Reject</span>
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 font-medium text-[10px]">Decided</span>
+                          )}
+                        </div>
                       </td>
                     )}
                     {!isOwner && (

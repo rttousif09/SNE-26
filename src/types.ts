@@ -51,6 +51,8 @@ export interface MeasurementItem {
   cumulativeQty: number; // prevQty + qtyExecuted
   prevAmount?: number;
   cumulativeAmount?: number;
+  boqItemId?: string;
+  floorId?: string;
 }
 
 export interface Billing {
@@ -735,6 +737,28 @@ export interface SubcontractorLedger {
   summary: SubcontractorLedgerSummary;
 }
 
+export interface BOQFloor {
+  id: string;
+  floorName: string;
+  actualQuantity: number;
+  executedQuantity: number;
+  billedQuantity: number;
+  remarks?: string;
+}
+
+export interface BOQBillingHistory {
+  id: string;
+  billId: string;
+  billNo: string;
+  billDate: string;
+  floorId: string;
+  floorName: string;
+  billedQty: number;
+  rate: number;
+  amount: number;
+  status: string;
+}
+
 export interface BOQItem {
   id: string;
   itemCode: string;
@@ -747,6 +771,8 @@ export interface BOQItem {
   billedQuantity: number;
   remarks?: string;
   category?: 'Shuttering' | 'Reinforcement' | 'Concreting' | 'Excavation' | 'Masonry' | 'Plastering' | 'Flooring' | 'Other';
+  floors?: BOQFloor[];
+  billingHistory?: BOQBillingHistory[];
 }
 
 export interface BOQRevision {
@@ -875,3 +901,142 @@ export interface ClientFloorBill {
   totalAmount: number;
   rate: number;
 }
+
+// -------------------------------------------------------------
+// SAP-Style Document Flow & Business Flow Interfaces
+// -------------------------------------------------------------
+
+export type DocFlowNodeType =
+  | 'PROJECT'
+  | 'BOQ'
+  | 'EXECUTION'
+  | 'FLOOR_ABSTRACT'
+  | 'CLIENT_FLOOR_BILL'
+  | 'BILLING'
+  | 'BILL_APPROVAL'
+  | 'CLIENT_PAYMENT'
+  | 'CLIENT_LEDGER'
+  | 'WORKER'
+  | 'ATTENDANCE'
+  | 'DLR'
+  | 'KHARCHI'
+  | 'ADVANCE'
+  | 'WORKER_PAYMENT'
+  | 'WORKER_PAYMENT_APPROVAL'
+  | 'WORKER_LEDGER'
+  | 'WORKER_HOLD'
+  | 'SUBCONTRACTOR'
+  | 'SUBCONTRACTOR_BILL'
+  | 'SUBCONTRACTOR_PAYMENT'
+  | 'SUBCONTRACTOR_LEDGER'
+  | 'EXPENSE'
+  | 'EXPENSE_APPROVAL'
+  | 'MESS_BOOKING'
+  | 'MATERIAL_ITEM'
+  | 'MATERIAL_PURCHASE'
+  | 'MATERIAL_ISSUE'
+  | 'MATERIAL_RETURN'
+  | 'MATERIAL_TRANSFER'
+  | 'ASSET'
+  | 'ASSET_TRANSFER'
+  | 'ASSET_MAINTENANCE'
+  | 'DMS_DOCUMENT';
+
+export type DocFlowCategory =
+  | 'Billing'
+  | 'Labour'
+  | 'Subcontractor'
+  | 'Expense'
+  | 'Material'
+  | 'Asset'
+  | 'Project'
+  | 'Document';
+
+export type DocFlowStatus =
+  | 'Planning'
+  | 'Draft'
+  | 'Active'
+  | 'Submitted'
+  | 'Under Review'
+  | 'Pending Approval'
+  | 'Approved'
+  | 'Rejected'
+  | 'Certified'
+  | 'Posted'
+  | 'Posted & Locked'
+  | 'Paid'
+  | 'Partially Paid'
+  | 'Outstanding'
+  | 'On Hold'
+  | 'Completed'
+  | 'Archived'
+  | 'Reversed';
+
+export interface DocFlowAuditInfo {
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+  approvedBy?: string;
+  approvedDate?: string;
+  postedBy?: string;
+  postedDate?: string;
+  reversedBy?: string;
+  reversalReason?: string;
+}
+
+export interface DocFlowNode {
+  id: string; // Unique node key, e.g. "BILL-billing_id_1"
+  documentNumber: string; // Formatted SAP Document Number, e.g. "BILL-2026-0045"
+  rawId: string;
+  documentType: DocFlowNodeType;
+  documentTypeName: string; // Human-friendly type, e.g. "RA Bill"
+  category: DocFlowCategory;
+  title: string;
+  subtitle?: string;
+  date: string;
+  amount?: number;
+  quantity?: number;
+  unit?: string;
+  status: DocFlowStatus;
+  statusColor: 'green' | 'blue' | 'amber' | 'red' | 'purple' | 'gray' | 'slate';
+  precedingDocIds: string[];
+  followUpDocIds: string[];
+  projectId?: string;
+  projectName?: string;
+  clientName?: string;
+  workerId?: string;
+  workerName?: string;
+  subcontractorId?: string;
+  subcontractorName?: string;
+  targetTab: string; // Tab to navigate to in App.tsx
+  targetProps?: Record<string, any>;
+  audit: DocFlowAuditInfo;
+  rawEntity?: any;
+  stageOrder: number;
+}
+
+export interface DocFlowChain {
+  rootDoc?: DocFlowNode;
+  currentDoc?: DocFlowNode;
+  allRelatedNodes: DocFlowNode[];
+  precedingDocs: DocFlowNode[];
+  followUpDocs: DocFlowNode[];
+  stages: {
+    stageKey: string;
+    stageTitle: string;
+    stageCategory: DocFlowCategory;
+    nodes: DocFlowNode[];
+  }[];
+}
+
+export interface DocFlowFilter {
+  searchQuery?: string;
+  projectId?: string;
+  category?: string;
+  docType?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+}
+

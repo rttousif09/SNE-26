@@ -1116,7 +1116,7 @@ async function startServer() {
       if (normalizedUser === 'rejatousifsne' && password === 'Tousif09@') {
         return res.json({
           username: normalizedUser,
-          name: 'Reja Tousif',
+          name: 'Tousif Reja',
           role: 'admin',
           allowedModules: [], // empty means all / unrestricted
           allowedProjects: [] // empty means all / unrestricted

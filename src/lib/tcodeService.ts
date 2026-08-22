@@ -101,6 +101,18 @@ export const DEFAULT_TCODES: TCode[] = [
   { code: "DOC03", name: "Download Document", description: "Securely save document files to external computer", module: "Document Management", tab: "dms", props: { initialAction: "download" }, isActive: true },
   { code: "DOC04", name: "Archive Documents", description: "Lock or compress outdated folders and drawing files", module: "Document Management", tab: "dms", props: { initialAction: "archive" }, isActive: true, requiredRoles: ["admin"] },
 
+  // SAP Document Flow & Business Flow
+  { code: "DF01", name: "Document Flow Workbench", description: "End-to-End connected SAP transaction flow & lifecycle traceability chain", module: "Document Flow", tab: "document-flow", isActive: true },
+  { code: "DOCFLOW", name: "Document Flow Explorer", description: "Search, trace, inspect and audit enterprise document relationships", module: "Document Flow", tab: "document-flow", isActive: true },
+  { code: "DF02", name: "Project Lifecycle Flow", description: "Trace project from BOQ to execution, floor abstracts, and billing", module: "Document Flow", tab: "document-flow", props: { initialPreset: "billing" }, isActive: true },
+  { code: "DF03", name: "Billing & Certification Flow", description: "Trace RA bill certification, deductions, and client remittances", module: "Document Flow", tab: "document-flow", props: { initialPreset: "billing" }, isActive: true },
+  { code: "DF04", name: "Labour & Wage Flow", description: "Trace workers from DLR attendance to advances, kharchi, wage sheets and ledger", module: "Document Flow", tab: "document-flow", props: { initialPreset: "labour" }, isActive: true },
+  { code: "DF05", name: "Subcontractor Flow", description: "Trace contractor contracts, measurement bills, approvals and disbursements", module: "Document Flow", tab: "document-flow", props: { initialPreset: "subcontractor" }, isActive: true },
+  { code: "DF06", name: "Expense & Approvals Flow", description: "Trace site petty cash vouchers, approvals, and general ledger postings", module: "Document Flow", tab: "document-flow", props: { initialPreset: "expense" }, isActive: true },
+  { code: "DF07", name: "Materials Movement Flow", description: "Trace material goods receipt (GRN) to site issue and stock registers", module: "Document Flow", tab: "document-flow", props: { initialPreset: "material" }, isActive: true },
+  { code: "DF08", name: "Asset & Plant Deployment Flow", description: "Trace equipment master to site deployments and maintenance vouchers", module: "Document Flow", tab: "document-flow", props: { initialPreset: "asset" }, isActive: true },
+  { code: "FB03", name: "Document Display / Flow", description: "SAP document display, audit trail inspection, and upstream/downstream drill-down", module: "Document Flow", tab: "document-flow", isActive: true },
+
   // Reports
   { code: "RPT01", name: "Worker Reports", description: "Attendance statistics, averages, and labor cost summaries", module: "Reports", tab: "site-monthly-summary", props: { category: "workers" }, isActive: true },
   { code: "RPT02", name: "Billing Reports", description: "Tracking, milestones, timeline, and collection status updates", module: "Reports", tab: "bill-tracking", isActive: true },

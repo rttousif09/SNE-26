@@ -30,7 +30,8 @@ import {
   Briefcase,
   Users,
   Layers,
-  Sparkles
+  Sparkles,
+  GitFork
 } from 'lucide-react';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import * as XLSX from 'xlsx';
@@ -868,20 +869,34 @@ export const ClientPayment = () => {
                         </td>
                         <td className="p-2 border-r border-gray-200 font-sans text-gray-500 max-w-[100px] truncate">{p.enteredBy}</td>
                         <td className="p-1 text-center">
-                          <button 
-                            onClick={() => handleEditPayment(p)}
-                            title="Edit receipt voucher entry"
-                            className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-sm cursor-pointer transition-colors"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteReceipt(p.id)}
-                            title="Delete receipt voucher entry"
-                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm cursor-pointer transition-colors"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          <div className="flex items-center justify-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if ((window as any).openDocumentFlow) {
+                                  (window as any).openDocumentFlow(`CPAY-${p.id}`);
+                                }
+                              }}
+                              title="Inspect SAP Document Flow Chain (DF01)"
+                              className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-sm cursor-pointer transition-colors"
+                            >
+                              <GitFork size={12} />
+                            </button>
+                            <button 
+                              onClick={() => handleEditPayment(p)}
+                              title="Edit receipt voucher entry"
+                              className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-sm cursor-pointer transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteReceipt(p.id)}
+                              title="Delete receipt voucher entry"
+                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm cursor-pointer transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

@@ -268,23 +268,23 @@ export const AnalyticsReports: React.FC<AnalyticsReportsProps> = ({
           <div className="flex items-center gap-2 print:hidden">
             <button
               onClick={() => exportAnalyticsPDF(analytics, filters, reportMeta)}
-              className="px-3 py-1.5 bg-[#0056b3] hover:bg-[#004085] text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-3 py-1.5 bg-[#0056b3] hover:bg-[#004085] text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
               title="Export Report to PDF"
             >
               <Download size={13} />
               Export PDF
             </button>
             <button
-              onClick={() => exportAnalyticsExcel(analytics, reportMeta)}
-              className="px-3 py-1.5 bg-[#107c41] hover:bg-[#0b5c30] text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+              onClick={() => exportAnalyticsExcel(analytics, filters, reportMeta)}
+              className="px-3 py-1.5 bg-[#107c41] hover:bg-[#0b5c30] text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
               title="Export Multi-Sheet Excel"
             >
               <FileSpreadsheet size={13} />
               Excel (XLSX)
             </button>
             <button
-              onClick={printAnalyticsReport}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+              onClick={() => printAnalyticsReport(analytics, filters, reportMeta)}
+              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
               title="Print Report"
             >
               <Printer size={13} />

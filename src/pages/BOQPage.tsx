@@ -11,6 +11,8 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
+import { BOQItemFloorManager } from '../components/BOQItemFloorManager';
+
 export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: boolean) => void }) {
   const { 
     projects, boqs, boqAuditLogs, addBOQ, updateBOQ, deleteBOQ, addBOQAuditLog, user 
@@ -18,6 +20,9 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
 
   // Active navigation tab inside BOQ Module
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'executed' | 'billing' | 'extra' | 'audit'>('dashboard');
+  
+  // Floor Manager State
+  const [managingFloorItem, setManagingFloorItem] = useState<{ boqId: string, item: BOQItem } | null>(null);
   
   // Selected Project filter
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
@@ -1005,12 +1010,20 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleOpenSimulate(boq.id, item.id, item.itemCode, 'executed', executed)}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer bg-blue-50 px-2.5 py-1 rounded border border-blue-200"
-                            >
-                              Log Execution
-                            </button>
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={() => setManagingFloorItem({ boqId: boq.id, item: item })}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer bg-blue-50 px-2.5 py-1 rounded border border-blue-200"
+                              >
+                                Manage Floors
+                              </button>
+                              <button
+                                onClick={() => handleOpenSimulate(boq.id, item.id, item.itemCode, 'executed', executed)}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer bg-blue-50 px-2.5 py-1 rounded border border-blue-200"
+                              >
+                                Quick Log
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1078,12 +1091,20 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleOpenSimulate(boq.id, item.id, item.itemCode, 'billed', billed)}
-                              className="text-xs text-teal-600 hover:text-teal-800 font-bold transition-colors cursor-pointer bg-teal-50 px-2.5 py-1 rounded border border-teal-200"
-                            >
-                              Log Bill Certification
-                            </button>
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={() => setManagingFloorItem({ boqId: boq.id, item: item })}
+                                className="text-xs text-teal-600 hover:text-teal-800 font-bold transition-colors cursor-pointer bg-teal-50 px-2.5 py-1 rounded border border-teal-200"
+                              >
+                                Manage Floors
+                              </button>
+                              <button
+                                onClick={() => handleOpenSimulate(boq.id, item.id, item.itemCode, 'billed', billed)}
+                                className="text-xs text-teal-600 hover:text-teal-800 font-bold transition-colors cursor-pointer bg-teal-50 px-2.5 py-1 rounded border border-teal-200"
+                              >
+                                Quick Log
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1679,6 +1700,20 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
             </div>
           </div>
         </div>
+      )}
+
+      {managingFloorItem && (
+        <BOQItemFloorManager
+          item={managingFloorItem.item}
+          onClose={() => setManagingFloorItem(null)}
+          onUpdate={(updatedItem) => {
+            const boq = boqs.find(b => b.id === managingFloorItem.boqId);
+            if (!boq) return;
+            const updatedItems = boq.items.map(i => i.id === updatedItem.id ? updatedItem : i);
+            updateBOQ(boq.id, { items: updatedItems });
+            setManagingFloorItem({ boqId: boq.id, item: updatedItem });
+          }}
+        />
       )}
 
     </div>

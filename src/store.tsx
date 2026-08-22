@@ -668,12 +668,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const syncBOQBillings = async (currentBillings: Billing[]) => {
+    const currentBoqs = stateRef.current.boqs;
+    let boqsChanged = false;
+    const newBoqs = currentBoqs.map(boq => {
+      let boqChanged = false;
+      const newItems = (boq.items || []).map(item => {
+        let itemChanged = false;
+        let floorChanged = false;
+        const newFloors = (item.floors || []).map(floor => {
+          const billedQty = currentBillings.flatMap(b => (b.measurementItems || [])).filter(mi => mi.boqItemId === item.id && mi.floorId === floor.id).reduce((sum, mi) => sum + (mi.qtyExecuted || 0), 0);
+          if (floor.billedQuantity !== billedQty) {
+            floor.billedQuantity = billedQty;
+            floorChanged = true;
+          }
+          return floor;
+        });
+        if (floorChanged) itemChanged = true;
+        const totalBilled = newFloors.reduce((s, f) => s + f.billedQuantity, 0);
+        if (item.billedQuantity !== totalBilled) {
+          item.billedQuantity = totalBilled;
+          itemChanged = true;
+        }
+        return itemChanged ? { ...item, floors: newFloors } : item;
+      });
+      if (boq.items.some((_, i) => newItems[i] !== boq.items[i])) boqChanged = true;
+      if (boqChanged) boqsChanged = true;
+      return boqChanged ? { ...boq, items: newItems } : boq;
+    });
+    if (boqsChanged) {
+      setState(s => ({ ...s, boqs: newBoqs }));
+      await saveAllToStore('boqs', newBoqs).catch(() => {});
+    }
+  };
+
   const refreshBillings = async () => {
     try {
       const res = await fetch('/api/billings');
       if (res.ok) {
         const data = await res.json();
         setState(s => ({ ...s, billings: data }));
+        await syncBOQBillings(data);
         await saveAllToStore('billings', data).catch(() => {});
       }
     } catch (e) {

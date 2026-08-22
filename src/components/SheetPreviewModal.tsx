@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { X, FileText, Landmark, Users, Calculator, ShieldCheck, Download, AlertCircle, FileCheck, Eye } from 'lucide-react';
 import { WorkerPayment, Kharchi, Advance, ExpenseEntry, Worker, Project } from '../types';
+import { PDFExportButton } from './PDFExportButton';
 
 interface SheetPreviewModalProps {
   isOpen: boolean;
@@ -572,7 +573,140 @@ export const SheetPreviewModal = ({
         </div>
 
         {/* Footer actions */}
-        <div className="border-t border-gray-250 px-4 py-3 bg-gray-50 flex justify-end shrink-0">
+        <div className="border-t border-gray-250 px-4 py-3 bg-gray-50 flex justify-between items-center shrink-0">
+          <div>
+            {type === 'paymentSheet' && (
+              <PDFExportButton
+                title={`Worker Payment Sheet - ${projectName}`}
+                subtitle={`Monthly Disbursement Cycle: ${getFormatMonth(month)}`}
+                tcode="WKR-PAY-01"
+                projectName={projectName}
+                financialYear={month ? `FY ${month.substring(0, 4)}` : undefined}
+                headers={[
+                  { header: 'Sr', type: 'number' },
+                  { header: 'ID', type: 'code' },
+                  { header: 'Worker Name', type: 'text' },
+                  { header: 'Designation', type: 'text' },
+                  { header: 'Gross Wage', type: 'currency' },
+                  { header: 'Supply Amt', type: 'currency' },
+                  { header: 'Mess Ded', type: 'currency' },
+                  { header: 'Kharchi', type: 'currency' },
+                  { header: 'Advance', type: 'currency' },
+                  { header: 'Recovery', type: 'currency' },
+                  { header: 'Net Payable', type: 'currency' }
+                ]}
+                data={sheetPayments.map(p => {
+                  const w = getWorkerInfo(p.workerId);
+                  return [
+                    w.srNo,
+                    w.idNo,
+                    w.name,
+                    w.design,
+                    p.workAmount || 0,
+                    p.supplyAmount ? Number(p.supplyAmount) || 0 : 0,
+                    p.messDeduction || 0,
+                    p.kharchiDeduction || 0,
+                    p.advanceDeduction || 0,
+                    p.recoveryAmount || 0,
+                    p.netPayment || 0
+                  ];
+                })}
+                totals={[
+                  'TOTALS', '', '', '',
+                  paymentTotals.gross,
+                  paymentTotals.supply,
+                  paymentTotals.mess,
+                  paymentTotals.kharchi,
+                  paymentTotals.advance,
+                  paymentTotals.recovery,
+                  paymentTotals.net
+                ]}
+                buttonLabel="Export / Print Sheet"
+                variant="primary"
+                showDropdown
+              />
+            )}
+            {type === 'kharchiSheet' && (
+              <PDFExportButton
+                title={`Kharchi Disbursement Sheet - ${projectName}`}
+                subtitle={`Month: ${getFormatMonth(month)}`}
+                tcode="WKR-KHC-01"
+                projectName={projectName}
+                headers={[
+                  { header: 'Sr No', type: 'number' },
+                  { header: 'Worker ID', type: 'code' },
+                  { header: 'Worker Name', type: 'text' },
+                  { header: 'Date', type: 'date' },
+                  { header: 'Kharchi Amount (INR)', type: 'currency' },
+                  { header: 'Reason / Remarks', type: 'text' }
+                ]}
+                data={sheetKharchis.map((k, idx) => {
+                  const w = getWorkerInfo(k.workerId);
+                  return [
+                    idx + 1,
+                    w.idNo,
+                    w.name,
+                    k.date,
+                    k.amount || 0,
+                    'Daily pocket allowance'
+                  ];
+                })}
+                totals={['TOTALS', '', '', '', kharchiTotal, '']}
+                buttonLabel="Export Kharchi Sheet"
+                variant="primary"
+                showDropdown
+              />
+            )}
+            {type === 'advanceSheet' && (
+              <PDFExportButton
+                title={`Worker Advance Ledger Sheet - ${projectName}`}
+                subtitle={`Month: ${getFormatMonth(month)}`}
+                tcode="WKR-ADV-01"
+                projectName={projectName}
+                headers={[
+                  { header: 'Sr No', type: 'number' },
+                  { header: 'Worker ID', type: 'code' },
+                  { header: 'Worker Name', type: 'text' },
+                  { header: 'Date Disbursed', type: 'date' },
+                  { header: 'Advance Amount (INR)', type: 'currency' },
+                  { header: 'Reason / Notes', type: 'text' }
+                ]}
+                data={sheetAdvances.map((a, idx) => {
+                  const w = getWorkerInfo(a.workerId);
+                  return [
+                    idx + 1,
+                    w.idNo,
+                    w.name,
+                    a.date,
+                    a.amount || 0,
+                    a.remarks || 'Personal loan/advance'
+                  ];
+                })}
+                totals={['TOTALS', '', '', '', advanceTotal, '']}
+                buttonLabel="Export Advance Sheet"
+                variant="primary"
+                showDropdown
+              />
+            )}
+            {type === 'expenseSheet' && expenseItem && (
+              <PDFExportButton
+                title={`Site Expense Voucher Breakdown - ${projectName}`}
+                subtitle={`Voucher Date: ${expenseItem.date} | Cost Code: ${expenseItem.id}`}
+                tcode="EXP-VCH-01"
+                projectName={projectName}
+                headers={[
+                  { header: 'Cost Category / Expense Head', type: 'text' },
+                  { header: 'Disbursed Amount (INR)', type: 'currency' }
+                ]}
+                data={expenseBreakdown.map(b => [b.category, b.amount])}
+                totals={['TOTAL VOUCHER OUTLAY', expenseTotal]}
+                buttonLabel="Export Expense Voucher"
+                variant="primary"
+                showDropdown
+              />
+            )}
+          </div>
+
           <button
             type="button"
             onClick={onClose}

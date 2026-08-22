@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
-import { FileText, Save, Plus, Trash2, Settings } from 'lucide-react';
+import { FileText, Save, Plus, Trash2, Settings, GitFork } from 'lucide-react';
 import { ClientFloorBill } from '../types';
 
 export const BillTracking: React.FC = () => {
@@ -73,7 +73,22 @@ export const BillTracking: React.FC = () => {
         <h1 className="text-2xl font-bold text-[var(--color-sap-blue-val)] flex items-center">
           <FileText className="mr-2" /> Floor Abstract (Client Bill Tracking)
         </h1>
-        <div className="flex space-x-4">
+        <div className="flex space-x-3 items-center">
+          {selectedProjectId && (
+            <button
+              type="button"
+              onClick={() => {
+                if ((window as any).openWorkspaceTab) {
+                  (window as any).openWorkspaceTab('document-flow', 'SAP Document Flow', { initialProjectId: selectedProjectId, initialPreset: 'billing' });
+                }
+              }}
+              className="bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded text-xs font-bold flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+              title="Inspect Project End-to-End Document Flow (DF01)"
+            >
+              <GitFork size={13} className="text-indigo-600 mr-1" />
+              <span>Project Document Flow</span>
+            </button>
+          )}
           <SAPSelect 
             value={selectedProjectId}
             onChange={(e) => setSelectedProjectId(e.target.value)}

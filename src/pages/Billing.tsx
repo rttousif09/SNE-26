@@ -11,6 +11,9 @@ import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
 import { exportIndividualBillToPDF, downloadPDF } from '../lib/pdfGenerator';
 import { MeasurementItem, Billing as BillingType } from '../types';
+import { RelatedDocumentsSection } from '../components/RelatedDocumentsSection';
+import { GitFork } from 'lucide-react';
+import { BOQAllocationSelector } from '../components/BOQAllocationSelector';
 import {
   ResponsiveContainer,
   LineChart,
@@ -23,11 +26,12 @@ import {
 } from 'recharts';
 
 export const Billing: React.FC = () => {
-  const { user, billings, projects, clientPayments = [], addBilling, updateBilling, deleteBilling, numberingSettings = [], previewNextNumber, consumeNextNumber } = useAppContext();
+  const { user, boqs = [], billings, projects, clientPayments = [], addBilling, updateBilling, deleteBilling, numberingSettings = [], previewNextNumber, consumeNextNumber } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const billingConfig = numberingSettings?.find((s: any) => s.moduleKey === 'billing');
   const isAutoBillingActive = false; // Turned off as per user request so bill numbers are entered manually
 
+  const [isBOQSelectorOpen, setIsBOQSelectorOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'records' | 'retention' | 'tds' | 'debit' | 'hold' | 'gst'>('records');
   const [summaryProjectId, setSummaryProjectId] = useState<string>('all');
   const [isAdding, setIsAdding] = useState(false);
@@ -570,6 +574,34 @@ export const Billing: React.FC = () => {
   };
 
   const handleSubmit = (e: React.FormEvent) => {
+    // Validate BOQ Floor Quantities
+    for (const mi of formData.measurementItems) {
+      if (mi.boqItemId && mi.floorId) {
+        const boq = boqs.find(b => b.items?.some(i => i.id === mi.boqItemId));
+        if (boq) {
+          const item = boq.items.find(i => i.id === mi.boqItemId);
+          const floor = item?.floors?.find(f => f.id === mi.floorId);
+          if (floor) {
+            // The available quantity for this new bill is the executed quantity minus previously billed quantity
+            // Since we compute billing dynamically from ALL bills, we have to exclude THIS bill if we are editing.
+            // A simple validation for now is that the current bill's qtyExecuted cannot exceed the remaining available execution.
+            // remaining = floor.executedQuantity - floor.billedQuantity (excluding current bill)
+            let previousBillsQty = floor.billedQuantity;
+            if (editingId) {
+              const existingBill = billings.find(b => b.id === editingId);
+              const existingQty = existingBill?.measurementItems?.find(em => em.boqItemId === mi.boqItemId && em.floorId === mi.floorId)?.qtyExecuted || 0;
+              previousBillsQty -= existingQty;
+            }
+            if (previousBillsQty < 0) previousBillsQty = 0;
+            const available = floor.executedQuantity - previousBillsQty;
+            if (mi.qtyExecuted > available) {
+              alert(`Cannot over-bill for BOQ item ${item.itemCode} on ${floor.floorName}. Max available is ${available}.`);
+              return;
+            }
+          }
+        }
+      }
+    }
     e.preventDefault();
     const billingData = {
       ...formData,
@@ -1039,6 +1071,20 @@ export const Billing: React.FC = () => {
                 className="w-full flex items-center justify-center space-x-1.5 py-1 px-2.5 bg-[var(--btn-hover-top)] text-white hover:bg-blue-800 rounded shadow-3xs cursor-pointer font-bold uppercase transition-colors text-center font-sans"
               >
                 <span>🔍 Open Invoice Preview</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if ((window as any).openDocumentFlow) {
+                    (window as any).openDocumentFlow(`BILL-${bill.id}`);
+                  }
+                }}
+                className="w-full flex items-center justify-center space-x-1.5 py-1 px-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded shadow-3xs cursor-pointer font-bold uppercase transition-colors text-center font-sans"
+                title="Inspect Complete SAP Document Flow Lifecycle Chain"
+              >
+                <GitFork size={12} className="text-indigo-600" />
+                <span>SAP Document Flow</span>
               </button>
               {bill.hardCopyFile && (
                 <button
@@ -1790,13 +1836,22 @@ export const Billing: React.FC = () => {
                 <span className="font-semibold text-[#0056b3] text-[11px] uppercase tracking-wider">
                   Bill Measurement Sheet
                 </span>
-                <button
-                  type="button"
-                  onClick={handleAddMeasurementItem}
-                  className="bg-blue-600 hover:bg-blue-750 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-700 border-b-2 border-slate-200 transition-colors cursor-pointer"
-                >
-                  + Add Item Row
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsBOQSelectorOpen(true)}
+                    className="bg-purple-600 hover:bg-purple-750 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-purple-700 border-b-2 border-slate-200 transition-colors cursor-pointer"
+                  >
+                    + Add from BOQ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddMeasurementItem}
+                    className="bg-blue-600 hover:bg-blue-750 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-700 border-b-2 border-slate-200 transition-colors cursor-pointer"
+                  >
+                    + Add Item Row
+                  </button>
+                </div>
               </div>
 
               {formData.measurementItems.length === 0 ? (
@@ -3564,6 +3619,24 @@ export const Billing: React.FC = () => {
                     Checked & Approved By: Authorized signatory
                   </div>
                 </div>
+
+                {/* Embedded SAP Document Flow & Business Flow Lifecycle Chain */}
+                <div className="mt-8 no-print">
+                  <RelatedDocumentsSection
+                    documentIdOrNo={`BILL-${printingBill.id}`}
+                    title="Invoice Business Flow & Related Documents"
+                    onOpenViewer={(nodeId) => {
+                      if ((window as any).openDocumentFlow) {
+                        (window as any).openDocumentFlow(nodeId);
+                      }
+                    }}
+                    onNavigateToTab={(tab, title, props) => {
+                      if ((window as any).openWorkspaceTab) {
+                        (window as any).openWorkspaceTab(tab, title, props);
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -3706,6 +3779,21 @@ export const Billing: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {isBOQSelectorOpen && (
+        <BOQAllocationSelector
+          projectId={formData.projectId || ''}
+          boqs={boqs || []}
+          onSelect={(item) => {
+            setFormData(prev => {
+              const items = [...prev.measurementItems];
+              items.push(item);
+              return { ...prev, measurementItems: items };
+            });
+          }}
+          onClose={() => setIsBOQSelectorOpen(false)}
+        />
       )}
     </div>
   );

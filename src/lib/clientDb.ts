@@ -300,7 +300,7 @@ export async function simulateFetch(url: string, init?: RequestInit): Promise<Re
       if (normalizedUser === 'rejatousifsne' && password === 'Tousif09@') {
         return responseHelper({
           username: normalizedUser,
-          name: 'Reja Tousif',
+          name: 'Tousif Reja',
           role: 'admin',
           allowedModules: [],
           allowedProjects: []

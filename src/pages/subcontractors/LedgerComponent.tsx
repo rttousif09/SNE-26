@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SAPSelect } from '../../components/SAPSelect';
-import { Printer, Building, Users, Building2, Calendar } from 'lucide-react';
+import { Building2, Calendar, Users } from 'lucide-react';
 import { Project, Subcontractor, SubcontractorLedger } from '../../types';
+import { PDFExportButton } from '../../components/PDFExportButton';
 
 interface LedgerComponentProps {
   user: any;
@@ -20,13 +21,13 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
   selectedSubcontractorId,
   setSelectedSubcontractorId,
   setErrorMessage,
-  setLoading
+  setLoading,
 }) => {
   const [ledgerData, setLedgerData] = useState<SubcontractorLedger | null>(null);
   const [ledgerFilters, setLedgerFilters] = useState({
     projectId: 'all',
     startDate: '',
-    endDate: ''
+    endDate: '',
   });
 
   const handleLoadLedger = async () => {
@@ -45,11 +46,11 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to compile book ledger.");
+        throw new Error(data.error || 'Failed to compile book ledger.');
       }
       setLedgerData(data);
     } catch (err: any) {
-      setErrorMessage(err.message || "Ledger compilation error.");
+      setErrorMessage(err.message || 'Ledger compilation error.');
     } finally {
       setLoading(false);
     }
@@ -59,63 +60,50 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
     handleLoadLedger();
   }, [selectedSubcontractorId, ledgerFilters]);
 
-  const handlePrintLedger = () => {
-    const printWindow = window.open('', '', 'height=600,width=800');
-    if (!printWindow) return;
-    
-    const subName = ledgerData?.subcontractor?.name || '';
-    const subFirm = ledgerData?.subcontractor?.firmName || 'N/A';
-    const subId = ledgerData?.subcontractor?.id || '';
+  const activeSubcontractor = subcontractors.find(s => s.id === selectedSubcontractorId);
+  const activeProjectObj = projects.find(p => p.id === ledgerFilters.projectId);
 
-    printWindow.document.write('<html><head><title>Subcontractor Ledger - ' + subName + '</title>');
-    printWindow.document.write('<style>');
-    printWindow.document.write('body { font-family: monospace; font-size: 10px; margin: 20px; line-height: 1.3; }');
-    printWindow.document.write('table { width: 100%; border-collapse: collapse; margin-top: 15px; }');
-    printWindow.document.write('th, td { border: 1px solid #777; padding: 4px; text-align: left; }');
-    printWindow.document.write('th { background-color: #eee; }');
-    printWindow.document.write('.text-right { text-align: right; }');
-    printWindow.document.write('.header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; }');
-    printWindow.document.write('.summary { width: 300px; margin-left: auto; border: 1px solid #000; padding: 5px; margin-top: 15px; }');
-    printWindow.document.write('</style></head><body>');
-    printWindow.document.write('<div class="header">');
-    printWindow.document.write('<h2>SN ENTERPRISES CONSTRUCTION ERP - SUBCONTRACTOR LEDGER</h2>');
-    printWindow.document.write('<p><strong>Subcontractor ID:</strong> ' + subId + ' | <strong>Name:</strong> ' + subName + ' (' + subFirm + ')</p>');
-    printWindow.document.write('<p><strong>Report Date:</strong> ' + new Date().toLocaleString() + '</p>');
-    printWindow.document.write('</div>');
+  // Prepare export structures
+  const exportHeaders = [
+    { header: 'Date', type: 'date' as const },
+    { header: 'Reference Voucher', type: 'code' as const },
+    { header: 'Particulars & Description', type: 'text' as const },
+    { header: 'Project Site', type: 'text' as const },
+    { header: 'Debit / Payments (INR)', type: 'currency' as const },
+    { header: 'Credit / Certified (INR)', type: 'currency' as const },
+    { header: 'Running Balance (INR)', type: 'currency' as const },
+  ];
 
-    printWindow.document.write('<table><thead><tr>');
-    printWindow.document.write('<th>Date</th><th>Ref No</th><th>Project</th><th>Particulars</th><th class="text-right">Debit (Dr)</th><th class="text-right">Credit (Cr)</th><th class="text-right">Balance</th>');
-    printWindow.document.write('</tr></thead><tbody>');
+  const exportData = (ledgerData?.ledger || []).map(entry => [
+    entry.date,
+    entry.referenceNo || 'VOUCHER',
+    entry.particulars,
+    entry.projectName,
+    entry.debit,
+    entry.credit,
+    entry.balance,
+  ]);
 
-    ledgerData?.ledger?.forEach(l => {
-      printWindow.document.write('<tr>');
-      printWindow.document.write('<td>' + l.date + '</td>');
-      printWindow.document.write('<td>' + l.referenceNo + '</td>');
-      printWindow.document.write('<td>' + l.projectName + '</td>');
-      printWindow.document.write('<td>' + l.particulars + '</td>');
-      printWindow.document.write('<td class="text-right">' + (l.debit > 0 ? l.debit.toLocaleString() : '-') + '</td>');
-      printWindow.document.write('<td class="text-right">' + (l.credit > 0 ? l.credit.toLocaleString() : '-') + '</td>');
-      printWindow.document.write('<td class="text-right">' + l.balance.toLocaleString() + '</td>');
-      printWindow.document.write('</tr>');
-    });
+  const totalDebit = (ledgerData?.ledger || []).reduce((s, e) => s + (e.debit || 0), 0);
+  const totalCredit = (ledgerData?.ledger || []).reduce((s, e) => s + (e.credit || 0), 0);
 
-    printWindow.document.write('</tbody></table>');
+  const exportTotals = [
+    'CUMULATIVE TOTALS',
+    '',
+    '',
+    '',
+    totalDebit,
+    totalCredit,
+    ledgerData?.summary?.outstandingBalance || (totalCredit - totalDebit),
+  ];
 
-    printWindow.document.write('<div class="summary">');
-    printWindow.document.write('<strong>Reconciliation Summary</strong><hr/>');
-    printWindow.document.write('<div>Total Gross Bills: ₹' + ledgerData?.summary?.totalBills.toLocaleString() + '</div>');
-    printWindow.document.write('<div>Total GST Accrual: ₹' + ledgerData?.summary?.totalGst.toLocaleString() + '</div>');
-    printWindow.document.write('<div>Total Taxes (TDS): ₹' + ledgerData?.summary?.totalTds.toLocaleString() + '</div>');
-    printWindow.document.write('<div>Total Retention Deducted: ₹' + ledgerData?.summary?.totalRetention.toLocaleString() + '</div>');
-    printWindow.document.write('<div>Total Recovery Deducted: ₹' + ledgerData?.summary?.totalRecovery.toLocaleString() + '</div>');
-    printWindow.document.write('<div>Total Payments Released: ₹' + ledgerData?.summary?.totalPayments.toLocaleString() + '</div>');
-    printWindow.document.write('<hr/><strong>Outstanding Owed: ₹' + ledgerData?.summary?.outstandingBalance.toLocaleString() + '</strong>');
-    printWindow.document.write('</div>');
-
-    printWindow.document.write('<script>window.print(); window.close();</script>');
-    printWindow.document.write('</body></html>');
-    printWindow.document.close();
-  };
+  const summaryBlocks = ledgerData?.summary ? [
+    { title: 'Total Certified Bills', value: ledgerData.summary.totalBills, isCurrency: true, color: 'blue' as const },
+    { title: 'Total Payments Paid', value: ledgerData.summary.totalPayments, isCurrency: true, color: 'green' as const },
+    { title: 'Total Retention Held', value: ledgerData.summary.totalRetention, isCurrency: true, color: 'orange' as const },
+    { title: 'Total TDS Deducted', value: ledgerData.summary.totalTds, isCurrency: true, color: 'red' as const },
+    { title: 'Outstanding Balance', value: ledgerData.summary.outstandingBalance, isCurrency: true, color: 'purple' as const },
+  ] : undefined;
 
   return (
     <div className="space-y-4">
@@ -126,16 +114,20 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
             <Users size={12} className="text-amber-500" />
             <span>Subcontractor Master *</span>
           </span>
-          <SAPSelect 
+          <SAPSelect
             value={selectedSubcontractorId}
-            onChange={(e) => {
+            onChange={e => {
               setSelectedSubcontractorId(e.target.value);
               setErrorMessage(null);
             }}
             className="border border-gray-300 rounded font-semibold p-1 text-[10px] bg-white outline-none focus:border-amber-500"
           >
             <option value="">-- Choose master cred partner --</option>
-            {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.firmName || 'Personal'})</option>)}
+            {subcontractors.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.firmName || 'Personal'})
+              </option>
+            ))}
           </SAPSelect>
         </div>
 
@@ -144,13 +136,17 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
             <Building2 size={12} className="text-amber-500" />
             <span>Site Filter</span>
           </span>
-          <SAPSelect 
+          <SAPSelect
             value={ledgerFilters.projectId}
-            onChange={(e) => setLedgerFilters(prev => ({ ...prev, projectId: e.target.value }))}
+            onChange={e => setLedgerFilters(prev => ({ ...prev, projectId: e.target.value }))}
             className="border border-gray-300 rounded p-1 text-[10px] bg-white outline-none focus:border-amber-500"
           >
             <option value="all">All Projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
           </SAPSelect>
         </div>
 
@@ -160,32 +156,40 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
             <span>Date Boundaries</span>
           </span>
           <div className="inline-flex space-x-1 items-center">
-            <input 
-              type="date" 
+            <input
+              type="date"
               value={ledgerFilters.startDate}
-              onChange={(e) => setLedgerFilters(prev => ({ ...prev, startDate: e.target.value }))}
+              onChange={e => setLedgerFilters(prev => ({ ...prev, startDate: e.target.value }))}
               className="border border-gray-300 rounded font-mono p-0.5 text-[10px] outline-none focus:border-amber-500"
             />
             <span className="text-gray-400 font-bold">-</span>
-            <input 
-              type="date" 
+            <input
+              type="date"
               value={ledgerFilters.endDate}
-              onChange={(e) => setLedgerFilters(prev => ({ ...prev, endDate: e.target.value }))}
+              onChange={e => setLedgerFilters(prev => ({ ...prev, endDate: e.target.value }))}
               className="border border-gray-300 rounded font-mono p-0.5 text-[10px] outline-none focus:border-amber-500"
             />
           </div>
         </div>
 
-        <div className="flex-1"></div>
+        <div className="flex-1" />
 
-        <button 
-          onClick={handlePrintLedger}
-          disabled={!selectedSubcontractorId || !ledgerData}
-          className="bg-gray-100 hover:bg-gray-200 border border-gray-350 text-gray-850 font-bold px-3 py-1.5 rounded flex items-center space-x-1 text-xs transition disabled:opacity-50 hover:scale-105 shadow-sm"
-        >
-          <Printer size={12} />
-          <span>Print Ledger Book</span>
-        </button>
+        {selectedSubcontractorId && ledgerData && (
+          <PDFExportButton
+            title={`Subcontractor Ledger - ${activeSubcontractor?.name || 'Statement'}`}
+            subtitle={`Firm: ${activeSubcontractor?.firmName || 'N/A'} | Trade: ${activeSubcontractor?.workCategory || 'General Civil'}`}
+            tcode="SUB-LDG-01"
+            projectName={activeProjectObj?.name || 'All Sites'}
+            dateRange={ledgerFilters.startDate && ledgerFilters.endDate ? `${ledgerFilters.startDate} to ${ledgerFilters.endDate}` : undefined}
+            headers={exportHeaders}
+            data={exportData}
+            totals={exportTotals}
+            summaryBlocks={summaryBlocks}
+            buttonLabel="Export Ledger Book"
+            variant="primary"
+            showDropdown
+          />
+        )}
       </div>
 
       {/* Complete double-entry reconciliation sheet */}
@@ -199,11 +203,16 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
           <div className="bg-white border rounded shadow-sm p-4 lg:col-span-3 space-y-3">
             <div className="border-b pb-2 flex justify-between items-center">
               <div>
-                <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest">{ledgerData.subcontractor?.name} Ledger</h3>
-                <p className="text-[9px] text-gray-500 font-bold">Firm: {ledgerData.subcontractor?.firmName || 'Personal'} | Category: {ledgerData.subcontractor?.workCategory || 'Civil Work'}</p>
+                <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest">
+                  {ledgerData.subcontractor?.name} Ledger
+                </h3>
+                <p className="text-[9px] text-gray-500 font-bold">
+                  Firm: {ledgerData.subcontractor?.firmName || 'Personal'} | Category:{' '}
+                  {ledgerData.subcontractor?.workCategory || 'Civil Work'}
+                </p>
               </div>
               <span className="bg-[#1e293b] text-amber-400 px-3 py-1 text-xs font-mono font-bold border rounded border-gray-800">
-                Ledger Out Balance: ₹{ledgerData.summary?.outstandingBalance.toLocaleString()}
+                Ledger Out Balance: ₹{ledgerData.summary?.outstandingBalance.toLocaleString('en-IN')}
               </span>
             </div>
 
@@ -215,99 +224,82 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
                     <th className="p-2">Reference</th>
                     <th className="p-2">Particulars Segment</th>
                     <th className="p-2">Project</th>
-                    <th className="p-2 text-right">Debit (Dr Deduction)</th>
+                    <th className="p-2 text-right">Debit (Dr Paid)</th>
                     <th className="p-2 text-right">Credit (Cr Certified)</th>
                     <th className="p-2 text-right">Running Net Balance</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 font-mono">
-                  {!ledgerData.ledger || ledgerData.ledger.length === 0 ? (
+                <tbody className="divide-y divide-gray-200">
+                  {ledgerData.ledger.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-4 text-center text-gray-400">No approved bills or payment records registered in date ranges.</td>
+                      <td colSpan={7} className="p-6 text-center text-gray-400 italic">
+                        No financial events recorded within selected parameters.
+                      </td>
                     </tr>
                   ) : (
-                    ledgerData.ledger.map((line, idx) => {
-                      return (
-                        <tr key={idx} className="hover:bg-gray-50/50 transition">
-                          <td className="p-2 text-gray-500 text-center font-bold">{line.date}</td>
-                          <td className="p-2 font-bold text-[var(--color-sap-blue-val)]">{line.referenceNo}</td>
-                          <td className="p-2 font-medium text-gray-800">{line.particulars}</td>
-                          <td className="p-2 text-gray-400 text-[9px] font-bold">{line.projectName}</td>
-                          <td className="p-2 text-right text-rose-600 font-bold">
-                            {line.debit > 0 ? `₹${line.debit.toLocaleString()}` : '-'}
-                          </td>
-                          <td className="p-2 text-right text-emerald-600 font-bold">
-                            {line.credit > 0 ? `₹${line.credit.toLocaleString()}` : '-'}
-                          </td>
-                          <td className="p-2 text-right text-gray-900 font-extrabold font-mono">
-                            ₹{line.balance.toLocaleString()}
-                          </td>
-                        </tr>
-                      );
-                    })
+                    ledgerData.ledger.map((entry, idx) => (
+                      <tr key={idx} className="hover:bg-amber-50/40 transition">
+                        <td className="p-2 font-mono text-center text-gray-500">{entry.date}</td>
+                        <td className="p-2 font-mono font-bold text-blue-600">
+                          {entry.referenceNo || 'VOUCHER'}
+                        </td>
+                        <td className="p-2 text-gray-800">{entry.particulars}</td>
+                        <td className="p-2 font-semibold text-gray-600">{entry.projectName}</td>
+                        <td className="p-2 font-mono text-right text-emerald-600 font-bold">
+                          {entry.debit > 0 ? `₹${entry.debit.toLocaleString('en-IN')}` : '-'}
+                        </td>
+                        <td className="p-2 font-mono text-right text-blue-600 font-bold">
+                          {entry.credit > 0 ? `₹${entry.credit.toLocaleString('en-IN')}` : '-'}
+                        </td>
+                        <td
+                          className={`p-2 font-mono text-right font-black ${
+                            entry.balance > 0 ? 'text-amber-700' : 'text-emerald-700'
+                          }`}
+                        >
+                          ₹{entry.balance.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Right: Summary panel */}
-          <div className="space-y-3">
-            <div className="bg-white border border-[#8c9ba8] p-4 rounded shadow-sm text-[10px]">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest border-b pb-1.5 mb-2.5 flex items-center space-x-1">
-                <Building size={12} className="text-amber-500" />
-                <span>Ledger Balances Summary</span>
-              </h3>
-              
-              <div className="space-y-2 font-sans">
-                <div className="flex justify-between border-b pb-1 text-gray-700">
-                  <span>1. Gross Certified Work:</span>
-                  <strong className="font-mono text-gray-950">₹{ledgerData.summary?.totalBills.toLocaleString()}</strong>
-                </div>
-
-                <div className="flex justify-between border-b pb-1 text-gray-700">
-                  <span>2. Associated GST Accrual:</span>
-                  <strong className="font-mono text-gray-950">₹{ledgerData.summary?.totalGst.toLocaleString()}</strong>
-                </div>
-
-                <div className="flex justify-between border-b pb-1 text-orange-950">
-                  <span>3. Retention Reserves Held:</span>
-                  <strong className="font-mono text-orange-650">-₹{ledgerData.summary?.totalRetention.toLocaleString()}</strong>
-                </div>
-
-                <div className="flex justify-between border-b pb-1 text-emerald-950">
-                  <span>4. TDS Compliances Held:</span>
-                  <strong className="font-mono text-emerald-600">-₹{ledgerData.summary?.totalTds.toLocaleString()}</strong>
-                </div>
-
-                <div className="flex justify-between border-b pb-1 text-pink-950 font-bold">
-                  <span>5. Backcharges / Recovery:</span>
-                  <strong className="font-mono text-pink-700">-₹{ledgerData.summary?.totalRecovery.toLocaleString()}</strong>
-                </div>
-
-                <div className="flex justify-between border-b pb-1 text-blue-950">
-                  <span>6. Direct Liquid Payouts:</span>
-                  <strong className="font-mono text-blue-700">-₹{ledgerData.summary?.totalPayments.toLocaleString()}</strong>
-                </div>
-
-                <div className="bg-[#1e293b] text-amber-400 p-2 border border-[#334155] rounded text-center">
-                  <span className="text-[8px] uppercase font-bold">creditor ledger outstanding liability</span>
-                  <div className="text-sm font-extrabold font-mono mt-1">₹{ledgerData.summary?.outstandingBalance.toLocaleString()}</div>
-                </div>
+          {/* Quick Summary Card */}
+          <div className="bg-white border rounded shadow-sm p-4 space-y-3">
+            <h4 className="font-bold text-gray-800 border-b pb-1 text-xs">Financial Summary</h4>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Gross Work Certified:</span>
+                <span className="font-bold text-blue-600">
+                  ₹{ledgerData.summary.totalBills.toLocaleString('en-IN')}
+                </span>
               </div>
-            </div>
-
-            {/* Static compliance card */}
-            <div className="bg-white border border-[#8c9ba8] p-3 rounded shadow-sm text-[9px] space-y-1.5">
-              <h4 className="font-bold text-gray-700 uppercase border-b pb-1">Master Compliance & Bank details</h4>
-              <div><strong>Entity Name:</strong> {ledgerData.subcontractor?.name}</div>
-              <div><strong>Firm Name:</strong> {ledgerData.subcontractor?.firmName || 'Personal'}</div>
-              <div><strong>Bank Name:</strong> {ledgerData.subcontractor?.bankName || 'N/A'}</div>
-              <div><strong>Bank Account ID:</strong> {ledgerData.subcontractor?.accountNumber || 'N/A'}</div>
-              <div><strong>Bank IFSC Code:</strong> {ledgerData.subcontractor?.ifscCode || 'N/A'}</div>
-              <div><strong>Branch Location:</strong> {ledgerData.subcontractor?.branch || 'N/A'}</div>
-              <div><strong>Compliance PAN:</strong> {ledgerData.subcontractor?.panNumber || 'N/A'}</div>
-              <div><strong>Compliance GSTIN:</strong> {ledgerData.subcontractor?.gstin || 'N/A'}</div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Payments Disbursed:</span>
+                <span className="font-bold text-emerald-600">
+                  ₹{ledgerData.summary.totalPayments.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Retention Retained:</span>
+                <span className="font-bold text-amber-600">
+                  ₹{ledgerData.summary.totalRetention.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">TDS Withheld:</span>
+                <span className="font-bold text-rose-600">
+                  ₹{ledgerData.summary.totalTds.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="border-t pt-2 flex justify-between font-bold text-sm">
+                <span>Net Outstanding:</span>
+                <span className="text-amber-600">
+                  ₹{ledgerData.summary.outstandingBalance.toLocaleString('en-IN')}
+                </span>
+              </div>
             </div>
           </div>
         </div>

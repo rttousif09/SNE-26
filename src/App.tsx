@@ -37,6 +37,11 @@ import { Subcontractors } from './pages/subcontractors';
 import { DMSPage } from './pages/DMSPage';
 import { TCodeMaster } from './pages/TCodeMaster';
 import { AnalyticsReports } from './pages/analytics';
+import { DocumentFlowPage } from './pages/DocumentFlow';
+import { DocumentFlowModal } from './components/DocumentFlowModal';
+import { CommandPalette } from './components/common/CommandPalette';
+import { AlertCenterModal } from './components/common/AlertCenterModal';
+import { Project360Modal } from './components/common/Project360Modal';
 import { Server, X, ChevronDown, ChevronUp, Download, Upload, Keyboard, HelpCircle, CheckSquare, Cloud, Pin, FolderMinus, RefreshCw, Copy, Plus, Trash2, Clock, ChevronLeft, ChevronRight, Undo, AlertCircle, Home, ArrowLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { initAuth, googleSignIn, getAccessToken } from './lib/auth';
@@ -57,6 +62,61 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [tabProps, setTabProps] = useState<any>({});
   const [isMobile, setIsMobile] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  
+  // Modals state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isAlertCenterOpen, setIsAlertCenterOpen] = useState(false);
+  const [project360State, setProject360State] = useState<{ isOpen: boolean; projectId?: string }>({ isOpen: false });
+  const [docFlowModalState, setDocFlowModalState] = useState<{ isOpen: boolean; documentIdOrNo?: string }>({
+    isOpen: false
+  });
+
+  // Expose global helpers
+  useEffect(() => {
+    (window as any).openDocumentFlow = (documentIdOrNo?: string) => {
+      setDocFlowModalState({ isOpen: true, documentIdOrNo });
+    };
+
+    (window as any).openProject360 = (projectId?: string) => {
+      setProject360State({ isOpen: true, projectId });
+    };
+
+    (window as any).openAlertCenter = () => {
+      setIsAlertCenterOpen(true);
+    };
+
+    (window as any).openCommandPalette = () => {
+      setIsCommandPaletteOpen(true);
+    };
+
+    (window as any).openWorkspaceTab = (tab: string, title?: string, props?: any) => {
+      setCurrentTab(tab);
+      if (props) {
+        setTabProps(props);
+      }
+    };
+
+    return () => {
+      delete (window as any).openDocumentFlow;
+      delete (window as any).openProject360;
+      delete (window as any).openAlertCenter;
+      delete (window as any).openCommandPalette;
+      delete (window as any).openWorkspaceTab;
+    };
+  }, []);
+
+  // Ctrl + K listener to trigger Command Palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || e.key === '/')) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Navigation tab history
   const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
@@ -164,8 +224,6 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   const [backupFileError, setBackupFileError] = useState<string | null>(null);
   const [backupSuccess, setBackupSuccess] = useState<string | null>(null);
   const [isBackingUp, setIsBackingUp] = useState(false);
-  const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [showFKeysBar, setShowFKeysBar] = useState(true);
   const [successToast, setSuccessToast] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
   const [isSessionLocked, setIsSessionLocked] = useState(false);
 
@@ -371,69 +429,6 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
     }
   };
 
-  // Global F-Key Listener reflecting classic SAP ERP workflows
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // List of supported Keyboard functional keys
-      const trackedFKeys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'F13'];
-      
-      if (trackedFKeys.includes(e.key)) {
-        // Prevent default actions (e.g., browser Help on F1, Page refresh on F5, full screen on F11, inspect tools on F12)
-        e.preventDefault();
-        
-        switch (e.key) {
-          case 'F1':
-            setIsHelpOpen(p => !p);
-            break;
-          case 'F13':
-            setIsSessionLocked(true);
-            break;
-          case 'F2':
-            setCurrentTab('site-monthly-summary');
-            break;
-          case 'F3':
-            // Classic SAP Back/Exit key -> Return home/dashboard view
-            setCurrentTab('dashboard');
-            break;
-          case 'F4':
-            setCurrentTab('approvals');
-            break;
-          case 'F5':
-            setCurrentTab('projects');
-            break;
-          case 'F6':
-            setCurrentTab('workers');
-            break;
-          case 'F7':
-            setCurrentTab('dlr');
-            break;
-          case 'F8':
-            setCurrentTab('kharchi');
-            break;
-          case 'F9':
-            setCurrentTab('advance');
-            break;
-          case 'F10':
-            setCurrentTab('worker-payment');
-            break;
-          case 'F11':
-            setCurrentTab('expenses');
-            break;
-          case 'F12':
-            setCurrentTab('materials');
-            break;
-          default:
-            break;
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
   const renderContent = () => {
     const type = currentTab;
     const props = tabProps || {};
@@ -475,6 +470,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'subcontractors-audit': return <Subcontractors key={key} initialTab="audit" />;
       case 'numbering-settings': return <NumberingSettingsPage key={key} />;
       case 'tcode-master': return <TCodeMaster key={key} />;
+      case 'document-flow': 
+        return <DocumentFlowPage key={key} initialDocumentIdOrNo={props.initialDocumentIdOrNo} initialPreset={props.initialPreset} initialProjectId={props.initialProjectId} />;
       case 'staff-management':
         if (user?.username === 'saddamsne' || user?.username === 'rejatousifsne') {
           return <StaffManagement key={key} />;
@@ -518,6 +515,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         return ['Billing & Collections', 'BOQ Management'];
       case 'dms':
         return ['Document System', 'DMS Document Center'];
+      case 'document-flow':
+        return ['Document System', 'SAP Document Flow & Traceability (DF01)'];
       case 'billing':
         return ['Billing & Collections', 'Billing Management'];
       case 'client-payment':
@@ -559,224 +558,67 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
 
   return (
     <div className="flex flex-col h-screen bg-[var(--color-sap-bg)] text-[11px] font-sans overflow-hidden">
-      <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.1 }} className="print:hidden">
+      <div className="print:hidden">
         <TopBar 
           user={user} 
           onLogout={onLogout} 
-          onShowHelp={() => setIsHelpOpen(true)}
-          onToggleFKeysBar={() => setShowFKeysBar(p => !p)}
-          showFKeysBar={showFKeysBar}
           onNavigate={setCurrentTab}
           onLock={() => setIsSessionLocked(true)}
-          onGoBack={handleGoBack}
-          onGoForward={handleGoForward}
-          canGoBack={historyIndex > 0}
-          canGoForward={historyIndex < tabHistory.length - 1}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onOpenAlertCenter={() => setIsAlertCenterOpen(true)}
+          breadcrumbs={getBreadcrumbs(currentTab)}
         />
-      </motion.div>
+      </div>
       <div className="flex flex-1 overflow-hidden">
-        {currentTab === 'dashboard' && (
-          <motion.div 
-            initial={{ x: -20, opacity: 0 }} 
-            animate={{ x: 0, opacity: 1 }} 
-            exit={{ x: -20, opacity: 0 }}
-            transition={{ duration: 0.2 }} 
-            className="flex h-full print:hidden shrink-0"
-          >
-            <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} />
-          </motion.div>
-        )}
+        {/* Permanent Collapsible Enterprise Sidebar */}
+        <div className="flex h-full print:hidden shrink-0 z-20">
+          <Sidebar 
+            currentTab={currentTab} 
+            setCurrentTab={setCurrentTab} 
+            isCollapsed={isSidebarCollapsed}
+            setIsCollapsed={setIsSidebarCollapsed}
+          />
+        </div>
+
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           {/* Editor Tabs */}
-          <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.3, delay: 0.3 }} className="flex items-end justify-between bg-[#eef2f6] pt-1 px-1 border-b border-[#8c9ba8] print:hidden shrink-0">
-            <div className="flex items-center space-x-1">
+          <div className="flex items-end justify-between bg-[#eef2f6] dark:bg-slate-900 pt-1 px-1 border-b border-[#8c9ba8] dark:border-slate-800 print:hidden shrink-0 h-[29px]">
+            <div className="flex items-center space-x-1 h-full">
               <button
                 onClick={() => setCurrentTab('dashboard')}
-                title="SAP Easy Access: Home / Workspace Modules (F3)"
-                className={`flex items-center px-3 py-1 rounded-t-[3px] space-x-1.5 border text-[11px] font-bold cursor-pointer transition-all relative top-[1px] z-10 ${
+                title="SAP Easy Access: Home / Workspace Modules"
+                className={`flex items-center px-3 h-[24px] rounded-t-[3px] space-x-1.5 border text-[11px] font-bold cursor-pointer transition-all relative top-[1px] z-10 ${
                   currentTab === 'dashboard'
-                    ? 'bg-white border-[#8c9ba8] border-b-white text-[#0056b3] shadow-xs'
-                    : 'bg-gradient-to-b from-[#f0f4f9] to-[#d8e3ed] hover:from-white hover:to-[#e6f0fa] border-[#9cb0c2] text-slate-700'
+                    ? 'bg-white dark:bg-[#1E2228] border-[#8c9ba8] dark:border-slate-700 border-b-white dark:border-b-[#1E2228] text-[#0056b3] dark:text-blue-400 shadow-xs'
+                    : 'bg-gradient-to-b from-[#f0f4f9] to-[#d8e3ed] dark:from-slate-800 dark:to-slate-900 hover:from-white hover:to-[#e6f0fa] border-[#9cb0c2] dark:border-slate-700 text-slate-700 dark:text-slate-300'
                 }`}
               >
-                <div className={`w-3.5 h-3.5 rounded-[2px] flex items-center justify-center ${currentTab === 'dashboard' ? 'bg-[#0056b3] text-white' : 'bg-slate-300 text-slate-700'}`}>
+                <div className={`w-3.5 h-3.5 rounded-[2px] flex items-center justify-center ${currentTab === 'dashboard' ? 'bg-[#0056b3] text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
                   <Home size={10} />
                 </div>
                 <span className="tracking-tight">Home (Easy Access)</span>
               </button>
 
               {currentTab !== 'dashboard' && (
-                <div className="flex items-center bg-white border border-[#8c9ba8] border-b-white px-3 py-1 rounded-t-[3px] space-x-2 relative top-[1px] z-10 shadow-xs">
-                  <Server size={12} className="text-[#0056b3]" />
-                  <span className="font-semibold text-[11px] text-slate-900">{getTabNameForType(currentTab)}</span>
+                <div className="flex items-center h-[24px] bg-white dark:bg-[#1E2228] border border-[#8c9ba8] dark:border-slate-700 border-b-white dark:border-b-[#1E2228] px-3 rounded-t-[3px] space-x-2 relative top-[1px] z-10 shadow-xs">
+                  <Server size={12} className="text-[#0056b3] dark:text-blue-400" />
+                  <span className="font-semibold text-[11px] text-slate-900 dark:text-slate-100">{getTabNameForType(currentTab)}</span>
                   <button
                     onClick={() => setCurrentTab('dashboard')}
-                    title="Close module and return to Home (F3)"
-                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded ml-1 cursor-pointer transition-colors"
+                    title="Close module and return to Home"
+                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded ml-1 cursor-pointer transition-colors flex items-center justify-center"
                   >
                     <X size={12} />
                   </button>
                 </div>
               )}
             </div>
+          </div>
             
-            <div className="mb-1 flex items-center space-x-2">
-              <button 
-                onClick={() => setIsHelpOpen(true)}
-                title="Keyboard Shortcut Help Guide (F1)"
-                className="text-[9px] text-[#0056b3] border border-[#cbdcf0] bg-blue-50 px-2 py-0.5 rounded shadow-sm hover:bg-[#cce8ff] hover:border-blue-400 font-bold font-mono uppercase cursor-pointer"
-              >
-                F1 keyboard help
-              </button>
-              <button 
-                onClick={() => setShowFKeysBar(p => !p)}
-                title="Toggle Function Keys Ribbon"
-                className={`text-[9px] px-2 py-0.5 rounded shadow-sm font-bold font-mono uppercase cursor-pointer border ${showFKeysBar ? 'text-green-700 border-green-200 bg-green-50 hover:bg-green-100' : 'text-gray-500 border-gray-300 bg-gray-50 hover:bg-gray-100'}`}
-              >
-                {showFKeysBar ? "F-Keys Ribbon ON" : "F-Keys Ribbon OFF"}
-              </button>
-            </div>
-          </motion.div>
-          
-          {/* Classic SAP Function Keys Navigation Ribbon */}
-          {showFKeysBar && (
-            <div className="bg-[#f0f4f8] border-b border-[#8c9ba8] px-2 py-1 flex items-center space-x-1.5 overflow-x-auto select-none print:hidden h-8 shrink-0 text-[10px]">
-              <span className="font-bold text-[var(--color-sap-blue-val)] mr-2 uppercase tracking-wider font-mono text-[9px] flex items-center shrink-0">
-                <Keyboard size={12} className="mr-1 text-blue-800" />
-                Active F-Keys:
-              </span>
-              
-              <button 
-                onClick={() => setIsHelpOpen(true)} 
-                title="System Help Guide & Keyboard assignments (F1)"
-                className="px-2 py-0.5 bg-white hover:bg-amber-50 border border-amber-300 hover:border-amber-500 rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer"
-              >
-                <kbd className="bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow-sm font-mono px-1 rounded text-[8px] font-bold border border-amber-600">F1</kbd>
-                <span className="text-amber-950 font-sans text-[9px]">Help Desk</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('site-monthly-summary')} 
-                title="Jump to Site Monthly Report (F2)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'site-monthly-summary' ? 'bg-[#cce8ff] border-blue-500 text-blue-900 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F2</kbd>
-                <span className="font-sans text-[9px]">Monthly Summary</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('dashboard')} 
-                title="Exit module and return to dashboard (F3)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'dashboard' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-red-500 to-red-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-red-600">F3</kbd>
-                <span className="font-sans text-[9px]">Overview [Back]</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('approvals')} 
-                title="Jump to Approvals Queue (F4)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'approvals' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-blue-500 to-blue-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-blue-600">F4</kbd>
-                <span className="font-sans text-[9px] flex items-center space-x-1">
-                  <span>Approvals</span>
-                  {pendingCount > 0 && (
-                    <span className="bg-red-600 text-white font-mono text-[8px] px-1 rounded-full font-bold ml-1 animate-pulse">
-                      {pendingCount}
-                    </span>
-                  )}
-                </span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('projects')} 
-                title="Jump to Projects screen (F5)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'projects' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F5</kbd>
-                <span className="font-sans text-[9px]">Projects</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('workers')} 
-                title="Jump to Workers Management (F6)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'workers' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F6</kbd>
-                <span className="font-sans text-[9px]">Workers HQ</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('dlr')} 
-                title="Jump to Daily Labour Report registration (F7)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'dlr' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F7</kbd>
-                <span className="font-sans text-[9px]">DLR Entry</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('kharchi')} 
-                title="Jump to Kharchi logs (F8)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'kharchi' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F8</kbd>
-                <span className="font-sans text-[9px]">Kharchi</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('advance')} 
-                title="Jump to Advance register (F9)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'advance' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F9</kbd>
-                <span className="font-sans text-[9px]">Advance Logs</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('worker-payment')} 
-                title="Jump to Workers Payment Sheet generation (F10)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'worker-payment' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F10</kbd>
-                <span className="font-sans text-[9px]">Wage Sheets</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('expenses')} 
-                title="Jump to Expenses Ledger (F11)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'expenses' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F11</kbd>
-                <span className="font-sans text-[9px]">Expenses</span>
-              </button>
-
-              <button 
-                onClick={() => setCurrentTab('materials')} 
-                title="Jump to Material & Inventory management (F12)"
-                className={`px-2 py-0.5 border rounded-sm font-semibold flex items-center space-x-1 shadow-sm transition-colors cursor-pointer ${currentTab === 'materials' ? 'bg-[#cce8ff] border-blue-500 text-blue-950 font-bold' : 'bg-white border-gray-300 hover:bg-[#e6f2ff] hover:border-blue-500 hover:text-blue-900 text-gray-700'}`}
-              >
-                <kbd className="bg-gradient-to-b from-gray-500 to-gray-600 text-white font-mono px-1 rounded text-[8px] font-bold border border-gray-600">F12</kbd>
-                <span className="font-sans text-[9px]">Materials ERP</span>
-              </button>
-
-              <div className="flex-grow"></div>
-              
-              <button 
-                onClick={() => setShowFKeysBar(false)} 
-                title="Minimize F-Key Ribbon (Can toggle back in Navigate/Help menu)"
-                className="hover:bg-red-50 p-1 rounded-sm text-gray-500 hover:text-white shrink-0 cursor-pointer text-[10px] font-bold border border-transparent hover:border-red-600 shadow-sm leading-none transition-colors mr-1"
-              >
-                × Hide
-              </button>
-            </div>
-          )}
-
           {/* Main Editor Area */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.4 }} className="flex-1 overflow-hidden flex flex-col bg-slate-100">
             {/* Breadcrumbs Banner */}
-            <div className="bg-[#f1f5f9] border-b border-[#cbd5e1] px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-500 font-sans select-none shrink-0 print:hidden">
+            <div className="bg-[#f1f5f9] border-b border-[#cbd5e1] px-3 py-1 flex items-center justify-between text-[10px] text-slate-500 font-sans select-none shrink-0 print:hidden h-[28px]">
               <div className="flex items-center space-x-1.5 min-w-0">
                 <button 
                   className="hover:text-blue-800 hover:underline cursor-pointer font-bold uppercase tracking-tight text-[#0056b3] flex items-center space-x-1"
@@ -804,13 +646,12 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
                 <button
                   onClick={() => setCurrentTab('dashboard')}
                   className="flex items-center space-x-1.5 px-2 py-0.5 bg-gradient-to-b from-[#ffffff] to-[#e4ebf5] hover:bg-[#cce8ff] border border-[#8c9ba8] hover:border-[#0056b3] rounded-[2px] text-[#00386b] text-[9px] font-bold cursor-pointer shadow-2xs active:translate-y-[0.5px] transition-all shrink-0 ml-2"
-                  title="Return to Home to select another module (F3)"
+                  title="Return to Home to select another module"
                 >
                   <div className="w-3 h-3 bg-[#0056b3] text-white rounded-[2px] flex items-center justify-center">
                     <Home size={8} />
                   </div>
                   <span>Switch Module (Home)</span>
-                  <kbd className="bg-white border border-slate-300 text-[#00386b] px-1 rounded-[2px] text-[8px] font-mono font-bold">F3</kbd>
                 </button>
               )}
             </div>
@@ -1050,148 +891,52 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         </div>
       </footer>
       
-      {/* Keyboard Shortcut Help Modal (SAP Layout Guideline) */}
-      <AnimatePresence>
-        {isHelpOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-[99999] p-4 select-none print:hidden">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="bg-[#f0f4f8] border-2 border-[var(--color-sap-blue-val)] w-full max-w-2xl shadow-2xl flex flex-col rounded-sm overflow-hidden text-black"
-            >
-              {/* SAP GUI Retro blue title bar */}
-              <div className="bg-[var(--color-sap-blue-val)] text-white px-3 py-1.5 flex items-center justify-between font-bold text-[11px] font-mono shadow-md select-none">
-                <div className="flex items-center space-x-2">
-                  <Keyboard size={14} className="text-amber-400" />
-                  <span>SAP Short-cuts (Functional Key Assignments Help Menu)</span>
-                </div>
-                <button 
-                  onClick={() => setIsHelpOpen(false)}
-                  className="bg-red-700 hover:bg-red-600 text-white font-bold px-1.5 py-0.5 rounded-sm text-[9px] transition-colors cursor-pointer"
-                >
-                  [X] CLOSE
-                </button>
-              </div>
-
-              {/* Informational Subheader */}
-              <div className="bg-[#cbdcf0] text-blue-950 p-2.5 px-3 border-b border-[#8c9ba8] text-[10px]">
-                <p className="font-semibold text-[11px]">💡 ERP Keyboard Navigation System</p>
-                <p className="mt-1 text-gray-700 leading-relaxed">
-                  In compliance with classic SAP terminal client layouts, this ERP supports quick high-speed module switching via function keys. Pressing an F-key instantly redirects your terminal context below:
-                </p>
-              </div>
-
-              {/* Content Grid */}
-              <div className="flex-1 p-3 overflow-y-auto max-h-[350px]">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div className="border border-[#8c9ba8] bg-white rounded-sm">
-                    <div className="bg-[#eef2f6] px-2 py-1 font-bold text-[10px] text-blue-900 border-b border-gray-200">📞 Overview & Reporting</div>
-                    <div className="divide-y divide-gray-100 p-1">
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-amber-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-amber-600 shadow-sm mr-2 w-8 text-center select-all">F1</kbd> SAP Help Desk</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/h_help</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-600 shadow-sm mr-2 w-8 text-center select-all">F2</kbd> Site Monthly Report</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nSMR</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-red-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-red-600 shadow-sm mr-2 w-8 text-center select-all">F3</kbd> Go to Dashboard</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nBACK</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-[var(--btn-hover-top)] text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-blue-700 shadow-sm mr-2 w-8 text-center select-all">F4</kbd> Approvals workflow</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nAPPV</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-600 shadow-sm mr-2 w-8 text-center select-all">F5</kbd> Project Register</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nPROJ</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border border-[#8c9ba8] bg-white rounded-sm">
-                    <div className="bg-[#eef2f6] px-2 py-1 font-bold text-[10px] text-blue-900 border-b border-gray-200">💼 Payroll, Ledger & Stock</div>
-                    <div className="divide-y divide-gray-100 p-1">
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-600 shadow-sm mr-2 w-8 text-center select-all">F6</kbd> Workers directory</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nWORK</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-600 shadow-sm mr-2 w-8 text-center select-all">F7</kbd> DLR (Daily Labour)</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nDLR</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-600 shadow-sm mr-2 w-8 text-center select-all">F8</kbd> Kharchi payroll logs</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nKHAR</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-600 shadow-sm mr-2 w-8 text-center select-all">F9</kbd> Advance register</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nADVN</span>
-                      </div>
-                      <div className="flex items-center justify-between p-1.5 text-[10px]">
-                        <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-600 shadow-sm mr-2 w-8 text-center select-all">F10</kbd> Workers Payment</span>
-                        <span className="text-gray-500 font-mono text-[9px] select-all">/nPAYM</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Secondary list */}
-                <div className="mt-2 border border-[#8c9ba8] bg-white rounded-sm">
-                  <div className="bg-[#eef2f6] px-2 py-1 font-bold text-[10px] text-blue-900 border-b border-gray-200">🛠️ Auxiliary Module Keys</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 p-2 divide-y md:divide-y-0 divide-gray-100">
-                    <div className="flex items-center justify-between py-1 text-[10px]">
-                      <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-300 mr-2">F11</kbd> Expenses Ledger Logs</span>
-                      <span className="text-gray-500 font-mono text-[9px]">/nEXPN</span>
-                    </div>
-                    <div className="flex items-center justify-between py-1 text-[10px]">
-                      <span className="flex items-center"><kbd className="bg-gray-500 text-white font-mono px-1.5 py-0.5 rounded text-[9px] font-bold border border-gray-300 mr-2">F12</kbd> Material & Stock ERP</span>
-                      <span className="text-gray-500 font-mono text-[9px]">/nMATR</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 bg-blue-50 border border-blue-200 rounded p-2 text-blue-900 flex items-start space-x-2">
-                  <span className="font-bold">Pro-tip:</span>
-                  <p className="text-[10px] text-gray-700 leading-relaxed">
-                    You can toggle the horizontal <strong className="text-blue-900">Active F-Keys Ribbon</strong> on/off from the header menu <strong className="text-blue-950">"Navigate" ➔ "Toggle Ribbon Bar"</strong> or by clicking the toggle next to the tabs above.
-                  </p>
-                </div>
-              </div>
-
-              {/* SAP Actions Bar at bottom of window */}
-              <div className="bg-[#cbdcf0] p-2 flex items-center justify-between border-t border-[#8c9ba8] shrink-0 font-sans">
-                <div className="flex items-center space-x-2">
-                  <input 
-                    type="checkbox" 
-                    id="ribbonToggle" 
-                    checked={showFKeysBar} 
-                    onChange={(e) => setShowFKeysBar(e.target.checked)} 
-                    className="w-3.5 h-3.5"
-                  />
-                  <label htmlFor="ribbonToggle" className="text-[10px] font-medium text-gray-800 cursor-pointer">
-                    Show Keyboard Ribbon Bar on screen
-                  </label>
-                </div>
-                <button 
-                  onClick={() => setIsHelpOpen(false)}
-                  className="bg-white hover:bg-[#e6f2ff] text-blue-900 border border-[#8c9ba8] hover:border-blue-500 px-4 py-1 font-bold text-[10px] shadow-sm rounded-sm uppercase tracking-wider cursor-pointer font-sans"
-                >
-                  System Understood
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       <SuccessToast 
         isOpen={successToast.open} 
         message={successToast.message} 
         onClose={() => setSuccessToast(prev => ({ ...prev, open: false }))} 
+      />
+
+      {/* SAP Document Flow & Business Flow Modal Inspector */}
+      <DocumentFlowModal
+        isOpen={docFlowModalState.isOpen}
+        documentIdOrNo={docFlowModalState.documentIdOrNo}
+        onClose={() => setDocFlowModalState({ isOpen: false })}
+        onNavigateToTab={(tab, title, props) => {
+          handleSetCurrentTab(tab, title, props);
+          setDocFlowModalState({ isOpen: false });
+        }}
+      />
+
+      {/* Global Enterprise Command Palette (Ctrl+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={(tab, title, props) => {
+          handleSetCurrentTab(tab, title, props);
+          setIsCommandPaletteOpen(false);
+        }}
+      />
+
+      {/* Real-time Exception & Alert Center */}
+      <AlertCenterModal
+        isOpen={isAlertCenterOpen}
+        onClose={() => setIsAlertCenterOpen(false)}
+        onNavigateTab={(tab, title, props) => {
+          handleSetCurrentTab(tab, title, props);
+          setIsAlertCenterOpen(false);
+        }}
+      />
+
+      {/* Project 360-degree Cockpit Modal */}
+      <Project360Modal
+        isOpen={project360State.isOpen}
+        projectId={project360State.projectId}
+        onClose={() => setProject360State({ isOpen: false })}
+        onNavigateTab={(tab, title, props) => {
+          handleSetCurrentTab(tab, title, props);
+          setProject360State({ isOpen: false });
+        }}
       />
 
       {/* Status Bar */}

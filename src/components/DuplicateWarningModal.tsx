@@ -140,7 +140,7 @@ export const DuplicateWarningModal: React.FC<DuplicateWarningModalProps> = ({
               </div>
             ) : (
               <p className="text-[9px] text-red-700 leading-relaxed font-semibold">
-                🚫 Standard users are prohibited from overriding duplicate MATCH alerts. Only the Corporate System Administrator (Reja Tousif) can bypass this block. Contact them to request an override.
+                🚫 Standard users are prohibited from overriding duplicate MATCH alerts. Only the Corporate System Administrator (Tousif Reja) can bypass this block. Contact them to request an override.
               </p>
             )}
 

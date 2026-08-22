@@ -3,7 +3,7 @@ import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../store';
 import { Project, Worker, FloorAbstract, FloorAbstractWorker } from '../types';
-import { Plus, Trash2, Save, X, Edit, Search, ChevronDown, ChevronUp, LayoutList, Users, Download } from 'lucide-react';
+import { Plus, Trash2, Save, X, Edit, Search, ChevronDown, ChevronUp, LayoutList, Users, Download, GitFork } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -1314,6 +1314,18 @@ export function FloorAbstracts() {
                     )}
                     
                     <div className="bg-white px-3 py-2 flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if ((window as any).openDocumentFlow) {
+                            (window as any).openDocumentFlow(`FAB-${record.id}`);
+                          }
+                        }}
+                        className="sap-btn bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 p-1 px-3 flex items-center text-xs"
+                        title="Inspect SAP Document Flow Chain (DF01)"
+                      >
+                        <GitFork size={12} className="mr-1 text-indigo-600" /> Doc Flow
+                      </button>
                       <button onClick={() => handleEdit(record)} className="sap-btn sap-btn-blue p-1 px-3 flex items-center text-xs">
                         <Edit size={12} className="mr-1" /> Edit
                       </button>
