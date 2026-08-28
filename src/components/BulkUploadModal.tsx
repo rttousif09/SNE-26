@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SAPSelect } from './SAPSelect';
 import Papa from 'papaparse';
 import { read, utils, write } from 'xlsx';
+import { normalizeImportedDate, formatToUIDate } from '../lib/importDateUtils';
 import { 
   Upload, X, AlertTriangle, FileSpreadsheet, Download, 
   CheckCircle2, Info, Settings2, Eye, ArrowRight,
@@ -214,11 +215,20 @@ export function BulkUploadModal({
         if (!rawHeaderKey) return; // Skip if user explicitly ignored this column
 
         const val = row[rawHeaderKey];
-        if (val !== undefined && val !== null) {
+        if (val !== undefined && val !== null && val !== '') {
+          // Check if it is a date column (using our KEY_VARIATIONS keys)
+          const isDateColumn = expectedKey.toLowerCase().includes('date');
           // Convert numbers correctly (strip characters that break parsing)
           const isNumeric = ['budget', 'amount', 'amountReceived', 'purchaseCost', 'rate', 'qty', 'workerCount', 'ratePerWeek', 'totalComputed', 'amountPaid', 'amountDue', 'kharchi', 'mess', 'workerAdvance', 'tiffin', 'travel', 'machineryMaterial', 'workerPayment', 'stationery', 'others', 'crBalance', 'carpenter', 'fitter', 'helper', 'mason', 'rigger', 'staff'].includes(expectedKey);
           
-          if (isNumeric) {
+          if (isDateColumn) {
+            const parsedDate = normalizeImportedDate(val, true);
+            newRow[expectedKey] = parsedDate;
+            if (parsedDate === 'Invalid Date') {
+              newRow[`_${expectedKey}Warning`] = `Invalid Date: ${val}`;
+              warnCount++;
+            }
+          } else if (isNumeric) {
             const strVal = String(val).replace(/[^\d.\-]/g, '');
             newRow[expectedKey] = strVal ? Number(strVal) : 0;
           } else {
@@ -727,10 +737,17 @@ export function BulkUploadModal({
                               );
                             }
 
+                            // Check if date column for custom UI display
+                            const isDateColumn = col.toLowerCase().includes('date');
+
                             // Render general parameters with nice design
                             return (
                               <td key={col} className="px-2.5 py-2 border-r border-slate-200 max-w-[120px] truncate leading-tight font-medium">
-                                {typeof val === 'number' ? (
+                                {isDateColumn ? (
+                                  <span className={`font-mono ${val === 'Invalid Date' ? 'text-red-500 font-bold' : 'text-slate-700'}`}>
+                                    {val === 'Invalid Date' ? 'Invalid Date' : (formatToUIDate(val as string) || '-')}
+                                  </span>
+                                ) : typeof val === 'number' ? (
                                   <span className="font-mono text-slate-700">
                                     {val.toLocaleString('en-IN')}
                                   </span>
