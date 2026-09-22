@@ -1531,8 +1531,60 @@ async function startServer() {
   app.delete("/api/billings/:id", (req, res) => {
     try {
       const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const old = db.prepare("SELECT billNo, amount, projectId FROM billings WHERE id = ?").get(id) as any;
       db.prepare("DELETE FROM billings WHERE id = ?").run(id);
+      if (old) {
+        logActivity(
+          authUser,
+          "DELETE",
+          "billing",
+          id,
+          `Deleted bill #${old.billNo || id} amounting to ₹${new Intl.NumberFormat('en-IN').format(old.amount || 0)}`
+        );
+      }
       res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/billings/bulk-delete", (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "No billing IDs provided" });
+      }
+
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const findStmt = db.prepare("SELECT billNo, amount, projectId FROM billings WHERE id = ?");
+      const deleteStmt = db.prepare("DELETE FROM billings WHERE id = ?");
+
+      let totalAmount = 0;
+      let count = 0;
+
+      const deleteMany = db.transaction((idList: string[]) => {
+        for (const id of idList) {
+          const old = findStmt.get(id) as any;
+          if (old) {
+            totalAmount += old.amount || 0;
+            deleteStmt.run(id);
+            count++;
+          }
+        }
+      });
+
+      deleteMany(ids);
+
+      logActivity(
+        authUser,
+        "DELETE",
+        "billing",
+        `BULK-${Date.now()}`,
+        `Bulk deleted ${count} certified bills totaling ₹${new Intl.NumberFormat('en-IN').format(totalAmount)}`
+      );
+
+      res.json({ success: true, count, deletedIds: ids });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1620,6 +1672,48 @@ async function startServer() {
       logActivity(authUser, "DELETE", "payments", id, `Deleted client payment of ₹${new Intl.NumberFormat('en-IN').format(amountVal)} for "${projName}"`);
       
       res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/client-payments/bulk-delete", (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids must be a non-empty array" });
+      }
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+
+      const deleteStmt = db.prepare("DELETE FROM client_payments WHERE id = ?");
+      const findStmt = db.prepare("SELECT amountReceived, projectId FROM client_payments WHERE id = ?");
+      const projStmt = db.prepare("SELECT name FROM projects WHERE id = ?");
+
+      let totalAmount = 0;
+      let count = 0;
+
+      const deleteMany = db.transaction((idList: string[]) => {
+        for (const id of idList) {
+          const old = findStmt.get(id) as any;
+          if (old) {
+            totalAmount += old.amountReceived || 0;
+            deleteStmt.run(id);
+            count++;
+          }
+        }
+      });
+
+      deleteMany(ids);
+
+      logActivity(
+        authUser,
+        "DELETE",
+        "payments",
+        `BULK-${Date.now()}`,
+        `Bulk deleted ${count} client payment receipts totaling ₹${new Intl.NumberFormat('en-IN').format(totalAmount)}`
+      );
+
+      res.json({ success: true, count, deletedIds: ids });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

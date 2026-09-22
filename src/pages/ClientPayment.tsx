@@ -11,6 +11,7 @@ import {
   Search, 
   Upload, 
   Trash2, 
+  CheckSquare,
   Calendar, 
   FileText, 
   CheckCircle2, 
@@ -44,8 +45,15 @@ export const ClientPayment = () => {
     clientPayments, 
     addClientPayment, 
     updateClientPayment,
-    deleteClientPayment 
+    deleteClientPayment,
+    deleteClientPayments,
+    deleteBilling,
+    deleteBillings 
   } = useAppContext();
+
+  // Bulk Selection States
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<string[]>([]);
+  const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
 
   // Basic Filter States
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
@@ -312,6 +320,60 @@ export const ClientPayment = () => {
   const handleDeleteReceipt = (id: string) => {
     if (confirm('Are you sure you want to delete this client payment receipt? This will permanently reverse the balance deduction.')) {
       deleteClientPayment(id);
+      setSelectedPaymentIds(prev => prev.filter(item => item !== id));
+    }
+  };
+
+  const handleToggleSelectPayment = (id: string) => {
+    setSelectedPaymentIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllPayments = () => {
+    if (selectedPaymentIds.length === filteredPayments.length && filteredPayments.length > 0) {
+      setSelectedPaymentIds([]);
+    } else {
+      setSelectedPaymentIds(filteredPayments.map(p => p.id));
+    }
+  };
+
+  const handleBulkDeletePayments = async () => {
+    if (selectedPaymentIds.length === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedPaymentIds.length} selected payment receipt(s)? This will reverse their balance deductions.`)) {
+      await deleteClientPayments(selectedPaymentIds);
+      setSelectedPaymentIds([]);
+    }
+  };
+
+  const handleDeleteBill = (id: string) => {
+    const bill = billings.find(b => b.id === id);
+    const billLabel = bill?.billNo ? `bill #${bill.billNo}` : 'this certified bill';
+    if (confirm(`Are you sure you want to delete ${billLabel}? This will permanently remove it from billing records and AR ledger.`)) {
+      deleteBilling(id);
+      setSelectedBillIds(prev => prev.filter(item => item !== id));
+    }
+  };
+
+  const handleToggleSelectBill = (id: string) => {
+    setSelectedBillIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllBills = () => {
+    if (selectedBillIds.length === filteredBills.length && filteredBills.length > 0) {
+      setSelectedBillIds([]);
+    } else {
+      setSelectedBillIds(filteredBills.map(b => b.id));
+    }
+  };
+
+  const handleBulkDeleteBills = async () => {
+    if (selectedBillIds.length === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedBillIds.length} selected certified bill(s)? This will permanently remove them from the billing register.`)) {
+      await deleteBillings(selectedBillIds);
+      setSelectedBillIds([]);
     }
   };
 
@@ -418,6 +480,34 @@ export const ClientPayment = () => {
             <Sliders size={12} />
             <span>{showFilters ? "Hide Filters" : "Show Filters"}</span>
           </button>
+
+          {activeTab === 'payments' && selectedPaymentIds.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-[#8c9ba8] mx-1 hidden md:block"></div>
+              <button
+                onClick={handleBulkDeletePayments}
+                className="sap-btn flex items-center space-x-1 bg-red-100 text-red-700 border border-red-400 hover:bg-red-200 transition font-bold"
+                title="Delete selected payment records"
+              >
+                <Trash2 size={12} className="text-red-600" />
+                <span>Delete Selected ({selectedPaymentIds.length})</span>
+              </button>
+            </>
+          )}
+
+          {activeTab === 'bills' && selectedBillIds.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-[#8c9ba8] mx-1 hidden md:block"></div>
+              <button
+                onClick={handleBulkDeleteBills}
+                className="sap-btn flex items-center space-x-1 bg-red-100 text-red-700 border border-red-400 hover:bg-red-200 transition font-bold"
+                title="Delete selected certified bill records"
+              >
+                <Trash2 size={12} className="text-red-600" />
+                <span>Delete Selected ({selectedBillIds.length})</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Quick select project filter right on the toolbar */}
@@ -715,6 +805,15 @@ export const ClientPayment = () => {
             <table className="w-full text-left border-collapse text-[10px] md:text-[11px] relative">
               <thead className="bg-[#f1f3f5] text-[var(--color-sap-blue-val)] uppercase font-bold sticky top-0 z-20 border-b border-gray-300 text-[9px]">
                 <tr>
+                  <th className="p-2 border-r border-gray-200 text-center w-8">
+                    <input 
+                      type="checkbox"
+                      className="cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-0"
+                      checked={filteredBills.length > 0 && selectedBillIds.length === filteredBills.length}
+                      onChange={handleSelectAllBills}
+                      title="Select all bills"
+                    />
+                  </th>
                   <th className="p-2 border-r border-gray-200 text-center">No.</th>
                   <th className="p-2 border-r border-gray-200">Bill No.</th>
                   <th className="p-2 border-r border-gray-200">Bill Date</th>
@@ -727,20 +826,32 @@ export const ClientPayment = () => {
                   <th className="p-2 border-r border-gray-200 text-right text-red-700">Debits</th>
                   <th className="p-2 border-r border-gray-200 text-right text-amber-700">Holds</th>
                   <th className="p-2 border-r border-gray-200 text-right font-black text-[var(--color-sap-blue-val)]">Billing Amount</th>
-                  <th className="p-2 text-center">Status</th>
+                  <th className="p-2 text-center border-r border-gray-200">Status</th>
+                  <th className="p-2 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 font-mono">
                 {filteredBills.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="p-8 text-center text-gray-400 font-sans italic">
+                    <td colSpan={15} className="p-8 text-center text-gray-400 font-sans italic">
                       No certified billing entries match the selected filters or project.
                     </td>
                   </tr>
                 ) : (
                   filteredBills.map((b, idx) => {
+                    const isSelected = selectedBillIds.includes(b.id);
+
                     return (
-                      <tr key={b.id} className="hover:bg-[#f0f4f8] transition-colors even:bg-gray-50/50">
+                      <tr key={b.id} className={`hover:bg-[#f0f4f8] transition-colors ${isSelected ? 'bg-blue-50/70' : 'even:bg-gray-50/50'}`}>
+                        <td className="p-2 border-r border-gray-200 text-center w-8">
+                          <input 
+                            type="checkbox"
+                            className="cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-0"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectBill(b.id)}
+                            title="Select bill for bulk deletion"
+                          />
+                        </td>
                         <td className="p-2 border-r border-gray-200 text-center text-gray-400 font-sans">{idx + 1}</td>
                         <td className="p-2 border-r border-gray-200 font-bold text-[#0056b3] uppercase tracking-tight">{b.billNo}</td>
                         <td className="p-2 border-r border-gray-200 text-gray-600">{b.certifyDate || b.month}</td>
@@ -757,7 +868,7 @@ export const ClientPayment = () => {
                         <td className="p-2 border-r border-gray-200 text-right font-black text-[var(--color-sap-blue-val)] bg-gray-50/50">
                           {b.netReceivable.toLocaleString('en-IN')}
                         </td>
-                        <td className="p-2 text-center font-sans">
+                        <td className="p-2 text-center font-sans border-r border-gray-200">
                           {b.status === 'Paid' ? (
                             <span className="bg-green-100 text-green-800 border border-green-200 px-1.5 py-0.5 rounded-sm font-bold text-[8px] uppercase tracking-wider">
                               Paid
@@ -772,6 +883,30 @@ export const ClientPayment = () => {
                             </span>
                           )}
                         </td>
+                        <td className="p-1 text-center">
+                          <div className="flex items-center justify-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if ((window as any).openDocumentFlow) {
+                                  (window as any).openDocumentFlow(`BILL-${b.id}`);
+                                }
+                              }}
+                              title="Inspect SAP Document Flow Chain"
+                              className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-sm cursor-pointer transition-colors"
+                            >
+                              <GitFork size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBill(b.id)}
+                              title="Delete certified bill entry"
+                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm cursor-pointer transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
@@ -780,7 +915,7 @@ export const ClientPayment = () => {
                 {/* Totals row */}
                 {filteredBills.length > 0 && (
                   <tr className="bg-[#eef2f6] text-gray-800 font-extrabold text-right border-t-2 border-b-4 border-double border-gray-400 text-[10px]">
-                    <td colSpan={4} className="p-2.5 text-center font-sans uppercase tracking-wider text-slate-800 font-black">
+                    <td colSpan={5} className="p-2.5 text-center font-sans uppercase tracking-wider text-slate-800 font-black">
                       Summary Total ({filteredBills.length} Bills)
                     </td>
                     <td className="p-2.5 border-r border-gray-300">
@@ -807,7 +942,7 @@ export const ClientPayment = () => {
                     <td className="p-2.5 border-r border-gray-300 text-[var(--color-sap-blue-val)] font-black bg-gray-200">
                       {filteredBills.reduce((acc, b) => acc + b.netReceivable, 0).toLocaleString('en-IN')}
                     </td>
-                    <td className="p-2.5 bg-white"></td>
+                    <td colSpan={2} className="p-2.5 bg-white"></td>
                   </tr>
                 )}
               </tbody>
@@ -823,6 +958,15 @@ export const ClientPayment = () => {
             <table className="w-full text-left border-collapse text-[10px] md:text-[11px]">
               <thead className="bg-[#f1f3f5] text-[var(--color-sap-blue-val)] uppercase font-bold sticky top-0 z-20 border-b border-gray-300">
                 <tr>
+                  <th className="p-2 border-r border-gray-200 text-center w-8">
+                    <input 
+                      type="checkbox"
+                      className="cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-0"
+                      checked={filteredPayments.length > 0 && selectedPaymentIds.length === filteredPayments.length}
+                      onChange={handleSelectAllPayments}
+                      title="Select all payment vouchers"
+                    />
+                  </th>
                   <th className="p-2 border-r border-gray-200 text-center">No.</th>
                   <th className="p-2 border-r border-gray-200">Payment Date</th>
                   <th className="p-2 border-r border-gray-200">Payment Category</th>
@@ -837,7 +981,7 @@ export const ClientPayment = () => {
               <tbody className="divide-y divide-gray-200 font-mono">
                 {filteredPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-gray-400 font-sans italic">
+                    <td colSpan={10} className="p-8 text-center text-gray-400 font-sans italic">
                       No client receipts match the selected filters or project.
                     </td>
                   </tr>
@@ -848,8 +992,19 @@ export const ClientPayment = () => {
                     else if (p.category === 'Against RA Bill') catStyle = "bg-green-100 text-green-800 border-green-200";
                     else if (p.category === 'Bill + GST') catStyle = "bg-purple-100 text-purple-800 border-purple-200";
 
+                    const isSelected = selectedPaymentIds.includes(p.id);
+
                     return (
-                      <tr key={p.id} className="hover:bg-[#f0f4f8] transition-colors even:bg-gray-50/50">
+                      <tr key={p.id} className={`hover:bg-[#f0f4f8] transition-colors ${isSelected ? 'bg-blue-50/70' : 'even:bg-gray-50/50'}`}>
+                        <td className="p-2 border-r border-gray-200 text-center w-8">
+                          <input 
+                            type="checkbox"
+                            className="cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-0"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectPayment(p.id)}
+                            title="Select voucher for bulk actions"
+                          />
+                        </td>
                         <td className="p-2 border-r border-gray-200 text-center text-gray-400 font-sans">{idx + 1}</td>
                         <td className="p-2 border-r border-gray-200 text-gray-600">{p.date}</td>
                         <td className="p-2 border-r border-gray-200 font-sans text-center">
@@ -906,7 +1061,7 @@ export const ClientPayment = () => {
                 {/* Summary totals for payments */}
                 {filteredPayments.length > 0 && (
                   <tr className="bg-[#eef2f6] text-gray-800 font-extrabold text-right border-t-2 border-b-4 border-double border-gray-400">
-                    <td colSpan={3} className="p-2.5 text-center font-sans uppercase tracking-wider text-slate-800 font-black">
+                    <td colSpan={4} className="p-2.5 text-center font-sans uppercase tracking-wider text-slate-800 font-black">
                       Total Amount Received ({filteredPayments.length} Vouchers)
                     </td>
                     <td className="p-2.5 border-r border-gray-300 text-green-700 font-black text-[11px] bg-[#e6f4ea]">
@@ -932,6 +1087,10 @@ export const ClientPayment = () => {
             isOpen={isRecordModalOpen}
             onClose={() => setIsRecordModalOpen(false)}
             onSave={handleSavePayment}
+            onDelete={(id) => {
+              handleDeleteReceipt(id);
+              setIsRecordModalOpen(false);
+            }}
             projects={projects}
             initialData={editingPaymentId ? clientPayments.find(p => p.id === editingPaymentId) : null}
           />
@@ -980,6 +1139,7 @@ interface PaymentEntryFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (formData: any) => void;
+  onDelete?: (id: string) => void;
   projects: Project[];
   initialData?: any;
 }
@@ -988,6 +1148,7 @@ const PaymentEntryFormModal = ({
   isOpen,
   onClose,
   onSave,
+  onDelete,
   projects,
   initialData
 }: PaymentEntryFormModalProps) => {
@@ -1018,7 +1179,7 @@ const PaymentEntryFormModal = ({
       setRemarks(initialData.remarks || '');
       setAttachmentName(initialData.attachment || '');
     }
-  }, [initialData]);
+  }, [initialData?.id]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1207,20 +1368,39 @@ const PaymentEntryFormModal = ({
           </div>
 
           {/* Footer actions */}
-          <div className="border-t border-gray-200 pt-4 flex justify-end space-x-2 bg-[#f8f9fa] p-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="sap-btn bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 px-4 py-1.5 font-bold cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="sap-btn bg-[var(--btn-hover-top)] text-white hover:bg-[#004494] px-5 py-1.5 font-bold cursor-pointer"
-            >
-              {initialData ? 'Update Client Voucher' : 'Post Client Voucher'}
-            </button>
+          <div className="border-t border-gray-200 pt-4 flex items-center justify-between bg-[#f8f9fa] p-3">
+            <div>
+              {initialData && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Are you sure you want to delete this payment voucher? This will permanently reverse the ledger entry.')) {
+                      onDelete(initialData.id);
+                    }
+                  }}
+                  className="sap-btn bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 px-3 py-1.5 font-bold cursor-pointer flex items-center space-x-1"
+                  title="Delete this client payment voucher"
+                >
+                  <Trash2 size={12} className="text-red-600" />
+                  <span>Delete Voucher</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="sap-btn bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 px-4 py-1.5 font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="sap-btn bg-[var(--btn-hover-top)] text-white hover:bg-[#004494] px-5 py-1.5 font-bold cursor-pointer"
+              >
+                {initialData ? 'Update Client Voucher' : 'Post Client Voucher'}
+              </button>
+            </div>
           </div>
         </form>
       </motion.div>

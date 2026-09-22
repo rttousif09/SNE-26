@@ -53,18 +53,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab = () => {} }
   };
 
   // Date/Time
-  const [greeting, setGreeting] = useState('Good Morning');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   
   useEffect(() => {
-    const hour = currentTime.getHours();
-    if (hour < 12) setGreeting('Good Morning');
-    else if (hour < 17) setGreeting('Good Afternoon');
-    else setGreeting('Good Evening');
-    
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
-  }, [currentTime]);
+  }, []);
+
+  const hour = currentTime.getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   const fyString = "2026-27";
   const formattedDate = currentTime.toLocaleDateString('en-IN', { 

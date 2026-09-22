@@ -103,9 +103,11 @@ interface AppContextType extends AppState {
   addBilling: (billing: Omit<Billing, 'id'>) => void;
   updateBilling: (id: string, billing: Partial<Billing>) => void;
   deleteBilling: (id: string) => void;
+  deleteBillings: (ids: string[]) => Promise<void>;
   addClientPayment: (payment: Omit<ClientPayment, 'id'>) => void;
   updateClientPayment: (id: string, payment: Partial<ClientPayment>) => void;
   deleteClientPayment: (id: string) => void;
+  deleteClientPayments: (ids: string[]) => Promise<void>;
   addKharchi: (kharchi: Omit<Kharchi, 'id'>) => void;
   updateKharchi: (id: string, kharchi: Partial<Kharchi>) => void;
   deleteKharchi: (id: string) => void;
@@ -1083,13 +1085,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(s => ({ ...s, billings: updated }));
     triggerSuccess('Billing entry deleted from records.');
     try {
-      await fetch(`/api/billings/${id}`, { method: 'DELETE' });
+      await fetch(`/api/billings/${id}`, { 
+        method: 'DELETE',
+        headers: { 'X-User-Username': user?.username || 'Admin' }
+      });
       await saveAllToStore('billings', updated);
       await refreshBillings();
       await refreshClientPayments();
       globalEventBus.emit('bill-delete', { id });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const deleteBillings = async (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    const idSet = new Set(ids);
+    const updated = stateRef.current.billings.filter(b => !idSet.has(b.id));
+    setState(s => ({ ...s, billings: updated }));
+    triggerSuccess(`Deleted ${ids.length} billing records.`);
+    try {
+      await fetch('/api/billings/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
+        body: JSON.stringify({ ids })
+      });
+      await saveAllToStore('billings', updated);
+      await refreshBillings();
+      await refreshClientPayments();
+      globalEventBus.emit('bill-bulk-delete', { ids });
+      refreshActivityLogs();
+    } catch (e) {
+      console.error('Failed to bulk delete billings:', e);
     }
   };
 
@@ -1151,6 +1181,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshActivityLogs();
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const deleteClientPayments = async (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    const idSet = new Set(ids);
+    const updated = stateRef.current.clientPayments.filter(cp => !idSet.has(cp.id));
+    setState(s => ({ ...s, clientPayments: updated }));
+    try {
+      await fetch('/api/client-payments/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
+        body: JSON.stringify({ ids })
+      });
+      await saveAllToStore('clientPayments', updated);
+      refreshActivityLogs();
+    } catch (e) {
+      console.error('Failed to bulk delete client payments:', e);
     }
   };
 
@@ -2528,9 +2579,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addBilling,
       updateBilling,
       deleteBilling,
+      deleteBillings,
       addClientPayment,
       updateClientPayment,
       deleteClientPayment,
+      deleteClientPayments,
       addKharchi,
       updateKharchi,
       deleteKharchi,

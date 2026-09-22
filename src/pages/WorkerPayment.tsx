@@ -94,12 +94,12 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     }
   }, [initialWorkerId, workers]);
 
+  const hasUnsaved = editingId !== null || formData.workerId !== '';
   useEffect(() => {
     if (onUnsavedChange) {
-      const hasUnsaved = editingId !== null || formData.workerId !== '';
       onUnsavedChange(hasUnsaved);
     }
-  }, [editingId, formData, onUnsavedChange]);
+  }, [hasUnsaved, onUnsavedChange]);
 
   // Keep month field updated with month selector unless editing a different month
   useEffect(() => {

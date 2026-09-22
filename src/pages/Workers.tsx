@@ -138,12 +138,12 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
     }
   }, [initialWorkerId, initialView]);
 
+  const hasUnsaved = isAdding && (formData.name !== '' || formData.workerId !== '');
   useEffect(() => {
     if (onUnsavedChange) {
-      const hasUnsaved = isAdding && (formData.name !== '' || formData.workerId !== '');
       onUnsavedChange(hasUnsaved);
     }
-  }, [isAdding, formData, onUnsavedChange]);
+  }, [hasUnsaved, onUnsavedChange]);
 
   React.useEffect(() => {
     const handleGlobalSearch = (e: Event) => {

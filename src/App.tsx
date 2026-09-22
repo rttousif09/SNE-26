@@ -50,6 +50,9 @@ import { LockScreen } from './components/LockScreen';
 import { exportConsolidatedSitesReportToPDF, downloadPDF } from './lib/pdfGenerator';
 
 
+// Stable callback reference to prevent child useEffect triggers on every parent render
+const NOOP_UNSAVED_CHANGE = (_hasUnsaved: boolean) => {};
+
 function AppContent({ user, onLogout }: { user: { username: string; name: string } | null; onLogout: () => void }) {
   const erp = useAppContext();
   const { approvals, advanceSheetApprovals, kharchiApprovals, paymentSheetApprovals, expensesLedger } = erp;
@@ -118,40 +121,44 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Navigation tab history
-  const [tabHistory, setTabHistory] = useState<string[]>(['dashboard']);
-  const [historyIndex, setHistoryIndex] = useState<number>(0);
+  // Navigation tab history state (unified to prevent cyclic re-render cascades)
+  const [navHistory, setNavHistory] = useState<{ history: string[]; index: number }>({
+    history: ['dashboard'],
+    index: 0
+  });
   const [isNavigatingHistory, setIsNavigatingHistory] = useState<boolean>(false);
 
   useEffect(() => {
     if (isNavigatingHistory) return;
-    setTabHistory(prevHistory => {
-      const nextHistory = prevHistory.slice(0, historyIndex + 1);
+    setNavHistory(prev => {
+      const nextHistory = prev.history.slice(0, prev.index + 1);
       if (nextHistory[nextHistory.length - 1] === currentTab) {
-        return prevHistory;
+        return prev;
       }
       const updated = [...nextHistory, currentTab];
-      setHistoryIndex(updated.length - 1);
-      return updated;
+      return {
+        history: updated,
+        index: updated.length - 1
+      };
     });
-  }, [currentTab, isNavigatingHistory, historyIndex]);
+  }, [currentTab, isNavigatingHistory]);
 
   const handleGoBack = () => {
-    if (historyIndex > 0) {
+    if (navHistory.index > 0) {
       setIsNavigatingHistory(true);
-      const newIdx = historyIndex - 1;
-      setHistoryIndex(newIdx);
-      setCurrentTab(tabHistory[newIdx]);
+      const newIdx = navHistory.index - 1;
+      setNavHistory(prev => ({ ...prev, index: newIdx }));
+      setCurrentTab(navHistory.history[newIdx]);
       setTimeout(() => setIsNavigatingHistory(false), 50);
     }
   };
 
   const handleGoForward = () => {
-    if (historyIndex < tabHistory.length - 1) {
+    if (navHistory.index < navHistory.history.length - 1) {
       setIsNavigatingHistory(true);
-      const newIdx = historyIndex + 1;
-      setHistoryIndex(newIdx);
-      setCurrentTab(tabHistory[newIdx]);
+      const newIdx = navHistory.index + 1;
+      setNavHistory(prev => ({ ...prev, index: newIdx }));
+      setCurrentTab(navHistory.history[newIdx]);
       setTimeout(() => setIsNavigatingHistory(false), 50);
     }
   };
@@ -220,7 +227,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   }, []);
 
   const [bottomTab, setBottomTab] = useState<'properties' | 'error-log' | 'backup'>('properties');
-  const [isBottomMinimized, setIsBottomMinimized] = useState(false);
+  const [isBottomMinimized, setIsBottomMinimized] = useState(true);
   const [backupFileError, setBackupFileError] = useState<string | null>(null);
   const [backupSuccess, setBackupSuccess] = useState<string | null>(null);
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -434,19 +441,17 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
     const props = tabProps || {};
     const key = `${type}`;
 
-    const onUnsavedChangeCallback = (hasUnsaved: boolean) => {};
-
     switch (type) {
       case 'dashboard': return <Dashboard key={key} setCurrentTab={setCurrentTab} />;
       case 'projects': return <Projects key={key} />;
       case 'dms': return <DMSPage key={key} />;
-      case 'workers': return <Workers key={key} initialWorkerId={props.initialWorkerId} initialView={props.initialView} onUnsavedChange={onUnsavedChangeCallback} />;
-      case 'boqs': return <BOQPage key={key} onUnsavedChange={onUnsavedChangeCallback} />;
+      case 'workers': return <Workers key={key} initialWorkerId={props.initialWorkerId} initialView={props.initialView} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
+      case 'boqs': return <BOQPage key={key} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
       case 'billing': return <Billing key={key} />;
       case 'client-payment': return <ClientPayment key={key} />;
       case 'kharchi': return <Kharchi key={key} />;
       case 'advance': return <Advance key={key} />;
-      case 'worker-payment': return <WorkerPayment key={key} initialWorkerId={props.initialWorkerId} onUnsavedChange={onUnsavedChangeCallback} />;
+      case 'worker-payment': return <WorkerPayment key={key} initialWorkerId={props.initialWorkerId} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
       case 'worker-ledger': return <WorkerLedger key={key} />;
       case 'approvals': return <Approvals key={key} />;
       case 'expenses': return <Expenses key={key} />;
@@ -678,19 +683,40 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
             <div className="flex items-end justify-between bg-[#eef2f6] px-1 border-b border-[#8c9ba8] select-none h-[22px]">
               <div className="flex items-end">
                 <button
-                  onClick={() => { setBottomTab('properties'); setIsBottomMinimized(false); }}
+                  onClick={() => {
+                    if (!isBottomMinimized && bottomTab === 'properties') {
+                      setIsBottomMinimized(true);
+                    } else {
+                      setBottomTab('properties');
+                      setIsBottomMinimized(false);
+                    }
+                  }}
                   className={`flex items-center px-3 py-0.5 rounded-t-sm space-x-2 relative top-[1px] z-10 border border-[#8c9ba8] text-[10px] ${bottomTab === 'properties' && !isBottomMinimized ? 'bg-white border-b-transparent font-semibold text-[#0056b3]' : 'bg-[#d9e4f1] hover:bg-white cursor-pointer ml-0.5'}`}
                 >
                   <span>Properties</span>
                 </button>
                 <button
-                  onClick={() => { setBottomTab('error-log'); setIsBottomMinimized(false); }}
+                  onClick={() => {
+                    if (!isBottomMinimized && bottomTab === 'error-log') {
+                      setIsBottomMinimized(true);
+                    } else {
+                      setBottomTab('error-log');
+                      setIsBottomMinimized(false);
+                    }
+                  }}
                   className={`flex items-center px-3 py-0.5 rounded-t-sm space-x-2 relative top-[1px] z-10 border border-[#8c9ba8] ml-1 text-[10px] ${bottomTab === 'error-log' && !isBottomMinimized ? 'bg-white border-b-transparent font-semibold text-[#0056b3]' : 'bg-[#d9e4f1] hover:bg-white cursor-pointer'}`}
                 >
                   <span>Error Log</span>
                 </button>
                 <button
-                  onClick={() => { setBottomTab('backup'); setIsBottomMinimized(false); }}
+                  onClick={() => {
+                    if (!isBottomMinimized && bottomTab === 'backup') {
+                      setIsBottomMinimized(true);
+                    } else {
+                      setBottomTab('backup');
+                      setIsBottomMinimized(false);
+                    }
+                  }}
                   className={`flex items-center px-3 py-0.5 rounded-t-sm space-x-2 relative top-[1px] z-10 border border-[#8c9ba8] ml-1 text-[10px] ${bottomTab === 'backup' && !isBottomMinimized ? 'bg-white border-b-transparent font-semibold text-[#0056b3]' : 'bg-[#d9e4f1] hover:bg-white cursor-pointer'}`}
                 >
                   <span className="font-bold text-green-700">DB Backup & Sync</span>

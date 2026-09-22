@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SAPSelect } from '../components/SAPSelect';
 import { useAppContext } from '../store';
 import { MessBooking, ExpenseEntry } from '../types';
@@ -41,12 +41,6 @@ export const Mess: React.FC = () => {
   const [workerSuggestions, setWorkerSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
 
-  // Calculation states
-  const [days, setDays] = useState<number>(0);
-  const [weeks, setWeeks] = useState<number>(0);
-  const [totalComputed, setTotalComputed] = useState<number>(0);
-  const [amountDue, setAmountDue] = useState<number>(0);
-
   // Sync selected entries when messBookings change
   useEffect(() => {
     setSelectedIds(prev => prev.filter(id => {
@@ -64,30 +58,30 @@ export const Mess: React.FC = () => {
     setPaymentDate(todayStr);
   }, [projects]);
 
-  // Handle live calculation
-  useEffect(() => {
+  // Synchronous calculation of days, weeks, totalComputed, and amountDue
+  const { days, weeks, totalComputed, amountDue } = useMemo(() => {
     if (fromDate && toDate) {
       const from = new Date(fromDate);
       const to = new Date(toDate);
       const diffTime = to.getTime() - from.getTime();
       const calculatedDays = diffTime >= 0 ? Math.floor(diffTime / (1000 * 3600 * 24)) + 1 : 0;
-      setDays(calculatedDays);
-
       const calculatedWeeks = parseFloat((calculatedDays / 7).toFixed(3));
-      setWeeks(calculatedWeeks);
-
       const computed = workerCount * (calculatedDays / 7) * ratePerWeek;
       const computedRounded = Math.round(computed * 100) / 100;
-      setTotalComputed(computedRounded);
-
       const due = computedRounded - amountPaid;
-      setAmountDue(Math.max(0, Math.round(due * 100) / 100));
-    } else {
-      setDays(0);
-      setWeeks(0);
-      setTotalComputed(0);
-      setAmountDue(0);
+      return {
+        days: calculatedDays,
+        weeks: calculatedWeeks,
+        totalComputed: computedRounded,
+        amountDue: Math.max(0, Math.round(due * 100) / 100)
+      };
     }
+    return {
+      days: 0,
+      weeks: 0,
+      totalComputed: 0,
+      amountDue: 0
+    };
   }, [fromDate, toDate, workerCount, ratePerWeek, amountPaid]);
 
   // Set default paid amount equal to computed when computed changes (if they haven't explicitly typed different amount)

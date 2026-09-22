@@ -139,14 +139,16 @@ function getColumnFriendlyDescription(col: string): string {
   return col.replace(/([A-Z])/g, ' $1').trim();
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export function BulkUploadModal({
   isOpen,
   onClose,
   onUpload,
   expectedColumns,
   entityName,
-  projectsContext = [],
-  workersContext = [],
+  projectsContext = EMPTY_ARRAY,
+  workersContext = EMPTY_ARRAY,
 }: BulkUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
@@ -165,6 +167,8 @@ export function BulkUploadModal({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const expectedColumnsKey = expectedColumns.join(',');
 
   // Auto-set the initial configuration mapping when rawHeaders alters
   useEffect(() => {
@@ -198,13 +202,15 @@ export function BulkUploadModal({
     });
 
     setMappings(initialMaps);
-  }, [rawHeaders, expectedColumns]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawHeaders, expectedColumnsKey]);
 
   // Recalculate parsed and matched rows when mappings or rawRows changes
   useEffect(() => {
     if (rawRows.length === 0) return;
     recalculateProcessedRows();
-  }, [mappings, rawRows, projectsContext, workersContext, dateFormattedHeaders]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mappings, rawRows, projectsContext.length, workersContext.length, dateFormattedHeaders]);
 
   const recalculateProcessedRows = () => {
     const list: any[] = [];
