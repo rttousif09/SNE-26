@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SAPSelect } from './SAPSelect';
 import Papa from 'papaparse';
 import { read, utils, write } from 'xlsx';
-import { normalizeImportedDate, formatToUIDate } from '../lib/importDateUtils';
+import { normalizeImportedDate, formatToUIDate, isDateField, isExcelDateFormat } from '../lib/importDateUtils';
 import { 
   Upload, X, AlertTriangle, FileSpreadsheet, Download, 
   CheckCircle2, Info, Settings2, Eye, ArrowRight,
@@ -27,9 +27,11 @@ const KEY_VARIATIONS: Record<string, string[]> = {
   serialNo: ['serialno', 'srno', 'sno', 'serialnum', 'serial_no', 'sr_no', 's.no', 'slno'],
   name: ['name', 'workername', 'fullname', 'nameoftheworker', 'worker_name', 'employee_name'],
   designation: ['designation', 'role', 'workerrole', 'category', 'workertype', 'designation_name', 'type_of_worker'],
-  joiningDate: ['joiningdate', 'doj', 'joindate', 'joining_date', 'date_of_joining'],
-  startDate: ['startDate', 'startdate', 'start_date', 'commencementdate'],
-  completionDate: ['completionDate', 'completiondate', 'enddate', 'completion_date', 'end_date'],
+  joiningDate: ['joiningdate', 'doj', 'joindate', 'joining_date', 'date_of_joining', 'dateofjoining'],
+  exitDate: ['exitdate', 'doe', 'exit_date', 'date_of_exit', 'dateofexit'],
+  attendanceDate: ['attendancedate', 'attendance_date', 'present_date', 'duty_date'],
+  startDate: ['startDate', 'startdate', 'start_date', 'commencementdate', 'commencement_date'],
+  completionDate: ['completionDate', 'completiondate', 'enddate', 'completion_date', 'end_date', 'project_end_date'],
   clientName: ['clientName', 'clientname', 'client', 'client_name', 'customer'],
   address: ['address', 'location', 'siteaddress', 'site_address', 'project_location'],
   budget: ['budget', 'projectbudget', 'costlimit', 'value', 'project_value', 'total_budget'],
@@ -37,15 +39,31 @@ const KEY_VARIATIONS: Record<string, string[]> = {
   amount: ['amount', 'value', 'price', 'amt', 'total', 'subtotal', 'bill_amount'],
   amountReceived: ['amountReceived', 'amountreceived', 'received', 'receivedamount', 'payment', 'cashreceived', 'amount_received'],
   date: ['date', 'datepaid', 'txndate', 'transactiondate', 'entrydate', 'date_paid', 'payment_date', 'txn_date'],
-  fromDate: ['fromDate', 'fromdate', 'start_date', 'from_date', 'start'],
-  toDate: ['toDate', 'todate', 'end_date', 'to_date', 'end'],
+  fromDate: ['fromDate', 'fromdate', 'start_date', 'from_date', 'start', 'period_from'],
+  toDate: ['toDate', 'todate', 'end_date', 'to_date', 'end', 'period_to'],
   workerCount: ['workerCount', 'workercount', 'workers', 'numworkers', 'noofworkers', 'total_workers'],
   ratePerWeek: ['ratePerWeek', 'rateperweek', 'weekly_rate', 'rate', 'week_rate'],
   totalComputed: ['totalComputed', 'totalcomputed', 'computedtotal', 'total_computed', 'amount_computed'],
   amountPaid: ['amountPaid', 'amountpaid', 'paid', 'totalpaid', 'amount_paid'],
   amountDue: ['amountDue', 'amountdue', 'due', 'totaldue', 'balance', 'amount_due'],
   paidTo: ['paidTo', 'paidto', 'receivedby', 'paid_to', 'payee'],
-  paymentDate: ['paymentDate', 'paymentdate', 'date_paid', 'pay_date'],
+  paymentDate: ['paymentDate', 'paymentdate', 'date_paid', 'pay_date', 'payment_date'],
+  advanceDate: ['advanceDate', 'advancedate', 'advance_date', 'date_advance'],
+  billingDate: ['billingDate', 'billingdate', 'billing_date', 'bill_date', 'billdate'],
+  invoiceDate: ['invoiceDate', 'invoicedate', 'invoice_date', 'date_of_invoice'],
+  certificationDate: ['certificationDate', 'certificationdate', 'certification_date', 'certifieddate', 'certifydate', 'certified_date'],
+  issueDate: ['issueDate', 'issuedate', 'issue_date', 'date_of_issue'],
+  returnDate: ['returnDate', 'returndate', 'return_date', 'date_of_return'],
+  transferDate: ['transferDate', 'transferdate', 'transfer_date'],
+  approvalDate: ['approvalDate', 'approvaldate', 'approval_date'],
+  projectStartDate: ['projectStartDate', 'projectstartdate', 'project_start_date'],
+  projectCompletionDate: ['projectCompletionDate', 'projectcompletiondate', 'project_completion_date'],
+  agreementDate: ['agreementDate', 'agreementdate', 'agreement_date'],
+  workStartDate: ['workStartDate', 'workstartdate', 'work_start_date'],
+  financialDate: ['financialDate', 'financialdate', 'financial_date'],
+  expenseDate: ['expenseDate', 'expensedate', 'expense_date'],
+  documentDate: ['documentDate', 'documentdate', 'document_date'],
+  expiryDate: ['expiryDate', 'expirydate', 'expiry_date', 'valid_till', 'expiration_date'],
   paidBy: ['paidBy', 'paidby', 'paymentmode', 'payee', 'source', 'paid_by', 'mode_of_payment', 'payment_mode', 'mode'],
   paidByDetails: ['paidByDetails', 'paidbydetails', 'mode_details', 'reference', 'utr', 'cheque_no', 'payment_reference'],
   remarks: ['remarks', 'description', 'notes', 'comment', 'narrative', 'particulars'],
@@ -87,11 +105,11 @@ const KEY_VARIATIONS: Record<string, string[]> = {
 function getSampleValue(col: string): any {
   const norm = col.toLowerCase();
   if (norm.includes('project') || norm.includes('site')) return 'S3 Eco City';
-  if (norm.includes('worker') || norm.includes('emp') || norm.includes('employee')) return 'John Doe'; // Friendly display
+  if (norm.includes('worker') || norm.includes('emp') || norm.includes('employee')) return 'John Doe';
   if (norm.includes('serial') || norm.includes('srno') || norm.includes('sno') || norm.includes('s.no')) return '1';
   if (norm.includes('name')) return 'John Doe';
   if (norm.includes('designation')) return 'Mason';
-  if (norm.includes('date')) return '2026-06-01';
+  if (isDateField(col)) return '2026-08-28';
   if (norm.includes('amount') || norm.includes('budget') || norm.includes('cost') || norm.includes('balance') || norm.includes('kharchi') || norm.includes('mess') || norm.includes('advance') || norm.includes('tiffin') || norm.includes('travel') || norm.includes('machinery') || norm.includes('stationery') || norm.includes('others')) return 15000;
   if (norm.includes('category')) return 'Power Tools';
   if (norm.includes('unit')) return 'Units';
@@ -115,7 +133,7 @@ function getColumnFriendlyDescription(col: string): string {
   if (col === 'amountPaid') return 'Actual Cash Disbursed';
   if (col === 'amountDue') return 'Pending outstanding balance';
   if (col === 'totalComputed') return 'Calculated wages/bill total';
-  if (norm.includes('date')) return 'Date format (YYYY-MM-DD)';
+  if (isDateField(col)) return 'Date (YYYY-MM-DD or DD-MM-YYYY)';
   if (norm.includes('qty')) return 'Quantity number';
   if (norm.includes('rate')) return 'Rate per unit amount';
   return col.replace(/([A-Z])/g, ' $1').trim();
@@ -133,12 +151,14 @@ export function BulkUploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<any[]>([]);
+  const [dateFormattedHeaders, setDateFormattedHeaders] = useState<Set<string>>(new Set());
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [processedData, setProcessedData] = useState<any[]>([]);
   
   const [showMappingPanel, setShowMappingPanel] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [warningsCount, setWarningsCount] = useState(0);
+  const [invalidDatesCount, setInvalidDatesCount] = useState(0);
   const [resolvedProjectsCount, setResolvedProjectsCount] = useState(0);
   const [resolvedWorkersCount, setResolvedWorkersCount] = useState(0);
   
@@ -184,11 +204,12 @@ export function BulkUploadModal({
   useEffect(() => {
     if (rawRows.length === 0) return;
     recalculateProcessedRows();
-  }, [mappings, rawRows, projectsContext, workersContext]);
+  }, [mappings, rawRows, projectsContext, workersContext, dateFormattedHeaders]);
 
   const recalculateProcessedRows = () => {
     const list: any[] = [];
     let warnCount = 0;
+    let invDateCount = 0;
     let resolvedProj = 0;
     let resolvedWork = 0;
     let validationErrors: string[] = [];
@@ -202,7 +223,7 @@ export function BulkUploadModal({
     }
 
     rawRows.forEach((row, idx) => {
-      const newRow: any = { _rowNum: idx + 1 };
+      const newRow: any = { _rowNum: idx + 1, _hasInvalidDate: false };
 
       // Initialize with correct key defaults
       expectedColumns.forEach((col) => {
@@ -216,17 +237,29 @@ export function BulkUploadModal({
 
         const val = row[rawHeaderKey];
         if (val !== undefined && val !== null && val !== '') {
-          // Check if it is a date column (using our KEY_VARIATIONS keys)
-          const isDateColumn = expectedKey.toLowerCase().includes('date');
+          // Check if it is a date column (target is date field, source header is date, or source cell was date-formatted)
+          const isDateColumn = isDateField(expectedKey) || isDateField(rawHeaderKey) || dateFormattedHeaders.has(rawHeaderKey);
+          
           // Convert numbers correctly (strip characters that break parsing)
           const isNumeric = ['budget', 'amount', 'amountReceived', 'purchaseCost', 'rate', 'qty', 'workerCount', 'ratePerWeek', 'totalComputed', 'amountPaid', 'amountDue', 'kharchi', 'mess', 'workerAdvance', 'tiffin', 'travel', 'machineryMaterial', 'workerPayment', 'stationery', 'others', 'crBalance', 'carpenter', 'fitter', 'helper', 'mason', 'rigger', 'staff'].includes(expectedKey);
           
           if (isDateColumn) {
-            const parsedDate = normalizeImportedDate(val, true);
+            newRow[`_${expectedKey}Raw`] = val;
+            const parsedDate = normalizeImportedDate(val, {
+              isDateColumn: true,
+              columnName: rawHeaderKey,
+              targetField: expectedKey,
+              isDateFormatted: dateFormattedHeaders.has(rawHeaderKey)
+            });
             newRow[expectedKey] = parsedDate;
             if (parsedDate === 'Invalid Date') {
-              newRow[`_${expectedKey}Warning`] = `Invalid Date: ${val}`;
+              newRow[`_${expectedKey}Warning`] = `Invalid Date: "${val}"`;
+              newRow._hasInvalidDate = true;
               warnCount++;
+              invDateCount++;
+              if (validationErrors.length < 5) {
+                validationErrors.push(`Row ${idx + 1}: ${getColumnFriendlyDescription(expectedKey)} is an Invalid Date ("${val}"). Please correct it before import.`);
+              }
             }
           } else if (isNumeric) {
             const strVal = String(val).replace(/[^\d.\-]/g, '');
@@ -291,9 +324,50 @@ export function BulkUploadModal({
 
     setErrors(validationErrors);
     setWarningsCount(warnCount);
+    setInvalidDatesCount(invDateCount);
     setResolvedProjectsCount(resolvedProj);
     setResolvedWorkersCount(resolvedWork);
     setProcessedData(list);
+  };
+
+  /**
+   * Allows user to manually fix an invalid date row inline prior to finalizing the import.
+   */
+  const handleInlineDateFix = (rowIndex: number, columnKey: string, newValue: string) => {
+    const normalized = normalizeImportedDate(newValue, true);
+    setProcessedData((prev) => {
+      const updated = [...prev];
+      const targetRow = { ...updated[rowIndex] };
+      targetRow[columnKey] = normalized;
+
+      if (normalized && normalized !== 'Invalid Date') {
+        delete targetRow[`_${columnKey}Warning`];
+        const hasOtherInvalid = expectedColumns.some(
+          col => isDateField(col) && targetRow[col] === 'Invalid Date'
+        );
+        targetRow._hasInvalidDate = hasOtherInvalid;
+      } else {
+        targetRow[columnKey] = 'Invalid Date';
+        targetRow[`_${columnKey}Warning`] = `Invalid Date: "${newValue}"`;
+        targetRow._hasInvalidDate = true;
+      }
+
+      updated[rowIndex] = targetRow;
+
+      // Recalculate summary error counts
+      let newInvCount = 0;
+      updated.forEach(r => {
+        if (expectedColumns.some(c => isDateField(c) && r[c] === 'Invalid Date')) {
+          newInvCount++;
+        }
+      });
+      setInvalidDatesCount(newInvCount);
+      if (newInvCount === 0) {
+        setErrors(prevErrors => prevErrors.filter(e => !e.includes('Invalid Date')));
+      }
+
+      return updated;
+    });
   };
 
   const handleMapChange = (expectedKey: string, rawHeaderValue: string) => {
@@ -328,6 +402,26 @@ export function BulkUploadModal({
           const headers = (jsonHeadersOnly[0] || []) as string[];
           const cleanHeaders = headers.map(h => String(h).trim()).filter(Boolean);
           
+          // Detect any columns where cells have date formatting
+          const detectedDateCols = new Set<string>();
+          if (worksheet && worksheet['!ref']) {
+            const range = utils.decode_range(worksheet['!ref']);
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+              const headerCell = worksheet[utils.encode_cell({ r: range.s.r, c: C })];
+              const headerName = headerCell ? String(headerCell.v).trim() : cleanHeaders[C];
+              if (!headerName) continue;
+
+              for (let R = range.s.r + 1; R <= Math.min(range.e.r, range.s.r + 20); ++R) {
+                const cell = worksheet[utils.encode_cell({ r: R, c: C })];
+                if (cell && (cell.t === 'd' || (cell.z && isExcelDateFormat(cell.z)))) {
+                  detectedDateCols.add(headerName);
+                  break;
+                }
+              }
+            }
+          }
+          setDateFormattedHeaders(detectedDateCols);
+
           const parsedRows = utils.sheet_to_json(worksheet, { defval: "" });
 
           if (parsedRows.length === 0) {
@@ -345,6 +439,7 @@ export function BulkUploadModal({
     } 
     // 2. FLAT CSV PARSER FALLBACK
     else {
+      setDateFormattedHeaders(new Set());
       Papa.parse(selectedFile, {
         header: true,
         skipEmptyLines: true,
@@ -377,6 +472,16 @@ export function BulkUploadModal({
 
   const handleUpload = async () => {
     if (processedData.length === 0) return;
+
+    // Guard: Do NOT silently save an incorrect value. Prevent saving rows with "Invalid Date".
+    const invalidRows = processedData.filter(row => 
+      expectedColumns.some(col => isDateField(col) && row[col] === 'Invalid Date') || row._hasInvalidDate
+    );
+    if (invalidRows.length > 0) {
+      setErrors([`Cannot import: ${invalidRows.length} record(s) contain Invalid Date. Please correct them in the preview table before proceeding.`]);
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -415,10 +520,12 @@ export function BulkUploadModal({
     setFile(null);
     setRawHeaders([]);
     setRawRows([]);
+    setDateFormattedHeaders(new Set());
     setMappings({});
     setProcessedData([]);
     setShowMappingPanel(false);
     setErrors([]);
+    setInvalidDatesCount(0);
   };
 
   const closeAndReset = () => {
@@ -448,174 +555,169 @@ export function BulkUploadModal({
       const wb = utils.book_new();
       utils.book_append_sheet(wb, ws, "Template Map Guidelines");
       
-      const arrayBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      // Auto-fit Column width computation
+      const maxCols = expectedColumns.map(col => ({ wch: Math.max(col.length + 3, 14) }));
+      ws['!cols'] = maxCols;
+
+      const excelBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
       const url = URL.createObjectURL(blob);
-      triggerDownload(url, `${entityName}_Template_Sample.xlsx`);
+      triggerDownload(url, `${entityName.toLowerCase().replace(/\s+/g, '_')}_import_template.xlsx`);
     } else {
       const csvStr = Papa.unparse([headingRow]);
       const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-      triggerDownload(url, `${entityName}_Template_Sample.csv`);
+      triggerDownload(url, `${entityName.toLowerCase().replace(/\s+/g, '_')}_import_template.csv`);
     }
   };
 
-  // Dynamically enlarge modal based on whether file is loaded
-  const modalWidthClass = file ? 'max-w-4xl' : 'max-w-md';
+  if (!isOpen) return null;
 
   return (
-    <AnimateModal isOpen={isOpen} onClose={closeAndReset} maxWidthClass={modalWidthClass}>
-      <div className="flex flex-col font-mono text-[11px] select-none text-slate-800 h-[85vh] md:h-auto max-h-[90vh]">
+    <AnimateModal isOpen={isOpen} onClose={closeAndReset} maxWidthClass="max-w-4xl">
+      <div className="flex flex-col max-h-[90vh] bg-white rounded-lg shadow-xl overflow-hidden font-sans">
         
-        {/* Header toolbar */}
-        <div className="flex justify-between items-center p-3.5 border-b bg-[#eef2f6] shrink-0">
-          <h2 className="font-bold text-[var(--color-sap-blue-val)] flex items-center text-xs font-sans">
-            <Upload size={14} className="mr-2 text-[#0056b3]" />
-            Smart Sheet Import Suite: <span className="text-[#0056b3] ml-1 font-bold">[{entityName}]</span>
-          </h2>
-          <button onClick={closeAndReset} className="text-gray-500 hover:text-red-500 transition cursor-pointer">
+        {/* Header Ribbon */}
+        <div className="bg-[#0056b3] text-white px-4 py-3 flex items-center justify-between shrink-0 border-b border-blue-900">
+          <div className="flex items-center space-x-2">
+            <FileSpreadsheet size={18} className="text-blue-200" />
+            <div>
+              <h2 className="text-xs font-bold tracking-wide uppercase font-sans">
+                Universal Bulk Importer: {entityName}
+              </h2>
+              <p className="text-[10px] text-blue-100 font-sans mt-0.5">
+                XLSX/CSV data ingestion engine with automatic date normalization
+              </p>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onClick={closeAndReset}
+            className="text-white/80 hover:text-white hover:bg-blue-700/60 p-1 rounded-sm transition cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
 
-        <div className="p-4 flex-1 overflow-y-auto space-y-4">
+        {/* Modal Scroll Content */}
+        <div className="p-4 overflow-y-auto space-y-3.5 flex-1 text-slate-800 text-xs">
           
-          {/* Top Info guides */}
-          {!file && (
-            <div>
-              <p className="text-[10px] text-gray-500 font-sans leading-relaxed">
-                Connect your Excel books (<b className="text-gray-700">.xlsx / .xls</b>) or text spreadsheets (<b className="text-gray-700">.csv</b>). The background indexer runs fuzzy-matching algorithms to automatically link row values with correct Projects and Employees in your system ledger.
+          {/* Action Top Bar: Template Generation & Quick Instruction */}
+          <div className="bg-slate-50 border border-slate-200 rounded p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="space-y-0.5 max-w-xl">
+              <span className="font-bold text-[10px] uppercase text-slate-700 font-sans flex items-center gap-1">
+                <Info size={12} className="text-[#0056b3]" />
+                Standard Template Formatting Guidelines
+              </span>
+              <p className="text-[9.5px] text-slate-500 leading-relaxed font-sans">
+                Dates are normalized globally to <span className="font-mono font-semibold text-slate-700">YYYY-MM-DD</span> in the database while displayed as <span className="font-mono font-semibold text-slate-700">DD-MM-YYYY</span> in the ERP. Excel serial numbers (e.g. 46262), DD-MM-YYYY, and ISO formats are fully supported.
               </p>
             </div>
-          )}
-
-          {/* Guidelines template links */}
-          {!file && (
-            <div className="border border-indigo-150 bg-indigo-50/40 p-3 rounded flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2.5 sm:space-y-0">
-              <div>
-                <p className="font-sans font-bold text-indigo-950 text-[10px] flex items-center">
-                  <FileSpreadsheet size={13} className="mr-1.5 text-indigo-800" />
-                  Guide Templates for Formatting:
-                </p>
-                <p className="text-[9px] text-indigo-700 font-sans mt-0.5">Use as is or check sample column conventions to avoid manual mapping.</p>
-              </div>
-              <div className="flex items-center space-x-1.5 shrink-0 self-end sm:self-center">
-                <button
-                  onClick={() => downloadTemplate('xlsx')}
-                  className="px-2.5 py-1 bg-[#217346] hover:bg-[#1a5c38] text-white rounded font-sans text-[10px] font-bold flex items-center transition cursor-pointer"
-                  title="Download guideline Excel ledger"
-                >
-                  <Download size={11} className="mr-1" />
-                  Excel Worksheet
-                </button>
-                <button
-                  onClick={() => downloadTemplate('csv')}
-                  className="px-2 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded font-sans text-[10px] font-bold flex items-center transition cursor-pointer"
-                  title="Download standard CSV text guideline"
-                >
-                  <Download size={11} className="mr-1" />
-                  CSV format
-                </button>
-              </div>
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => downloadTemplate('xlsx')}
+                className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-sans font-bold text-[9px] rounded flex items-center space-x-1 shadow-2xs transition cursor-pointer"
+              >
+                <Download size={11} className="text-green-700" />
+                <span>Template (.xlsx)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadTemplate('csv')}
+                className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-sans font-bold text-[9px] rounded flex items-center space-x-1 shadow-2xs transition cursor-pointer"
+              >
+                <Download size={11} className="text-blue-700" />
+                <span>Template (.csv)</span>
+              </button>
             </div>
-          )}
+          </div>
 
-          {/* Excel upload form dropzone */}
-          <div className={`border-2 border-dashed rounded p-5 text-center transition relative ${file ? 'border-indigo-400 bg-indigo-50/10 py-4' : 'border-slate-300 hover:bg-slate-50'}`}>
-            <input
-              type="file"
-              accept=".csv, .xlsx, .xls"
-              className="hidden"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              disabled={isUploading}
+          {/* Interactive Drag Drop or Browse Section */}
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-5 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-2 select-none ${
+              file ? 'border-emerald-400 bg-emerald-50/20' : 'border-slate-300 hover:border-[#0056b3] bg-slate-50/50 hover:bg-blue-50/10'
+            }`}
+          >
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+              accept=".csv, .xlsx, .xls" 
+              className="hidden" 
             />
 
             {file ? (
-              <div className="flex flex-col md:flex-row md:items-center justify-between font-sans gap-3">
-                <div className="flex items-center space-x-2.5 text-left">
-                  <div className="bg-emerald-100 p-2 rounded-sm text-emerald-800 shrink-0">
-                    <CheckCircle2 size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-800 overflow-hidden text-ellipsis line-clamp-1">{file.name}</h3>
-                    <p className="text-[10px] text-slate-500 font-mono">
-                      {rawRows.length} rows parsed | {rawHeaders.length} source columns identified
-                    </p>
-                  </div>
+              <div className="flex flex-col items-center">
+                <div className="p-2 bg-emerald-100 text-emerald-700 rounded-full mb-1">
+                  <CheckCircle2 size={24} />
                 </div>
-
-                <div className="flex items-center space-x-2 shrink-0 max-sm:w-full max-sm:justify-end">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-2.5 py-1 text-[#0056b3] border border-[#0056b3]/30 text-[10px] hover:bg-[var(--btn-hover-top)]/5 bg-white font-bold rounded cursor-pointer"
-                  >
-                    Load New File
-                  </button>
-                  <button
-                    onClick={resetStates}
-                    className="px-2.5 py-1 text-red-700 border border-red-200 text-[10px] hover:bg-red-50 bg-white font-bold rounded cursor-pointer"
-                  >
-                    Clear File
-                  </button>
-                </div>
+                <span className="font-bold text-[11px] text-emerald-900 font-sans">{file.name}</span>
+                <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+                  {(file.size / 1024).toFixed(1)} KB &bull; {rawRows.length} data rows recognized
+                </span>
+                <span className="text-[8px] text-blue-600 underline mt-1 font-sans">Click to pick a different file</span>
               </div>
             ) : (
-              <div className="space-y-2">
-                <Upload size={24} className="mx-auto text-slate-400 animate-bounce" />
-                <p className="text-[10px] text-[var(--color-sap-blue-val)] font-sans font-extrabold">DRAG & DROP WORKSHEET OR BROWSE DEVICE</p>
-                <div className="pt-1.5">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-1.5 bg-[var(--btn-hover-top)] text-white hover:bg-[#003d80] rounded font-sans font-bold select-none cursor-pointer text-[10px]"
-                  >
-                    Import From Computer
-                  </button>
+              <>
+                <div className="p-2 bg-blue-100 text-[#0056b3] rounded-full">
+                  <Upload size={20} />
                 </div>
-              </div>
+                <div>
+                  <span className="font-bold text-[11px] text-slate-700 block font-sans">Select or Drop Excel / CSV Document</span>
+                  <span className="text-[9px] text-slate-400 font-sans">Supports Microsoft Excel (.xlsx, .xls) and UTF-8 CSV</span>
+                </div>
+              </>
             )}
           </div>
 
-          {/* Active Cockpit: Mappings Panel & Realtime Sample Grid */}
-          {file && (
+          {/* Processed Data Section: Mapping Controls & Preview Grid */}
+          {file && processedData.length > 0 && (
             <div className="space-y-3.5">
               
-              {/* Mapper toggle tab */}
-              <div className="border border-slate-250 rounded-sm">
+              {/* Dynamic Header Column Mapping Panel */}
+              <div className="border border-slate-250 rounded-sm bg-white overflow-hidden shadow-2xs">
                 <button
                   type="button"
                   onClick={() => setShowMappingPanel(!showMappingPanel)}
-                  className="w-full bg-slate-50 px-3 py-2 flex items-center justify-between text-slate-700 font-bold font-sans text-[10px] outline-hidden cursor-pointer"
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-3 py-2 border-b flex items-center justify-between text-left transition select-none cursor-pointer"
                 >
-                  <div className="flex items-center space-x-1.5">
-                    <Settings2 size={13} className="text-slate-500" />
-                    <span>Customize Column Mapping Linkage</span>
-                    <span className="bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-xs text-[9px] font-mono ml-2">
-                      {Object.values(mappings).filter(Boolean).length} / {expectedColumns.length} mapped
+                  <div className="flex items-center space-x-2">
+                    <Settings2 size={13} className="text-[#0056b3]" />
+                    <span className="font-bold text-[10px] text-slate-700 font-sans uppercase">
+                      Header Column Mapping Configuration
+                    </span>
+                    <span className="bg-slate-200 text-slate-600 text-[8px] font-mono px-1.5 py-0.2 rounded-full font-bold">
+                      {Object.values(mappings).filter(Boolean).length} / {expectedColumns.length} Mapped
                     </span>
                   </div>
-                  {showMappingPanel ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <div className="text-slate-400">
+                    {showMappingPanel ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </div>
                 </button>
 
                 {showMappingPanel && (
-                  <div className="p-3 border-t bg-white grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2.5 max-h-60 overflow-y-auto">
+                  <div className="p-3 bg-slate-50/40 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {expectedColumns.map((expectedKey) => {
-                      const isMapped = !!mappings[expectedKey];
+                      const isMapped = Boolean(mappings[expectedKey]);
                       return (
-                        <div key={expectedKey} className="flex flex-col space-y-1 bg-slate-50 p-2 border border-slate-200 rounded-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-800 text-[10px] font-sans truncate" title={expectedKey}>
-                              {expectedKey.replace(/([A-Z])/g, ' $1').trim()}
+                        <div 
+                          key={expectedKey}
+                          className={`p-2 rounded border text-left flex flex-col justify-between ${
+                            isMapped ? 'bg-white border-slate-300' : 'bg-amber-50/50 border-amber-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-[9.5px] text-slate-800 font-sans truncate">
+                              {expectedKey}
                             </span>
-                            <span className="text-[8px] text-gray-400 italic">
+                            <span className="text-[7.5px] uppercase font-bold font-mono px-1 py-0.2 rounded bg-slate-100 text-slate-500">
                               {expectedFieldsRules(expectedKey)}
                             </span>
                           </div>
-                          <p className="text-[8px] text-gray-500 font-sans shrink-0 truncate-2-lines line-clamp-1">
-                            {getColumnFriendlyDescription(expectedKey)}
-                          </p>
-                          <div className="relative mt-1">
+                          
+                          <div className="relative">
                             <SAPSelect
                               value={mappings[expectedKey] || ''}
                               onChange={(e) => handleMapChange(expectedKey, e.target.value)}
@@ -639,7 +741,7 @@ export function BulkUploadModal({
                 )}
               </div>
 
-              {/* Realtime Resolved Analytics Banner */}
+              {/* Realtime Analytics & Warnings Banner */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div className="bg-emerald-50/50 p-2 border border-emerald-100 rounded-sm text-center">
                   <span className="block text-emerald-800 font-extrabold text-xs">{processedData.length}</span>
@@ -653,17 +755,22 @@ export function BulkUploadModal({
                     <span className="text-[8px] text-slate-600 font-sans block truncate">Sites Resolved</span>
                   </div>
                 )}
-                {expectedColumns.includes('workerId') && (
+                {invalidDatesCount > 0 ? (
+                  <div className="bg-red-50/80 p-2 border border-red-200 rounded-sm text-center">
+                    <span className="block text-red-700 font-extrabold text-xs">{invalidDatesCount}</span>
+                    <span className="text-[8px] text-red-600 font-sans font-bold">Invalid Dates (Action Required)</span>
+                  </div>
+                ) : (
                   <div className="bg-indigo-50/50 p-2 border border-indigo-100 rounded-sm text-center">
                     <span className="block text-indigo-800 font-extrabold text-xs">
-                      {resolvedWorkersCount} / {processedData.length}
+                      {processedData.length}
                     </span>
-                    <span className="text-[8px] text-indigo-700 font-sans block truncate">Workers Match</span>
+                    <span className="text-[8px] text-indigo-700 font-sans block truncate">Dates Validated</span>
                   </div>
                 )}
                 <div className={`p-2 border rounded-sm text-center ${warningsCount > 0 ? 'bg-amber-50/30 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
                   <span className={`block font-extrabold text-xs ${warningsCount > 0 ? 'text-amber-700' : 'text-slate-600'}`}>{warningsCount}</span>
-                  <span className="text-[8px] text-slate-500 font-sans">Warnings Detected</span>
+                  <span className="text-[8px] text-slate-500 font-sans">Total Warnings</span>
                 </div>
               </div>
 
@@ -672,33 +779,51 @@ export function BulkUploadModal({
                 <div className="bg-slate-100 px-3 py-1.5 flex items-center justify-between text-slate-700 border-b">
                   <span className="font-bold text-[9px] flex items-center font-sans uppercase">
                     <Eye size={12} className="mr-1 text-[#0056b3]" />
-                    Realtime Data Parsing Preview (First 5 Rows)
+                    Bulk Import Realtime Preview & Date Normalization
                   </span>
-                  <span className="text-[8px] text-slate-500 font-mono">Verify auto-resolved rows</span>
+                  <span className="text-[8px] text-slate-500 font-mono">
+                    Showing all mapped columns &bull; UI Display: DD-MM-YYYY
+                  </span>
                 </div>
                 
-                <div className="overflow-x-auto w-full">
-                  <table className="w-full text-left text-[9px] border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 font-bold uppercase">
-                        <th className="px-2.5 py-1.5 border-r border-slate-150 w-12 text-center">#</th>
-                        {expectedColumns.slice(0, 6).map((col) => (
-                          <th key={col} className="px-2.5 py-1.5 border-r border-slate-200 font-sans text-[8px]">
+                <div className="overflow-x-auto w-full max-h-72 overflow-y-auto">
+                  <table className="w-full text-left text-[9px] border-collapse min-w-[800px]">
+                    <thead className="sticky top-0 z-10 bg-slate-100">
+                      <tr className="bg-slate-100 text-slate-600 border-b border-slate-200 font-bold uppercase">
+                        <th className="px-2.5 py-1.5 border-r border-slate-200 w-10 text-center">#</th>
+                        <th className="px-2.5 py-1.5 border-r border-slate-200 font-sans text-[8px] text-center w-24">Status</th>
+                        {expectedColumns.map((col) => (
+                          <th key={col} className="px-2.5 py-1.5 border-r border-slate-200 font-sans text-[8px] whitespace-nowrap">
                             {col.replace(/([A-Z])/g, ' $1').trim()}
+                            {isDateField(col) && (
+                              <span className="text-blue-600 text-[7px] ml-1 font-mono font-normal">(Date)</span>
+                            )}
                           </th>
                         ))}
-                        {expectedColumns.length > 6 && (
-                          <th className="px-2.5 py-1.5 font-sans text-[8px] text-slate-400 italic">More fields...</th>
-                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {processedData.slice(0, 5).map((row, index) => (
-                        <tr key={index} className="hover:bg-[#e6f2ff] even:bg-slate-50/40 border-b last:border-b-0">
+                      {processedData.map((row, index) => (
+                        <tr key={index} className={`hover:bg-[#e6f2ff] even:bg-slate-50/40 border-b last:border-b-0 ${row._hasInvalidDate ? 'bg-red-50/30' : ''}`}>
                           <td className="px-2.5 py-2 border-r border-slate-200 font-bold text-center text-slate-500 bg-slate-100/50">
                             {row._rowNum}
                           </td>
-                          {expectedColumns.slice(0, 6).map((col) => {
+                          <td className="px-2.5 py-2 border-r border-slate-200 text-center whitespace-nowrap">
+                            {row._hasInvalidDate ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7.5px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                Invalid Date
+                              </span>
+                            ) : (row._projectWarning || row._workerWarning) ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7.5px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                                Warning
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7.5px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                Valid
+                              </span>
+                            )}
+                          </td>
+                          {expectedColumns.map((col) => {
                             const val = row[col];
                             
                             // Advanced visual rendering for Project resolved IDs
@@ -738,30 +863,67 @@ export function BulkUploadModal({
                             }
 
                             // Check if date column for custom UI display
-                            const isDateColumn = col.toLowerCase().includes('date');
+                            const isDateColumn = isDateField(col);
 
-                            // Render general parameters with nice design
+                            // Render date column with readable DD-MM-YYYY format and inline correction if invalid
+                            if (isDateColumn) {
+                              const isInvalid = val === 'Invalid Date';
+                              return (
+                                <td key={col} className={`px-2.5 py-2 border-r border-slate-200 font-mono text-[8.5px] ${isInvalid ? 'bg-red-50' : ''}`}>
+                                  {isInvalid ? (
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-red-600 font-bold flex items-center gap-1">
+                                        <AlertCircle size={10} className="shrink-0" /> Invalid Date
+                                      </span>
+                                      {row[`_${col}Raw`] && (
+                                        <span className="text-[7px] text-slate-500 font-mono">Raw: "{String(row[`_${col}Raw`])}"</span>
+                                      )}
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <input
+                                          type="text"
+                                          placeholder="DD-MM-YYYY"
+                                          defaultValue=""
+                                          className="text-[8px] px-1 py-0.5 border border-red-300 rounded bg-white text-slate-800 outline-none focus:border-indigo-500 w-24"
+                                          title="Enter corrected date and press Enter or blur"
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              handleInlineDateFix(index, col, (e.target as HTMLInputElement).value);
+                                            }
+                                          }}
+                                          onBlur={(e) => {
+                                            if (e.target.value.trim()) {
+                                              handleInlineDateFix(index, col, e.target.value);
+                                            }
+                                          }}
+                                        />
+                                        <span className="text-[7px] text-slate-400">↵ save</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-800 font-semibold font-mono">
+                                      {val ? formatToUIDate(val as string) : '-'}
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            }
+
+                            // Render numeric parameters
+                            if (typeof val === 'number') {
+                              return (
+                                <td key={col} className="px-2.5 py-2 border-r border-slate-200 font-mono text-slate-700 whitespace-nowrap">
+                                  {val.toLocaleString('en-IN')}
+                                </td>
+                              );
+                            }
+
+                            // General text
                             return (
-                              <td key={col} className="px-2.5 py-2 border-r border-slate-200 max-w-[120px] truncate leading-tight font-medium">
-                                {isDateColumn ? (
-                                  <span className={`font-mono ${val === 'Invalid Date' ? 'text-red-500 font-bold' : 'text-slate-700'}`}>
-                                    {val === 'Invalid Date' ? 'Invalid Date' : (formatToUIDate(val as string) || '-')}
-                                  </span>
-                                ) : typeof val === 'number' ? (
-                                  <span className="font-mono text-slate-700">
-                                    {val.toLocaleString('en-IN')}
-                                  </span>
-                                ) : (
-                                  val || '-'
-                                )}
+                              <td key={col} className="px-2.5 py-2 border-r border-slate-200 max-w-[150px] truncate leading-tight font-medium text-slate-700">
+                                {val || '-'}
                               </td>
                             );
                           })}
-                          {expectedColumns.length > 6 && (
-                            <td className="px-2.5 py-2 text-slate-400 italic text-[7.5px]">
-                              {expectedColumns.length - 6} other fields mapped
-                            </td>
-                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -784,8 +946,15 @@ export function BulkUploadModal({
             <div className="p-3 bg-red-50 border border-red-200 rounded flex items-start space-x-2.5 text-left font-sans">
               <AlertCircle size={15} className="text-red-700 shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-red-900 font-bold text-[10px]">Mapping Blocking Errors Detect:</h4>
-                <p className="text-[9px] text-red-700 leading-relaxed mt-0.5">{errors[0]}</p>
+                <h4 className="text-red-900 font-bold text-[10px]">Import Warnings / Errors Detected:</h4>
+                <div className="space-y-0.5 mt-0.5">
+                  {errors.slice(0, 3).map((err, i) => (
+                    <p key={i} className="text-[9px] text-red-700 leading-relaxed font-sans">{err}</p>
+                  ))}
+                  {errors.length > 3 && (
+                    <p className="text-[8px] text-red-600 italic">...and {errors.length - 3} more issues.</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -807,7 +976,7 @@ export function BulkUploadModal({
             <button
               onClick={handleUpload}
               className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-sans font-bold select-none cursor-pointer text-[10.5px] rounded transition duration-150 flex items-center space-x-1.5 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
-              disabled={processedData.length === 0 || errors.length > 0 || isUploading}
+              disabled={processedData.length === 0 || errors.length > 0 || invalidDatesCount > 0 || isUploading}
             >
               {isUploading ? (
                 <>
@@ -829,7 +998,7 @@ export function BulkUploadModal({
 function expectedFieldsRules(col: string): string {
   const norm = col.toLowerCase();
   if (norm.includes('amount') || norm.includes('cost') || norm.includes('rate') || norm.includes('budget') || norm.includes('balance') || norm.includes('kharchi') || norm.includes('mess') || norm.includes('advance') || norm.includes('tiffin') || norm.includes('travel') || norm.includes('machinery') || norm.includes('stationery') || norm.includes('others')) return 'Number';
-  if (norm.includes('date')) return 'Date';
+  if (isDateField(col)) return 'Date';
   if (norm.includes('qty') || norm.includes('quantity') || norm.includes('count')) return 'Integer';
   return 'Text';
 }
