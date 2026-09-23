@@ -169,6 +169,8 @@ export interface WorkerPayment {
   otherDeductionDetails?: string;
   floorAbstractsJson?: string;
   towerName?: string;
+  kharchiDetailsJson?: string;
+  advanceDetailsJson?: string;
 }
 
 export interface WorkerLedgerEntry {

@@ -3,7 +3,7 @@ import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { F4Help } from '../components/F4Help';
-import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet, FolderOpen } from 'lucide-react';
+import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet, FolderOpen, Calendar, CheckSquare, Square } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkWorkerPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
@@ -63,6 +63,13 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
   const [floorFilterLevel, setFloorFilterLevel] = useState('');
   const [tempFloorSelections, setTempFloorSelections] = useState<Array<{ floorAbstractId: string; level: string; flatNo: string; hajira: number; amount: number }>>([]);
 
+  // Kharchi & Advance Date-by-date Selection state
+  const [showKharchiModal, setShowKharchiModal] = useState(false);
+  const [tempKharchiSelections, setTempKharchiSelections] = useState<string[]>([]);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [tempAdvanceSelections, setTempAdvanceSelections] = useState<string[]>([]);
+  const [advanceFilterMode, setAdvanceFilterMode] = useState<'month' | 'all'>('month');
+
   const [formData, setFormData] = useState({
     workerId: '', 
     month: selectedMonth, 
@@ -72,6 +79,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     overtimeHours: '',
     allowance: '',
     manualKharchi: '',
+    selectedKharchiIds: [] as string[],
+    manualAdvance: '',
+    selectedAdvanceIds: [] as string[],
     messDeduction: '', 
     level: '',
     towerName: '',
@@ -106,7 +116,14 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     if (!editingId) {
       setFormData(prev => {
         if (prev.month === selectedMonth) return prev;
-        return { ...prev, month: selectedMonth };
+        return { 
+          ...prev, 
+          month: selectedMonth,
+          manualKharchi: '',
+          selectedKharchiIds: [],
+          manualAdvance: '',
+          selectedAdvanceIds: []
+        };
       });
     }
   }, [selectedMonth, editingId]);
@@ -120,7 +137,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       ratePerDay: payment.ratePerDay ? payment.ratePerDay.toString() : '',
       overtimeHours: payment.overtimeHours ? payment.overtimeHours.toString() : '',
       allowance: payment.allowance ? payment.allowance.toString() : '',
-      manualKharchi: payment.kharchiDeduction ? payment.kharchiDeduction.toString() : '',
+      manualKharchi: payment.kharchiDeduction !== undefined && payment.kharchiDeduction !== null ? payment.kharchiDeduction.toString() : '',
+      selectedKharchiIds: payment.kharchiDetailsJson ? JSON.parse(payment.kharchiDetailsJson) : [],
+      manualAdvance: payment.advanceDeduction !== undefined && payment.advanceDeduction !== null ? payment.advanceDeduction.toString() : '',
+      selectedAdvanceIds: payment.advanceDetailsJson ? JSON.parse(payment.advanceDetailsJson) : [],
       messDeduction: payment.messDeduction.toString(),
       level: payment.level || '',
       towerName: payment.towerName || '',
@@ -147,6 +167,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       overtimeHours: '',
       allowance: '',
       manualKharchi: '',
+      selectedKharchiIds: [],
+      manualAdvance: '',
+      selectedAdvanceIds: [],
       messDeduction: '', 
       level: '',
       towerName: '',
@@ -213,6 +236,102 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     return currentApproval.status === 'Pending' || currentApproval.status === 'Approved';
   }, [currentApproval, isReadOnly]);
 
+  // Helper date formatter: DD-MM-YYYY (Day)
+  const formatDateWithDay = (dateStr: string) => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (isNaN(d.getTime())) return dateStr;
+      const dayName = d.toLocaleDateString('en-IN', { weekday: 'short' });
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}-${month}-${year} (${dayName})`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Worker Kharchis for the selected month
+  const workerMonthKharchis = useMemo(() => {
+    if (!formData.workerId || !formData.month) return [];
+    return kharchis
+      .filter(k => k.workerId === formData.workerId && k.date.startsWith(formData.month))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [kharchis, formData.workerId, formData.month]);
+
+  // Worker Advances for the selected month
+  const workerMonthAdvances = useMemo(() => {
+    if (!formData.workerId || !formData.month) return [];
+    return advances
+      .filter(a => a.workerId === formData.workerId && a.date.startsWith(formData.month))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [advances, formData.workerId, formData.month]);
+
+  // All historical advances for worker
+  const workerAllOutstandingAdvances = useMemo(() => {
+    if (!formData.workerId) return [];
+    return advances
+      .filter(a => a.workerId === formData.workerId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [advances, formData.workerId]);
+
+  // Open & apply Kharchi Modal
+  const handleOpenKharchiModal = () => {
+    if (!formData.workerId) {
+      alert("Please select a worker first to view and select their weekly kharchis.");
+      return;
+    }
+    if (formData.selectedKharchiIds && formData.selectedKharchiIds.length > 0) {
+      setTempKharchiSelections([...formData.selectedKharchiIds]);
+    } else if (formData.manualKharchi === '' || Number(formData.manualKharchi) === autoCalculations.kharchi) {
+      setTempKharchiSelections(workerMonthKharchis.map(k => k.id));
+    } else {
+      setTempKharchiSelections([]);
+    }
+    setShowKharchiModal(true);
+  };
+
+  const handleApplyKharchiSelection = () => {
+    const selected = workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id));
+    const total = selected.reduce((sum, k) => sum + k.amount, 0);
+    setFormData(prev => ({
+      ...prev,
+      manualKharchi: total.toString(),
+      selectedKharchiIds: tempKharchiSelections
+    }));
+    setShowKharchiModal(false);
+  };
+
+  // Open & apply Advance Modal
+  const handleOpenAdvanceModal = () => {
+    if (!formData.workerId) {
+      alert("Please select a worker first to view and select their advances.");
+      return;
+    }
+    if (formData.selectedAdvanceIds && formData.selectedAdvanceIds.length > 0) {
+      setTempAdvanceSelections([...formData.selectedAdvanceIds]);
+    } else if (formData.manualAdvance === '' || Number(formData.manualAdvance) === autoCalculations.advance) {
+      setTempAdvanceSelections(workerMonthAdvances.map(a => a.id));
+    } else {
+      setTempAdvanceSelections([]);
+    }
+    setAdvanceFilterMode('month');
+    setShowAdvanceModal(true);
+  };
+
+  const handleApplyAdvanceSelection = () => {
+    const pool = advanceFilterMode === 'month' ? workerMonthAdvances : workerAllOutstandingAdvances;
+    const selected = pool.filter(a => tempAdvanceSelections.includes(a.id));
+    const total = selected.reduce((sum, a) => sum + a.amount, 0);
+    setFormData(prev => ({
+      ...prev,
+      manualAdvance: total.toString(),
+      selectedAdvanceIds: tempAdvanceSelections
+    }));
+    setShowAdvanceModal(false);
+  };
+
   // Auto-calculate deductions based on selected worker and month
   const autoCalculations = useMemo(() => {
     if (!formData.workerId || !formData.month) return { kharchi: 0, advance: 0 };
@@ -250,9 +369,27 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
 
   const calculatedValues = useMemo(() => {
     let finalWorkAmount = Number(formData.workAmount) || 0;
-    let finalKharchi = formData.manualKharchi !== '' 
-      ? Number(formData.manualKharchi) 
-      : autoCalculations.kharchi;
+    
+    let finalKharchi = 0;
+    if (formData.selectedKharchiIds && formData.selectedKharchiIds.length > 0) {
+      finalKharchi = kharchis
+        .filter(k => formData.selectedKharchiIds.includes(k.id))
+        .reduce((sum, k) => sum + k.amount, 0);
+    } else if (formData.manualKharchi !== '') {
+      finalKharchi = Number(formData.manualKharchi);
+    } else {
+      finalKharchi = autoCalculations.kharchi;
+    }
+
+    let finalAdvance = 0;
+    if (formData.selectedAdvanceIds && formData.selectedAdvanceIds.length > 0) {
+      const pool = advances.filter(a => formData.selectedAdvanceIds.includes(a.id));
+      finalAdvance = pool.reduce((sum, a) => sum + a.amount, 0);
+    } else if (formData.manualAdvance !== '') {
+      finalAdvance = Number(formData.manualAdvance);
+    } else {
+      finalAdvance = autoCalculations.advance;
+    }
 
     if (selectedCategory === 'Monthly work') {
       const days = Number(formData.workDays) || 0;
@@ -271,16 +408,17 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     const recoveryAmount = Number(formData.recoveryAmount) || 0;
     const otherDeductionAmount = Number(formData.otherDeduction) || 0;
     
-    const netPayment = finalWorkAmount + supplyAmount - messDeduction - finalKharchi - autoCalculations.advance - recoveryAmount - otherDeductionAmount;
+    const netPayment = finalWorkAmount + supplyAmount - messDeduction - finalKharchi - finalAdvance - recoveryAmount - otherDeductionAmount;
     
     return {
       workAmount: finalWorkAmount,
       kharchi: finalKharchi,
+      advance: finalAdvance,
       recoveryAmount,
       otherDeduction: otherDeductionAmount,
       netPayment
     };
-  }, [formData, autoCalculations, selectedCategory]);
+  }, [formData, autoCalculations, selectedCategory, kharchis, advances]);
 
   const netPayment = calculatedValues.netPayment;
 
@@ -420,7 +558,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       allowance: selectedCategory === 'Monthly work' ? Number(formData.allowance) || 0 : undefined,
       messDeduction: Number(formData.messDeduction),
       kharchiDeduction: calculatedValues.kharchi,
-      advanceDeduction: autoCalculations.advance,
+      advanceDeduction: calculatedValues.advance,
       netPayment: netPayment,
       date: formData.date,
       level: formData.level || undefined,
@@ -432,7 +570,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       otherDeductionDetails: formData.otherDeductionDetails,
       paymentStatus: (formData.paymentStatus || 'Pending') as 'Pending' | 'Paid',
       floorAbstractsJson: formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 ? JSON.stringify(formData.selectedFloorAbstracts) : undefined,
-      towerName: formData.towerName || undefined
+      towerName: formData.towerName || undefined,
+      kharchiDetailsJson: formData.selectedKharchiIds.length > 0 ? JSON.stringify(formData.selectedKharchiIds) : undefined,
+      advanceDetailsJson: formData.selectedAdvanceIds.length > 0 ? JSON.stringify(formData.selectedAdvanceIds) : undefined
     };
 
     const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
@@ -674,7 +814,15 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   required 
                   className="sap-input" 
                   value={formData.workerId} 
-                  onChange={e => setFormData({...formData, workerId: e.target.value})}
+                  onChange={e => setFormData({
+                    ...formData, 
+                    workerId: e.target.value,
+                    manualKharchi: '',
+                    selectedKharchiIds: [],
+                    manualAdvance: '',
+                    selectedAdvanceIds: [],
+                    selectedFloorAbstracts: []
+                  })}
                 >
                   <option value="">-- Choose Worker --</option>
                   {projectWorkers.map(w => <option key={w.id} value={w.id}>{w.name} ({w.workerId})</option>)}
@@ -797,12 +945,39 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              {selectedCategory === 'Contract work' && (
-                <div className="flex flex-col space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="font-semibold text-gray-600">Gross Work Amount (INR):</label>
-                    {formData.workerId && (
+            {/* Contract Work Gross Amount (if contract work) */}
+            {selectedCategory === 'Contract work' && (
+              <div className="bg-blue-50/40 p-2.5 border border-blue-200 rounded-sm mb-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-gray-700 text-[11px]">Gross Work Amount (INR):</label>
+                  {formData.workerId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                        setFloorFilterLevel('');
+                        setShowFloorAbstractPopup(true);
+                      }}
+                      className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] font-bold py-1 px-2.5 rounded border border-blue-700 transition shadow-xs"
+                    >
+                      Import From Floor Abstract
+                    </button>
+                  )}
+                </div>
+                <input 
+                  required 
+                  type="number" 
+                  step="any"
+                  className="sap-input font-bold" 
+                  placeholder="₹ Gross amount"
+                  value={formData.workAmount} 
+                  onChange={e => setFormData({...formData, workAmount: e.target.value})} 
+                />
+
+                {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 && (
+                  <div className="bg-white border border-blue-200 rounded p-2 text-[10px] space-y-1.5 mt-1.5">
+                    <div className="flex justify-between items-center font-bold text-blue-800 border-b border-blue-200 pb-1">
+                      <span>Linked Floor Abstracts ({formData.selectedFloorAbstracts.length})</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -810,93 +985,187 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                           setFloorFilterLevel('');
                           setShowFloorAbstractPopup(true);
                         }}
-                        className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] font-bold py-1 px-2.5 rounded border border-blue-700 transition"
+                        className="text-blue-700 hover:underline font-semibold"
                       >
-                        Import From Floor Abstract
+                        + Add More
                       </button>
-                    )}
-                  </div>
-                  <input 
-                    required 
-                    type="number" 
-                    step="any"
-                    className="sap-input font-bold" 
-                    placeholder="₹ Gross amount"
-                    value={formData.workAmount} 
-                    onChange={e => setFormData({...formData, workAmount: e.target.value})} 
-                  />
-
-                  {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 && (
-                    <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[10px] space-y-1.5 mt-1.5">
-                      <div className="flex justify-between items-center font-bold text-blue-800 border-b border-blue-200 pb-1">
-                        <span>Linked Floor Abstracts ({formData.selectedFloorAbstracts.length})</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTempFloorSelections(formData.selectedFloorAbstracts || []);
-                            setFloorFilterLevel('');
-                            setShowFloorAbstractPopup(true);
-                          }}
-                          className="text-blue-700 hover:underline font-semibold"
-                        >
-                          + Add More
-                        </button>
-                      </div>
-                      <div className="max-h-24 overflow-y-auto divide-y divide-blue-105">
-                        {formData.selectedFloorAbstracts.map((item) => (
-                          <div key={item.floorAbstractId} className="flex items-center justify-between py-1 text-gray-700 font-sans">
-                            <span>
-                              Floor {item.level} (Flat {item.flatNo})
-                            </span>
-                            <div className="flex items-center space-x-2 font-mono">
-                              <span className="font-bold">₹{item.amount.toLocaleString('en-IN')}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = formData.selectedFloorAbstracts.filter(x => x.floorAbstractId !== item.floorAbstractId);
-                                  const totalAmount = updated.reduce((sum, x) => sum + x.amount, 0);
-                                  setFormData({
-                                    ...formData,
-                                    selectedFloorAbstracts: updated,
-                                    workAmount: totalAmount.toString()
-                                  });
-                                }}
-                                className="text-red-500 hover:text-red-750 font-bold px-1 text-xs"
-                                title="Remove"
-                              >
-                                &times;
-                              </button>
-                            </div>
+                    </div>
+                    <div className="max-h-24 overflow-y-auto divide-y divide-blue-105">
+                      {formData.selectedFloorAbstracts.map((item) => (
+                        <div key={item.floorAbstractId} className="flex items-center justify-between py-1 text-gray-700 font-sans">
+                          <span>
+                            Floor {item.level} (Flat {item.flatNo})
+                          </span>
+                          <div className="flex items-center space-x-2 font-mono">
+                            <span className="font-bold">₹{item.amount.toLocaleString('en-IN')}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = formData.selectedFloorAbstracts.filter(x => x.floorAbstractId !== item.floorAbstractId);
+                                const totalAmount = updated.reduce((sum, x) => sum + x.amount, 0);
+                                setFormData({
+                                  ...formData,
+                                  selectedFloorAbstracts: updated,
+                                  workAmount: totalAmount.toString()
+                                });
+                              }}
+                              className="text-red-500 hover:text-red-750 font-bold px-1 text-xs"
+                              title="Remove"
+                            >
+                              &times;
+                            </button>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Deductions Panel: Kharchi, Advance & Mess */}
+            <div className="bg-gray-50/70 p-2.5 border border-[#8c9ba8] rounded-sm space-y-2">
+              <div className="text-[10px] font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200 pb-1 flex justify-between items-center">
+                <span>Deductions (Weekly Kharchi, Advance & Mess)</span>
+                {formData.workerId && (
+                  <span className="text-gray-500 font-normal">
+                    Click date list to select specific deductions
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* 1. KHARCHI DEDUCTION */}
+                <div className="flex flex-col bg-white p-2 border border-blue-200 rounded">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-gray-700 text-[11px]">Kharchi Deduction:</label>
+                    <button
+                      type="button"
+                      onClick={handleOpenKharchiModal}
+                      className="sap-btn bg-blue-50 border-blue-400 text-[#0056b3] hover:bg-blue-100 text-[10px] px-2 py-0.5 flex items-center space-x-1 font-bold shadow-xs transition"
+                      title="Select date-by-date kharchis for this worker"
+                    >
+                      <Calendar size={11} className="text-[#0056b3]" />
+                      <span>Select Kharchi ({workerMonthKharchis.length})</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 font-bold text-xs">₹</span>
+                    <input 
+                      type="number" 
+                      step="any"
+                      className="sap-input font-bold text-red-650 flex-1" 
+                      placeholder={autoCalculations.kharchi > 0 ? autoCalculations.kharchi.toString() : "0.00"}
+                      value={formData.manualKharchi} 
+                      onChange={e => setFormData({...formData, manualKharchi: e.target.value, selectedKharchiIds: []})} 
+                    />
+                    <button
+                      type="button"
+                      onClick={handleOpenKharchiModal}
+                      className="sap-btn px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] border-blue-700"
+                      title="Open Date-by-Date Kharchi List"
+                    >
+                      Date List
+                    </button>
+                  </div>
+                  {formData.selectedKharchiIds.length > 0 ? (
+                    <div className="flex items-center justify-between text-[9px] text-[#0056b3] font-bold mt-1 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                      <span>✓ {formData.selectedKharchiIds.length} kharchi date(s) selected</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData({...formData, selectedKharchiIds: [], manualKharchi: ''})}
+                        className="text-red-600 hover:underline ml-1"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  ) : workerMonthKharchis.length > 0 ? (
+                    <div className="text-[9px] text-gray-500 mt-1">
+                      {workerMonthKharchis.length} kharchi date(s) in {formData.month} (Total ₹{autoCalculations.kharchi.toLocaleString('en-IN')})
+                    </div>
+                  ) : (
+                    <div className="text-[9px] text-gray-400 mt-1 italic">
+                      No kharchi logged for this month
                     </div>
                   )}
                 </div>
-              )}
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1">Kharchi Deduction (INR):</label>
-                <input 
-                  type="number" 
-                  step="any"
-                  className="sap-input font-bold text-red-650" 
-                  placeholder={autoCalculations.kharchi > 0 ? autoCalculations.kharchi.toString() : "0 (Auto-calculated)"}
-                  value={formData.manualKharchi} 
-                  onChange={e => setFormData({...formData, manualKharchi: e.target.value})} 
-                />
-              </div>
 
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1">Mess Deduction (INR):</label>
-                <input 
-                  required 
-                  type="number" 
-                  step="any"
-                  className="sap-input font-bold text-red-650" 
-                  placeholder="Deducted mess cost sum"
-                  value={formData.messDeduction} 
-                  onChange={e => setFormData({...formData, messDeduction: e.target.value})} 
-                />
+                {/* 2. ADVANCE DEDUCTION */}
+                <div className="flex flex-col bg-white p-2 border border-amber-200 rounded">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-gray-700 text-[11px]">Advance Deduction:</label>
+                    <button
+                      type="button"
+                      onClick={handleOpenAdvanceModal}
+                      className="sap-btn bg-amber-50 border-amber-400 text-amber-850 hover:bg-amber-100 text-[10px] px-2 py-0.5 flex items-center space-x-1 font-bold shadow-xs transition"
+                      title="Select date-by-date advances for this worker"
+                    >
+                      <Calendar size={11} className="text-amber-800" />
+                      <span>Select Advance ({workerMonthAdvances.length})</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 font-bold text-xs">₹</span>
+                    <input 
+                      type="number" 
+                      step="any"
+                      className="sap-input font-bold text-red-650 flex-1" 
+                      placeholder={autoCalculations.advance > 0 ? autoCalculations.advance.toString() : "0.00"}
+                      value={formData.manualAdvance !== '' ? formData.manualAdvance : ''} 
+                      onChange={e => setFormData({...formData, manualAdvance: e.target.value, selectedAdvanceIds: []})} 
+                    />
+                    <button
+                      type="button"
+                      onClick={handleOpenAdvanceModal}
+                      className="sap-btn px-2.5 py-1 bg-amber-700 hover:bg-amber-800 text-white font-bold text-[10px] border-amber-800"
+                      title="Open Date-by-Date Advance List"
+                    >
+                      Date List
+                    </button>
+                  </div>
+                  {formData.selectedAdvanceIds.length > 0 ? (
+                    <div className="flex items-center justify-between text-[9px] text-amber-900 font-bold mt-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      <span>✓ {formData.selectedAdvanceIds.length} advance date(s) selected</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData({...formData, selectedAdvanceIds: [], manualAdvance: ''})}
+                        className="text-red-600 hover:underline ml-1"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  ) : workerMonthAdvances.length > 0 ? (
+                    <div className="text-[9px] text-gray-500 mt-1">
+                      {workerMonthAdvances.length} advance(s) in {formData.month} (Total ₹{autoCalculations.advance.toLocaleString('en-IN')})
+                    </div>
+                  ) : (
+                    <div className="text-[9px] text-gray-400 mt-1 italic">
+                      No advance logged for this month
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. MESS DEDUCTION */}
+                <div className="flex flex-col bg-white p-2 border border-gray-200 rounded">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-gray-700 text-[11px]">Mess Deduction (INR):</label>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 font-bold text-xs">₹</span>
+                    <input 
+                      required 
+                      type="number" 
+                      step="any"
+                      className="sap-input font-bold text-red-650 flex-1" 
+                      placeholder="Deducted mess cost sum"
+                      value={formData.messDeduction} 
+                      onChange={e => setFormData({...formData, messDeduction: e.target.value})} 
+                    />
+                  </div>
+                  <div className="text-[9px] text-gray-400 mt-1">
+                    Worker monthly mess consumption deduction
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1650,7 +1919,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             ratePerDay: String(record.ratePerDay || ''),
             overtimeHours: String(record.overtimeHours || ''),
             allowance: String(record.allowance || ''),
-            manualKharchi: String(record.kharchiDeduction || ''),
+            manualKharchi: record.kharchiDeduction !== undefined && record.kharchiDeduction !== null ? String(record.kharchiDeduction) : '',
+            selectedKharchiIds: record.kharchiDetailsJson ? JSON.parse(record.kharchiDetailsJson) : [],
+            manualAdvance: record.advanceDeduction !== undefined && record.advanceDeduction !== null ? String(record.advanceDeduction) : '',
+            selectedAdvanceIds: record.advanceDetailsJson ? JSON.parse(record.advanceDetailsJson) : [],
             messDeduction: String(record.messDeduction || ''),
             level: record.level || '',
             towerName: record.towerName || '',
@@ -1819,6 +2091,467 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kharchi Selection Popup (Date by Date) */}
+      {showKharchiModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-[11px] relative z-10 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="bg-[var(--color-sap-blue-val)] text-white px-3.5 py-2.5 flex justify-between items-center shrink-0">
+              <div className="flex items-center space-x-2">
+                <Calendar size={16} className="text-blue-200" />
+                <h3 className="font-bold text-xs uppercase tracking-wider">
+                  Select Kharchi Deduction — Date by Date
+                </h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowKharchiModal(false)}
+                className="text-white hover:text-gray-300 font-bold text-lg leading-none p-1"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Sub-header info bar */}
+            <div className="bg-[#eef2f6] border-b border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center space-x-3 text-gray-800">
+                <div>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Worker:</span>
+                  <span className="font-bold text-[#0056b3] text-xs">
+                    {workers.find(w => w.id === formData.workerId)?.name || 'Unknown'}
+                  </span>
+                  <span className="text-gray-500 font-mono text-[10px] ml-1">
+                    ({workers.find(w => w.id === formData.workerId)?.workerId || 'Sr ' + workers.find(w => w.id === formData.workerId)?.serialNo})
+                  </span>
+                </div>
+                <div className="h-6 border-r border-gray-300 mx-1"></div>
+                <div>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Selected Month:</span>
+                  <span className="font-mono font-bold text-gray-800">{formData.month}</span>
+                </div>
+                <div className="h-6 border-r border-gray-300 mx-1"></div>
+                <div>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Site / Project:</span>
+                  <span className="font-semibold text-gray-700 truncate max-w-[150px] block">
+                    {projects.find(p => p.id === selectedProject)?.name || '-'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Select Buttons */}
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={() => setTempKharchiSelections(workerMonthKharchis.map(k => k.id))}
+                  className="sap-btn bg-blue-100 hover:bg-blue-200 border-blue-300 text-[#0056b3] text-[10px] font-bold py-1 px-2.5 rounded flex items-center space-x-1"
+                >
+                  <CheckSquare size={12} />
+                  <span>Select All ({workerMonthKharchis.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTempKharchiSelections([])}
+                  className="sap-btn bg-gray-200 hover:bg-gray-300 border-gray-400 text-gray-700 text-[10px] font-bold py-1 px-2 rounded flex items-center space-x-1"
+                >
+                  <Square size={12} />
+                  <span>Clear All</span>
+                </button>
+              </div>
+            </div>
+
+            {/* List Table */}
+            <div className="overflow-y-auto p-3 flex-1">
+              {workerMonthKharchis.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded border border-gray-200 p-6 space-y-2">
+                  <AlertCircle size={28} className="mx-auto text-amber-500" />
+                  <p className="font-bold text-gray-700 text-xs">
+                    No weekly kharchi records found for this worker in {formData.month}.
+                  </p>
+                  <p className="text-gray-500 text-[10px] max-w-sm mx-auto">
+                    Weekly kharchi can be recorded in the <strong className="text-gray-700">Weekly Kharchi</strong> module (PR04) or entered directly as a manual deduction amount.
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-[#8c9ba8] rounded-sm overflow-hidden bg-white shadow-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] font-bold border-b border-[#8c9ba8] text-[10px]">
+                        <th className="p-2 border-r border-[#8c9ba8] w-12 text-center">
+                          <input
+                            type="checkbox"
+                            checked={workerMonthKharchis.length > 0 && tempKharchiSelections.length === workerMonthKharchis.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setTempKharchiSelections(workerMonthKharchis.map(k => k.id));
+                              } else {
+                                setTempKharchiSelections([]);
+                              }
+                            }}
+                            className="rounded cursor-pointer"
+                            title="Toggle Select All"
+                          />
+                        </th>
+                        <th className="p-2 border-r border-[#8c9ba8] w-14 text-center">Sr No</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Kharchi Date</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Day of Week</th>
+                        <th className="p-2 border-r border-[#8c9ba8] text-right">Kharchi Amount (INR)</th>
+                        <th className="p-2 text-center w-24">Deduction Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {workerMonthKharchis.map((k, idx) => {
+                        const isChecked = tempKharchiSelections.includes(k.id);
+                        const dateObj = new Date(k.date + 'T00:00:00');
+                        const dayName = isNaN(dateObj.getTime()) ? '-' : dateObj.toLocaleDateString('en-IN', { weekday: 'long' });
+                        const isSunday = dayName === 'Sunday';
+
+                        return (
+                          <tr 
+                            key={k.id} 
+                            onClick={() => {
+                              if (isChecked) {
+                                setTempKharchiSelections(prev => prev.filter(id => id !== k.id));
+                              } else {
+                                setTempKharchiSelections(prev => [...prev, k.id]);
+                              }
+                            }}
+                            className={`hover:bg-blue-50/50 cursor-pointer text-[11px] transition-colors ${isChecked ? 'bg-blue-50/70 font-semibold' : ''}`}
+                          >
+                            <td className="p-2 border-r border-gray-200 text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setTempKharchiSelections(prev => [...prev, k.id]);
+                                  } else {
+                                    setTempKharchiSelections(prev => prev.filter(id => id !== k.id));
+                                  }
+                                }}
+                                className="rounded cursor-pointer"
+                              />
+                            </td>
+                            <td className="p-2 border-r border-gray-200 text-center font-mono text-gray-600">
+                              {idx + 1}
+                            </td>
+                            <td className="p-2 border-r border-gray-200 font-mono font-bold text-gray-800">
+                              {formatDateWithDay(k.date)}
+                            </td>
+                            <td className="p-2 border-r border-gray-200">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${isSunday ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>
+                                {dayName}
+                              </span>
+                            </td>
+                            <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-red-650 text-xs">
+                              ₹{k.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-2 text-center">
+                              {isChecked ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 border border-green-300">
+                                  ✓ Deduct
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-gray-400 italic">Excluded</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Summary & Buttons footer */}
+            <div className="bg-[#f8f9fa] border-t border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-3 text-[10px] shrink-0">
+              <div className="flex flex-wrap gap-4 text-gray-800 bg-white px-3 py-1.5 rounded border border-[#8c9ba8] shadow-xs">
+                <div>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Month Records:</span>
+                  <span className="font-bold text-gray-700 font-mono">{workerMonthKharchis.length} dates</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Selected Dates:</span>
+                  <span className="font-bold text-blue-900 font-mono">{tempKharchiSelections.length} of {workerMonthKharchis.length}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Kharchi Deducted:</span>
+                  <span className="font-black font-mono text-red-650 text-xs">
+                    ₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + k.amount, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={handleApplyKharchiSelection}
+                  className="sap-btn sap-btn-blue text-[11px] font-bold py-1.5 px-4 flex items-center space-x-1.5 shadow-sm"
+                >
+                  <CheckCircle2 size={13} />
+                  <span>
+                    Apply Kharchi Deduction (₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + k.amount, 0).toLocaleString('en-IN')})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowKharchiModal(false)}
+                  className="sap-btn bg-gray-600 hover:bg-gray-700 border-gray-700 text-white font-bold py-1.5 px-4"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advance Selection Popup (Date by Date) */}
+      {showAdvanceModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-[11px] relative z-10 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="bg-amber-800 text-white px-3.5 py-2.5 flex justify-between items-center shrink-0">
+              <div className="flex items-center space-x-2">
+                <Calendar size={16} className="text-amber-200" />
+                <h3 className="font-bold text-xs uppercase tracking-wider">
+                  Select Advance Deduction — Date by Date
+                </h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowAdvanceModal(false)}
+                className="text-white hover:text-gray-300 font-bold text-lg leading-none p-1"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Sub-header info bar */}
+            <div className="bg-[#eef2f6] border-b border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center space-x-3 text-gray-800">
+                <div>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Worker:</span>
+                  <span className="font-bold text-amber-900 text-xs">
+                    {workers.find(w => w.id === formData.workerId)?.name || 'Unknown'}
+                  </span>
+                  <span className="text-gray-500 font-mono text-[10px] ml-1">
+                    ({workers.find(w => w.id === formData.workerId)?.workerId || 'Sr ' + workers.find(w => w.id === formData.workerId)?.serialNo})
+                  </span>
+                </div>
+                <div className="h-6 border-r border-gray-300 mx-1"></div>
+                <div>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Selected Month:</span>
+                  <span className="font-mono font-bold text-gray-800">{formData.month}</span>
+                </div>
+              </div>
+
+              {/* View Toggle (This Month vs All Outstanding) */}
+              <div className="flex items-center space-x-1 bg-white p-0.5 rounded border border-gray-300 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setAdvanceFilterMode('month')}
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${advanceFilterMode === 'month' ? 'bg-amber-700 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                >
+                  This Month ({workerMonthAdvances.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdvanceFilterMode('all')}
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${advanceFilterMode === 'all' ? 'bg-amber-700 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                >
+                  All Advances ({workerAllOutstandingAdvances.length})
+                </button>
+              </div>
+
+              {/* Quick Select Buttons */}
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pool = advanceFilterMode === 'month' ? workerMonthAdvances : workerAllOutstandingAdvances;
+                    setTempAdvanceSelections(pool.map(a => a.id));
+                  }}
+                  className="sap-btn bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900 text-[10px] font-bold py-1 px-2.5 rounded flex items-center space-x-1"
+                >
+                  <CheckSquare size={12} />
+                  <span>Select All</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTempAdvanceSelections([])}
+                  className="sap-btn bg-gray-200 hover:bg-gray-300 border-gray-400 text-gray-700 text-[10px] font-bold py-1 px-2 rounded flex items-center space-x-1"
+                >
+                  <Square size={12} />
+                  <span>Clear</span>
+                </button>
+              </div>
+            </div>
+
+            {/* List Table */}
+            <div className="overflow-y-auto p-3 flex-1">
+              {(() => {
+                const currentPool = advanceFilterMode === 'month' ? workerMonthAdvances : workerAllOutstandingAdvances;
+                if (currentPool.length === 0) {
+                  return (
+                    <div className="text-center py-12 bg-white rounded border border-gray-200 p-6 space-y-2">
+                      <AlertCircle size={28} className="mx-auto text-amber-500" />
+                      <p className="font-bold text-gray-700 text-xs">
+                        No advance records found for this worker {advanceFilterMode === 'month' ? `in ${formData.month}` : ''}.
+                      </p>
+                      <p className="text-gray-500 text-[10px] max-w-sm mx-auto">
+                        Advances can be recorded in the <strong className="text-gray-700">Advance</strong> module (PR03) or entered directly as a manual deduction amount.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="border border-[#8c9ba8] rounded-sm overflow-hidden bg-white shadow-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] font-bold border-b border-[#8c9ba8] text-[10px]">
+                          <th className="p-2 border-r border-[#8c9ba8] w-12 text-center">
+                            <input
+                              type="checkbox"
+                              checked={currentPool.length > 0 && tempAdvanceSelections.length === currentPool.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setTempAdvanceSelections(currentPool.map(a => a.id));
+                                } else {
+                                  setTempAdvanceSelections([]);
+                                }
+                              }}
+                              className="rounded cursor-pointer"
+                              title="Toggle Select All"
+                            />
+                          </th>
+                          <th className="p-2 border-r border-[#8c9ba8] w-14 text-center">Sr No</th>
+                          <th className="p-2 border-r border-[#8c9ba8]">Advance Date</th>
+                          <th className="p-2 border-r border-[#8c9ba8] text-right">Advance Amount (INR)</th>
+                          <th className="p-2 border-r border-[#8c9ba8]">Disbursed By</th>
+                          <th className="p-2 border-r border-[#8c9ba8]">Remarks</th>
+                          <th className="p-2 text-center w-24">Deduction</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {currentPool.map((a, idx) => {
+                          const isChecked = tempAdvanceSelections.includes(a.id);
+
+                          return (
+                            <tr 
+                              key={a.id} 
+                              onClick={() => {
+                                if (isChecked) {
+                                  setTempAdvanceSelections(prev => prev.filter(id => id !== a.id));
+                                } else {
+                                  setTempAdvanceSelections(prev => [...prev, a.id]);
+                                }
+                              }}
+                              className={`hover:bg-amber-50/50 cursor-pointer text-[11px] transition-colors ${isChecked ? 'bg-amber-50/70 font-semibold' : ''}`}
+                            >
+                              <td className="p-2 border-r border-gray-200 text-center" onClick={e => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setTempAdvanceSelections(prev => [...prev, a.id]);
+                                    } else {
+                                      setTempAdvanceSelections(prev => prev.filter(id => id !== a.id));
+                                    }
+                                  }}
+                                  className="rounded cursor-pointer"
+                                />
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-center font-mono text-gray-600">
+                                {idx + 1}
+                              </td>
+                              <td className="p-2 border-r border-gray-200 font-mono font-bold text-gray-800">
+                                {formatDateWithDay(a.date)}
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-red-650 text-xs">
+                                ₹{a.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-gray-700">
+                                {a.paidBy || '-'}
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-gray-500 italic max-w-xs truncate" title={a.remarks}>
+                                {a.remarks || '-'}
+                              </td>
+                              <td className="p-2 text-center">
+                                {isChecked ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 border border-green-300">
+                                    ✓ Deduct
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-gray-400 italic">Excluded</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Summary & Buttons footer */}
+            <div className="bg-[#f8f9fa] border-t border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-3 text-[10px] shrink-0">
+              {(() => {
+                const currentPool = advanceFilterMode === 'month' ? workerMonthAdvances : workerAllOutstandingAdvances;
+                const totalSelectedAmount = currentPool.filter(a => tempAdvanceSelections.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+
+                return (
+                  <>
+                    <div className="flex flex-wrap gap-4 text-gray-800 bg-white px-3 py-1.5 rounded border border-[#8c9ba8] shadow-xs">
+                      <div>
+                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Available Records:</span>
+                        <span className="font-bold text-gray-700 font-mono">{currentPool.length} advances</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Selected Advances:</span>
+                        <span className="font-bold text-amber-900 font-mono">{tempAdvanceSelections.length} of {currentPool.length}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Advance Deducted:</span>
+                        <span className="font-black font-mono text-red-650 text-xs">
+                          ₹{totalSelectedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={handleApplyAdvanceSelection}
+                        className="sap-btn bg-amber-700 hover:bg-amber-800 border-amber-800 text-white text-[11px] font-bold py-1.5 px-4 flex items-center space-x-1.5 shadow-sm"
+                      >
+                        <CheckCircle2 size={13} />
+                        <span>
+                          Apply Advance Deduction (₹{totalSelectedAmount.toLocaleString('en-IN')})
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvanceModal(false)}
+                        className="sap-btn bg-gray-600 hover:bg-gray-700 border-gray-700 text-white font-bold py-1.5 px-4"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
