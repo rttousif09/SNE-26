@@ -260,7 +260,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [kharchis, formData.workerId, formData.month]);
 
-  // Worker Advances for the selected month
+  // Worker Advances for the selected month (for optional monthly view)
   const workerMonthAdvances = useMemo(() => {
     if (!formData.workerId || !formData.month) return [];
     return advances
@@ -268,13 +268,49 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [advances, formData.workerId, formData.month]);
 
-  // All historical advances for worker
+  // Requirement 2: Worker advances must NOT be filtered only by the selected worker payment month.
+  // During Worker Payment preparation, fetch all outstanding/unadjusted advance transactions for the selected worker
+  // up to the worker payment date, irrespective of the month in which the advance was entered.
   const workerAllOutstandingAdvances = useMemo(() => {
     if (!formData.workerId) return [];
+    const paymentDate = formData.date || new Date().toISOString().split('T')[0];
     return advances
-      .filter(a => a.workerId === formData.workerId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [advances, formData.workerId]);
+      .filter(a => {
+        if (a.workerId !== formData.workerId) return false;
+        if (a.date > paymentDate) return false;
+        if (editingId && a.adjustedInPaymentId === editingId) return true;
+        const isAdj = a.status === 'Adjusted' || a.isDeducted === true;
+        const amt = Number(a.amount) || 0;
+        const outAmt = (a.outstandingAmount !== undefined && a.outstandingAmount !== null)
+          ? Number(a.outstandingAmount)
+          : (isAdj ? 0 : amt);
+        return !isAdj && outAmt > 0;
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [advances, formData.workerId, formData.date, editingId]);
+
+  // Separate regular advances vs Previously Over Balance carry forwards
+  const regularOutstandingAdvances = useMemo(() => {
+    return workerAllOutstandingAdvances.filter(a => a.paymentType !== 'Previously Over Balance');
+  }, [workerAllOutstandingAdvances]);
+
+  const previouslyOverBalanceAdvances = useMemo(() => {
+    return workerAllOutstandingAdvances.filter(a => a.paymentType === 'Previously Over Balance');
+  }, [workerAllOutstandingAdvances]);
+
+  const totalRegularOutstandingAdvance = useMemo(() => {
+    return regularOutstandingAdvances.reduce((sum, a) => {
+      const val = (a.outstandingAmount !== undefined && a.outstandingAmount !== null) ? Number(a.outstandingAmount) : (Number(a.amount) || 0);
+      return sum + val;
+    }, 0);
+  }, [regularOutstandingAdvances]);
+
+  const totalPreviouslyOverBalance = useMemo(() => {
+    return previouslyOverBalanceAdvances.reduce((sum, a) => {
+      const val = (a.outstandingAmount !== undefined && a.outstandingAmount !== null) ? Number(a.outstandingAmount) : (Number(a.amount) || 0);
+      return sum + val;
+    }, 0);
+  }, [previouslyOverBalanceAdvances]);
 
   // Open & apply Kharchi Modal
   const handleOpenKharchiModal = () => {
@@ -311,22 +347,24 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     }
     if (formData.selectedAdvanceIds && formData.selectedAdvanceIds.length > 0) {
       setTempAdvanceSelections([...formData.selectedAdvanceIds]);
-    } else if (formData.manualAdvance === '' || Number(formData.manualAdvance) === autoCalculations.advance) {
-      setTempAdvanceSelections(workerMonthAdvances.map(a => a.id));
     } else {
-      setTempAdvanceSelections([]);
+      setTempAdvanceSelections(workerAllOutstandingAdvances.map(a => a.id));
     }
-    setAdvanceFilterMode('month');
+    setAdvanceFilterMode('all');
     setShowAdvanceModal(true);
   };
 
   const handleApplyAdvanceSelection = () => {
-    const pool = advanceFilterMode === 'month' ? workerMonthAdvances : workerAllOutstandingAdvances;
-    const selected = pool.filter(a => tempAdvanceSelections.includes(a.id));
-    const total = selected.reduce((sum, a) => sum + a.amount, 0);
+    const selected = workerAllOutstandingAdvances.filter(a => tempAdvanceSelections.includes(a.id));
+    const regularSum = selected
+      .filter(a => a.paymentType !== 'Previously Over Balance')
+      .reduce((sum, a) => {
+        const val = (a.outstandingAmount !== undefined && a.outstandingAmount !== null) ? Number(a.outstandingAmount) : (Number(a.amount) || 0);
+        return sum + val;
+      }, 0);
     setFormData(prev => ({
       ...prev,
-      manualAdvance: total.toString(),
+      manualAdvance: regularSum.toString(),
       selectedAdvanceIds: tempAdvanceSelections
     }));
     setShowAdvanceModal(false);
@@ -352,20 +390,8 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
   // Calculate historical total outstanding advance for selected worker
   const workerOutstandingAdvance = useMemo(() => {
     if (!formData.workerId) return 0;
-    const totalAdvancesGiven = advances
-      .filter(a => a.workerId === formData.workerId)
-      .reduce((sum, a) => sum + a.amount, 0);
-
-    const totalRecovered = workerPayments
-      .filter(p => p.workerId === formData.workerId && p.id !== editingId)
-      .reduce((sum, p) => sum + (p.recoveryAmount || 0) + (p.advanceDeduction || 0), 0);
-
-    const manualBalanceContribution = workerLedger
-      .filter(l => l.workerId === formData.workerId)
-      .reduce((sum, l) => sum + l.debit - l.credit, 0);
-
-    return Math.max(0, totalAdvancesGiven - totalRecovered + manualBalanceContribution);
-  }, [formData.workerId, advances, workerPayments, workerLedger, editingId]);
+    return totalRegularOutstandingAdvance + totalPreviouslyOverBalance;
+  }, [formData.workerId, totalRegularOutstandingAdvance, totalPreviouslyOverBalance]);
 
   const calculatedValues = useMemo(() => {
     let finalWorkAmount = Number(formData.workAmount) || 0;
@@ -381,15 +407,33 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       finalKharchi = autoCalculations.kharchi;
     }
 
+    // Advance deductions calculation
     let finalAdvance = 0;
+    let finalPreviouslyOverBalance = 0;
+
     if (formData.selectedAdvanceIds && formData.selectedAdvanceIds.length > 0) {
-      const pool = advances.filter(a => formData.selectedAdvanceIds.includes(a.id));
-      finalAdvance = pool.reduce((sum, a) => sum + a.amount, 0);
+      const selected = workerAllOutstandingAdvances.filter(a => formData.selectedAdvanceIds.includes(a.id));
+      finalAdvance = selected
+        .filter(a => a.paymentType !== 'Previously Over Balance')
+        .reduce((sum, a) => {
+          const val = (a.outstandingAmount !== undefined && a.outstandingAmount !== null) ? Number(a.outstandingAmount) : (Number(a.amount) || 0);
+          return sum + val;
+        }, 0);
+      finalPreviouslyOverBalance = selected
+        .filter(a => a.paymentType === 'Previously Over Balance')
+        .reduce((sum, a) => {
+          const val = (a.outstandingAmount !== undefined && a.outstandingAmount !== null) ? Number(a.outstandingAmount) : (Number(a.amount) || 0);
+          return sum + val;
+        }, 0);
     } else if (formData.manualAdvance !== '') {
       finalAdvance = Number(formData.manualAdvance);
+      finalPreviouslyOverBalance = totalPreviouslyOverBalance;
     } else {
-      finalAdvance = autoCalculations.advance;
+      finalAdvance = totalRegularOutstandingAdvance;
+      finalPreviouslyOverBalance = totalPreviouslyOverBalance;
     }
+
+    const totalAdvanceDeduction = finalAdvance + finalPreviouslyOverBalance;
 
     if (selectedCategory === 'Monthly work') {
       const days = Number(formData.workDays) || 0;
@@ -408,17 +452,36 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     const recoveryAmount = Number(formData.recoveryAmount) || 0;
     const otherDeductionAmount = Number(formData.otherDeduction) || 0;
     
-    const netPayment = finalWorkAmount + supplyAmount - messDeduction - finalKharchi - finalAdvance - recoveryAmount - otherDeductionAmount;
+    const grossPayable = finalWorkAmount + supplyAmount;
+    const totalDeductions = messDeduction + finalKharchi + totalAdvanceDeduction + recoveryAmount + otherDeductionAmount;
     
+    // Negative Payment / Over Balance Logic (Requirement 4)
+    // Calculated Net = Gross Payable - Total Deductions
+    // If Calculated Net >= 0:
+    //   Net Payment = Calculated Net
+    //   Previously Over Balance = 0 (new carry forward)
+    // If Calculated Net < 0:
+    //   Net Payment = 0
+    //   New Carry Forward Balance = ABS(Calculated Net)
+    const calculatedNet = grossPayable - totalDeductions;
+    const netPayment = calculatedNet >= 0 ? calculatedNet : 0;
+    const newCarryForwardOverBalance = calculatedNet < 0 ? Math.abs(calculatedNet) : 0;
+
     return {
       workAmount: finalWorkAmount,
       kharchi: finalKharchi,
       advance: finalAdvance,
+      previouslyOverBalance: finalPreviouslyOverBalance,
+      totalAdvanceDeduction,
       recoveryAmount,
       otherDeduction: otherDeductionAmount,
-      netPayment
+      grossPayable,
+      totalDeductions,
+      calculatedNet,
+      netPayment,
+      newCarryForwardOverBalance
     };
-  }, [formData, autoCalculations, selectedCategory, kharchis, advances]);
+  }, [formData, autoCalculations, selectedCategory, kharchis, workerAllOutstandingAdvances, totalRegularOutstandingAdvance, totalPreviouslyOverBalance]);
 
   const netPayment = calculatedValues.netPayment;
 
@@ -547,6 +610,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       return;
     }
     
+    const consumedAdvanceIds = (formData.selectedAdvanceIds && formData.selectedAdvanceIds.length > 0)
+      ? formData.selectedAdvanceIds
+      : workerAllOutstandingAdvances.map(a => a.id);
+
     const paymentData = {
       projectId: selectedProject,
       workerId: formData.workerId,
@@ -558,7 +625,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       allowance: selectedCategory === 'Monthly work' ? Number(formData.allowance) || 0 : undefined,
       messDeduction: Number(formData.messDeduction),
       kharchiDeduction: calculatedValues.kharchi,
-      advanceDeduction: calculatedValues.advance,
+      advanceDeduction: calculatedValues.totalAdvanceDeduction,
+      previouslyOverBalance: calculatedValues.previouslyOverBalance,
+      newCarryForwardOverBalance: calculatedValues.newCarryForwardOverBalance,
+      consumedAdvanceIds: consumedAdvanceIds,
       netPayment: netPayment,
       date: formData.date,
       level: formData.level || undefined,
@@ -572,7 +642,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       floorAbstractsJson: formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 ? JSON.stringify(formData.selectedFloorAbstracts) : undefined,
       towerName: formData.towerName || undefined,
       kharchiDetailsJson: formData.selectedKharchiIds.length > 0 ? JSON.stringify(formData.selectedKharchiIds) : undefined,
-      advanceDetailsJson: formData.selectedAdvanceIds.length > 0 ? JSON.stringify(formData.selectedAdvanceIds) : undefined
+      advanceDetailsJson: consumedAdvanceIds.length > 0 ? JSON.stringify(consumedAdvanceIds) : undefined
     };
 
     const onProceedSave = (bypassCheck: boolean = false, overrideReason: string = '') => {
@@ -1090,10 +1160,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   )}
                 </div>
 
-                {/* 2. ADVANCE DEDUCTION */}
-                <div className="flex flex-col bg-white p-2 border border-amber-200 rounded">
+                {/* 2. CURRENT OUTSTANDING ADVANCES DEDUCTION */}
+                <div className="flex flex-col bg-white p-2 border border-amber-300 rounded">
                   <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-gray-700 text-[11px]">Advance Deduction:</label>
+                    <label className="font-bold text-gray-700 text-[11px]">Current Outstanding Advances:</label>
                     <button
                       type="button"
                       onClick={handleOpenAdvanceModal}
@@ -1101,7 +1171,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                       title="Select date-by-date advances for this worker"
                     >
                       <Calendar size={11} className="text-amber-800" />
-                      <span>Select Advance ({workerMonthAdvances.length})</span>
+                      <span>Select Advances ({workerAllOutstandingAdvances.length})</span>
                     </button>
                   </div>
                   <div className="flex items-center space-x-1">
@@ -1110,7 +1180,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                       type="number" 
                       step="any"
                       className="sap-input font-bold text-red-650 flex-1" 
-                      placeholder={autoCalculations.advance > 0 ? autoCalculations.advance.toString() : "0.00"}
+                      placeholder={totalRegularOutstandingAdvance > 0 ? totalRegularOutstandingAdvance.toString() : "0.00"}
                       value={formData.manualAdvance !== '' ? formData.manualAdvance : ''} 
                       onChange={e => setFormData({...formData, manualAdvance: e.target.value, selectedAdvanceIds: []})} 
                     />
@@ -1125,7 +1195,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   </div>
                   {formData.selectedAdvanceIds.length > 0 ? (
                     <div className="flex items-center justify-between text-[9px] text-amber-900 font-bold mt-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                      <span>✓ {formData.selectedAdvanceIds.length} advance date(s) selected</span>
+                      <span>✓ {formData.selectedAdvanceIds.length} advance(s) selected</span>
                       <button 
                         type="button" 
                         onClick={() => setFormData({...formData, selectedAdvanceIds: [], manualAdvance: ''})}
@@ -1134,18 +1204,42 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                         Reset
                       </button>
                     </div>
-                  ) : workerMonthAdvances.length > 0 ? (
-                    <div className="text-[9px] text-gray-500 mt-1">
-                      {workerMonthAdvances.length} advance(s) in {formData.month} (Total ₹{autoCalculations.advance.toLocaleString('en-IN')})
-                    </div>
                   ) : (
-                    <div className="text-[9px] text-gray-400 mt-1 italic">
-                      No advance logged for this month
+                    <div className="text-[9px] text-gray-500 mt-1">
+                      {workerAllOutstandingAdvances.length} outstanding advance(s) up to payment date (Total ₹{totalRegularOutstandingAdvance.toLocaleString('en-IN')})
                     </div>
                   )}
                 </div>
 
-                {/* 3. MESS DEDUCTION */}
+                {/* 3. PREVIOUSLY OVER BALANCE (CARRY FORWARD) */}
+                <div className={`flex flex-col p-2 border rounded transition-colors ${calculatedValues.previouslyOverBalance > 0 ? 'bg-purple-50 border-purple-300' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-purple-900 text-[11px] flex items-center space-x-1">
+                      <span>Previously Over Balance:</span>
+                      {calculatedValues.previouslyOverBalance > 0 && (
+                        <span className="bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded">
+                          Carry Forward
+                        </span>
+                      )}
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-purple-700 font-bold text-xs">₹</span>
+                    <input 
+                      type="text" 
+                      readOnly
+                      className="sap-input font-bold text-purple-800 flex-1 bg-white cursor-not-allowed" 
+                      value={calculatedValues.previouslyOverBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    />
+                  </div>
+                  <div className="text-[9px] text-purple-700 mt-1 font-medium">
+                    {calculatedValues.previouslyOverBalance > 0 
+                      ? 'Absorbed deficit from previous payment(s). Deducted automatically.' 
+                      : 'No previous over-balance carry forward for this worker.'}
+                  </div>
+                </div>
+
+                {/* 4. MESS DEDUCTION */}
                 <div className="flex flex-col bg-white p-2 border border-gray-200 rounded">
                   <div className="flex items-center justify-between mb-1">
                     <label className="font-bold text-gray-700 text-[11px]">Mess Deduction (INR):</label>
@@ -1215,25 +1309,6 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             </div>
 
             <div className="grid grid-cols-2 gap-3 bg-amber-50/30 p-2 border border-amber-200 rounded-sm">
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-700 mb-1 flex justify-between items-center">
-                  <span>Recovery Amount from Outstanding Advance (INR):</span>
-                  {formData.workerId && (
-                    <span className="font-mono text-[9px] text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
-                      O/S Advance: ₹{workerOutstandingAdvance.toLocaleString('en-IN')}
-                    </span>
-                  )}
-                </label>
-                <input 
-                  type="number" 
-                  step="any"
-                  className="sap-input font-bold text-red-650 bg-amber-50/50" 
-                  placeholder="E.g. 1000, 2000"
-                  value={formData.recoveryAmount} 
-                  onChange={e => setFormData({...formData, recoveryAmount: e.target.value})} 
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col">
                   <label className="font-semibold text-gray-700 mb-1">Other Deduction (INR):</label>
@@ -1271,36 +1346,96 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
               </div>
             </div>
 
-            {/* Calculations Workspace */}
-            <div className="grid gap-3 p-2.5 border border-[#8c9ba8] rounded-sm bg-[#eef2f6] grid-cols-4 md:grid-cols-5">
-              {selectedCategory === 'Monthly work' ? (
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-500 uppercase tracking-tight font-bold">Clc. Gross Wage</span>
-                  <span className="font-mono font-bold text-gray-800 text-xs mt-0.5">₹{calculatedValues.workAmount.toLocaleString('en-IN')}</span>
+            {/* Calculations Workspace: Gross Earnings, Mess, Kharchi, Current Outstanding Advances, Previously Over Balance, Other Deductions, Total Deductions, Net Payment, New Carry Forward */}
+            <div className="p-3 border border-[#8c9ba8] rounded-sm bg-[#eef2f6] space-y-2">
+              <div className="text-[10px] font-bold text-[#0056b3] uppercase tracking-wider border-b border-gray-300 pb-1 flex items-center justify-between">
+                <span>Payment Calculation Breakdown</span>
+                <span className="font-normal text-gray-500 lowercase">
+                  (gross payable - total deductions = net payable)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 text-[10px]">
+                {/* 1. Gross Earnings */}
+                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
+                  <span className="text-gray-500 uppercase font-bold text-[9px]">Gross Earnings</span>
+                  <span className="font-mono font-bold text-gray-900 text-xs mt-0.5">
+                    ₹{(calculatedValues.grossPayable || 0).toLocaleString('en-IN')}
+                  </span>
                 </div>
-              ) : (
-                <div className="hidden"></div>
+
+                {/* 2. Mess */}
+                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
+                  <span className="text-gray-500 uppercase font-bold text-[9px]">Mess</span>
+                  <span className="font-mono font-bold text-red-650 text-xs mt-0.5">
+                    ₹{(Number(formData.messDeduction) || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 3. Kharchi */}
+                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
+                  <span className="text-gray-500 uppercase font-bold text-[9px]">Kharchi</span>
+                  <span className="font-mono font-bold text-red-650 text-xs mt-0.5">
+                    ₹{(calculatedValues.kharchi || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 4. Current Outstanding Advances */}
+                <div className="flex flex-col bg-white p-2 rounded border border-amber-200">
+                  <span className="text-amber-800 uppercase font-bold text-[9px]">Advances</span>
+                  <span className="font-mono font-bold text-red-650 text-xs mt-0.5">
+                    ₹{(calculatedValues.advance || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 5. Previously Over Balance */}
+                <div className="flex flex-col bg-purple-50 p-2 rounded border border-purple-200">
+                  <span className="text-purple-800 uppercase font-bold text-[9px]">Prev Over Bal</span>
+                  <span className="font-mono font-bold text-purple-900 text-xs mt-0.5">
+                    ₹{(calculatedValues.previouslyOverBalance || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 6. Other Deductions */}
+                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
+                  <span className="text-gray-500 uppercase font-bold text-[9px]">Other Ded.</span>
+                  <span className="font-mono font-bold text-red-700 text-xs mt-0.5">
+                    ₹{(calculatedValues.otherDeduction || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 7. Total Deductions */}
+                <div className="flex flex-col bg-red-50 p-2 rounded border border-red-200">
+                  <span className="text-red-700 uppercase font-bold text-[9px]">Total Deductions</span>
+                  <span className="font-mono font-bold text-red-700 text-xs mt-0.5">
+                    ₹{(calculatedValues.totalDeductions || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 8. Net Payment */}
+                <div className="flex flex-col justify-center bg-[#cce5ff] p-2 border border-[#99ccff] rounded col-span-1 sm:col-span-2 md:col-span-1">
+                  <span className="text-[9px] text-[#0056b3] uppercase font-bold">Net Payment</span>
+                  <span className="font-mono font-black text-[#0056b3] text-sm leading-none mt-0.5">
+                    ₹{(calculatedValues.netPayment || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+
+              {/* 9. Negative Payment & Carry Forward Alert */}
+              {calculatedValues.calculatedNet < 0 && (
+                <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 p-2 text-[10px] rounded flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle size={14} className="text-amber-700 shrink-0" />
+                    <span>
+                      <strong>Negative Calculated Net (-₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}):</strong> Cash payment is set to ₹0.00.
+                      The remaining balance of <strong>₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}</strong> will automatically be carried forward to the next payment as <strong>Previously Over Balance</strong>.
+                    </span>
+                  </div>
+                  <span className="bg-amber-200 text-amber-950 font-bold px-2 py-0.5 rounded text-[9px] uppercase tracking-wider shrink-0 font-mono">
+                    Carry Fwd: ₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
               )}
-              <div className="flex flex-col">
-                <span className="text-[10px] text-gray-500 uppercase tracking-tight font-bold">Pocket-Money (Kharchi)</span>
-                <span className="font-mono font-bold text-red-650 text-xs mt-0.5">₹{calculatedValues.kharchi.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] text-gray-500 uppercase tracking-tight font-bold">Capital Advance (Month)</span>
-                <span className="font-mono font-bold text-red-650 text-xs mt-0.5">₹{autoCalculations.advance.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] text-amber-805 uppercase tracking-tight font-bold">Advance Recovery (Ded.)</span>
-                <span className="font-mono font-bold text-red-750 text-xs mt-0.5">₹{calculatedValues.recoveryAmount.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] text-amber-805 uppercase tracking-tight font-bold">Other Ded.</span>
-                <span className="font-mono font-bold text-red-750 text-xs mt-0.5">₹{calculatedValues.otherDeduction.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex flex-col justify-center bg-[#cce5ff] px-2 py-1.5 border border-[#99ccff] rounded-sm col-span-1">
-                <span className="text-[9px] text-[#0056b3] uppercase font-bold tracking-tight">Calculated Net Payable</span>
-                <span className="font-mono font-black text-[#0056b3] text-sm leading-none mt-0.5">₹{netPayment.toLocaleString('en-IN')}</span>
-              </div>
             </div>
 
             <div className="flex justify-end space-x-2 pt-1">
@@ -1335,24 +1470,24 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 headers={['Sr No', 'ID No', 'Worker Name', 'Tower / Block', 'Work Area', 'Gross Wages', 'Total Deductions', 'Net Payable', 'Status']}
                 data={searchFilteredPayments.map(p => {
                   const w = getWorkerDetails(p.workerId);
-                  const totalDed = p.messDeduction + p.kharchiDeduction + p.advanceDeduction + (p.recoveryAmount || 0) + (p.otherDeduction || 0);
+                  const totalDed = (Number(p.messDeduction) || 0) + (Number(p.kharchiDeduction) || 0) + (Number(p.advanceDeduction) || 0) + (Number(p.recoveryAmount) || 0) + (Number(p.otherDeduction) || 0);
                   return [
                     w.srNo,
                     w.idNo,
                     w.name,
                     p.towerName || '-',
                     p.level ? p.level : (p.floorAbstractsJson ? Array.from(new Set(JSON.parse(p.floorAbstractsJson).map((x: any) => x.level))).join(', ') : '-'),
-                    `Rs. ${p.workAmount.toLocaleString('en-IN')}`,
-                    `Rs. ${totalDed.toLocaleString('en-IN')}`,
-                    `Rs. ${p.netPayment.toLocaleString('en-IN')}`,
+                    `Rs. ${(Number(p.workAmount) || 0).toLocaleString('en-IN')}`,
+                    `Rs. ${(totalDed || 0).toLocaleString('en-IN')}`,
+                    `Rs. ${(Number(p.netPayment) || 0).toLocaleString('en-IN')}`,
                     p.paymentStatus || 'Pending'
                   ];
                 })}
                 totals={[
                   '', '', '', '', 'Totals:', 
-                  `Rs. ${totals.gross.toLocaleString('en-IN')}`, 
-                  `Rs. ${(totals.mess + totals.kharchi + totals.advance + totals.recovery + totals.otherDeduction).toLocaleString('en-IN')}`, 
-                  `Rs. ${totals.net.toLocaleString('en-IN')}`, 
+                  `Rs. ${(totals.gross || 0).toLocaleString('en-IN')}`, 
+                  `Rs. ${(((totals.mess || 0) + (totals.kharchi || 0) + (totals.advance || 0) + (totals.recovery || 0) + (totals.otherDeduction || 0)) || 0).toLocaleString('en-IN')}`, 
+                  `Rs. ${(totals.net || 0).toLocaleString('en-IN')}`, 
                   ''
                 ]}
               />
@@ -1456,15 +1591,15 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                       {payment.level ? payment.level : (payment.floorAbstractsJson ? Array.from(new Set(JSON.parse(payment.floorAbstractsJson).map((x: any) => x.level))).join(', ') : <span className="text-gray-400 italic">None</span>)}
                     </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 font-mono">{payment.month}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{payment.workAmount.toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700 font-semibold bg-green-50/25">₹{(payment.supplyAmount || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600">₹{payment.messDeduction.toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{payment.kharchiDeduction.toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{payment.advanceDeduction.toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/15">₹{(payment.recoveryAmount || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-700 bg-red-50/30">₹{(payment.otherDeduction || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{(Number(payment.workAmount) || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700 font-semibold bg-green-50/25">₹{(Number(payment.supplyAmount) || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600">₹{(Number(payment.messDeduction) || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{(Number(payment.kharchiDeduction) || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{(Number(payment.advanceDeduction) || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/15">₹{(Number(payment.recoveryAmount) || 0).toLocaleString('en-IN')}</td>
+                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-700 bg-red-50/30">₹{(Number(payment.otherDeduction) || 0).toLocaleString('en-IN')}</td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-750 bg-green-50/50">
-                      ₹{payment.netPayment.toLocaleString('en-IN')}
+                      ₹{(Number(payment.netPayment) || 0).toLocaleString('en-IN')}
                     </td>
                     <td className="border border-[#8c9ba8] px-2 py-1 text-center">
                       <span className={`px-1.5 py-0.5 rounded-sm font-sans font-bold text-[9px] uppercase tracking-wider ${
@@ -1513,28 +1648,28 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                     Total Month Summary:
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right">
-                    ₹{totals.gross.toLocaleString('en-IN')}
+                    ₹{(totals.gross || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700">
                     ₹{(totals.supply || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
-                    ₹{totals.mess.toLocaleString('en-IN')}
+                    ₹{(totals.mess || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
-                    ₹{totals.kharchi.toLocaleString('en-IN')}
+                    ₹{(totals.kharchi || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
-                    ₹{totals.advance.toLocaleString('en-IN')}
+                    ₹{(totals.advance || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/20 font-bold">
-                    ₹{totals.recovery.toLocaleString('en-IN')}
+                    ₹{(totals.recovery || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-700 font-bold">
-                    ₹{totals.otherDeduction.toLocaleString('en-IN')}
+                    ₹{(totals.otherDeduction || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1 text-right font-black text-green-800 bg-green-100/70 text-[11px]">
-                    ₹{totals.net.toLocaleString('en-IN')}
+                    ₹{(totals.net || 0).toLocaleString('en-IN')}
                   </td>
                   <td className="border border-[#8c9ba8] px-2 py-1"></td>
                   {!isLocked && <td className="border border-[#8c9ba8] px-2 py-1"></td>}
@@ -1746,13 +1881,13 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                           {payment.level ? payment.level : (payment.floorAbstractsJson ? Array.from(new Set(JSON.parse(payment.floorAbstractsJson).map((x: any) => x.level))).join(', ') : <span className="text-gray-400 italic">None</span>)}
                         </td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5">{payment.month}</td>
-                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right font-medium">₹{payment.workAmount.toLocaleString('en-IN')}</td>
-                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-green-800 font-semibold">₹{(payment.supplyAmount || 0).toLocaleString('en-IN')}</td>
-                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-red-700">₹{payment.messDeduction.toLocaleString('en-IN')}</td>
-                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-red-700">₹{payment.kharchiDeduction.toLocaleString('en-IN')}</td>
-                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-red-700">₹{payment.advanceDeduction.toLocaleString('en-IN')}</td>
+                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right font-medium">₹{(Number(payment.workAmount) || 0).toLocaleString('en-IN')}</td>
+                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-green-800 font-semibold">₹{(Number(payment.supplyAmount) || 0).toLocaleString('en-IN')}</td>
+                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-red-700">₹{(Number(payment.messDeduction) || 0).toLocaleString('en-IN')}</td>
+                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-red-700">₹{(Number(payment.kharchiDeduction) || 0).toLocaleString('en-IN')}</td>
+                        <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right text-red-700">₹{(Number(payment.advanceDeduction) || 0).toLocaleString('en-IN')}</td>
                         <td className="border border-gray-300 print:border-gray-800 px-2 py-1.5 text-right font-bold text-green-900">
-                          ₹{payment.netPayment.toLocaleString('en-IN')}
+                          ₹{(Number(payment.netPayment) || 0).toLocaleString('en-IN')}
                         </td>
                       </motion.tr>
                     );
@@ -1772,22 +1907,22 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                         Total Month Summary:
                       </td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right">
-                        ₹{totals.gross.toLocaleString('en-IN')}
+                        ₹{(totals.gross || 0).toLocaleString('en-IN')}
                       </td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right text-green-700">
                         ₹{(totals.supply || 0).toLocaleString('en-IN')}
                       </td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right text-red-700">
-                        ₹{totals.mess.toLocaleString('en-IN')}
+                        ₹{(totals.mess || 0).toLocaleString('en-IN')}
                       </td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right text-red-700">
-                        ₹{totals.kharchi.toLocaleString('en-IN')}
+                        ₹{(totals.kharchi || 0).toLocaleString('en-IN')}
                       </td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right text-red-700">
-                        ₹{totals.advance.toLocaleString('en-IN')}
+                        ₹{(totals.advance || 0).toLocaleString('en-IN')}
                       </td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right font-black text-[11px] text-green-900 print:text-black bg-gray-200 print:bg-transparent">
-                        ₹{totals.net.toLocaleString('en-IN')}
+                        ₹{(totals.net || 0).toLocaleString('en-IN')}
                       </td>
                     </tr>
                   </tfoot>
@@ -2312,16 +2447,16 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
         </div>
       )}
 
-      {/* Advance Selection Popup (Date by Date) */}
+      {/* Advance Selection Popup (Date by Date & Outstanding Advances) */}
       {showAdvanceModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-[11px] relative z-10 animate-in fade-in zoom-in-95 duration-150">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-4xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-[11px] relative z-10 animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="bg-amber-800 text-white px-3.5 py-2.5 flex justify-between items-center shrink-0">
               <div className="flex items-center space-x-2">
                 <Calendar size={16} className="text-amber-200" />
                 <h3 className="font-bold text-xs uppercase tracking-wider">
-                  Select Advance Deduction — Date by Date
+                  Select Outstanding Advances — Date by Date
                 </h3>
               </div>
               <button 
@@ -2348,26 +2483,26 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 </div>
                 <div className="h-6 border-r border-gray-300 mx-1"></div>
                 <div>
-                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Selected Month:</span>
-                  <span className="font-mono font-bold text-gray-800">{formData.month}</span>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Payment Month & Date:</span>
+                  <span className="font-mono font-bold text-gray-800">{formData.month} ({formData.date})</span>
                 </div>
               </div>
 
-              {/* View Toggle (This Month vs All Outstanding) */}
+              {/* View Toggle (All Outstanding vs This Month) */}
               <div className="flex items-center space-x-1 bg-white p-0.5 rounded border border-gray-300 text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => setAdvanceFilterMode('month')}
-                  className={`px-2 py-0.5 rounded font-bold transition-colors ${advanceFilterMode === 'month' ? 'bg-amber-700 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-                >
-                  This Month ({workerMonthAdvances.length})
-                </button>
                 <button
                   type="button"
                   onClick={() => setAdvanceFilterMode('all')}
                   className={`px-2 py-0.5 rounded font-bold transition-colors ${advanceFilterMode === 'all' ? 'bg-amber-700 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
                 >
-                  All Advances ({workerAllOutstandingAdvances.length})
+                  All Outstanding Advances ({workerAllOutstandingAdvances.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdvanceFilterMode('month')}
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${advanceFilterMode === 'month' ? 'bg-amber-700 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                >
+                  This Month Only ({workerMonthAdvances.length})
                 </button>
               </div>
 
@@ -2404,10 +2539,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                     <div className="text-center py-12 bg-white rounded border border-gray-200 p-6 space-y-2">
                       <AlertCircle size={28} className="mx-auto text-amber-500" />
                       <p className="font-bold text-gray-700 text-xs">
-                        No advance records found for this worker {advanceFilterMode === 'month' ? `in ${formData.month}` : ''}.
+                        No outstanding advance records found for this worker {advanceFilterMode === 'month' ? `in ${formData.month}` : 'up to payment date'}.
                       </p>
                       <p className="text-gray-500 text-[10px] max-w-sm mx-auto">
-                        Advances can be recorded in the <strong className="text-gray-700">Advance</strong> module (PR03) or entered directly as a manual deduction amount.
+                        Advances can be recorded in the <strong className="text-gray-700">Advance</strong> module or entered directly as a manual deduction amount.
                       </p>
                     </div>
                   );
@@ -2415,10 +2550,10 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
 
                 return (
                   <div className="border border-[#8c9ba8] rounded-sm overflow-hidden bg-white shadow-xs">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse text-[11px]">
                       <thead>
-                        <tr className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] font-bold border-b border-[#8c9ba8] text-[10px]">
-                          <th className="p-2 border-r border-[#8c9ba8] w-12 text-center">
+                        <tr className="bg-[#eef2f6] text-gray-800 font-bold border-b border-[#8c9ba8] text-[10px]">
+                          <th className="p-2 border-r border-[#8c9ba8] w-10 text-center">
                             <input
                               type="checkbox"
                               checked={currentPool.length > 0 && tempAdvanceSelections.length === currentPool.length}
@@ -2433,17 +2568,25 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                               title="Toggle Select All"
                             />
                           </th>
-                          <th className="p-2 border-r border-[#8c9ba8] w-14 text-center">Sr No</th>
-                          <th className="p-2 border-r border-[#8c9ba8]">Advance Date</th>
-                          <th className="p-2 border-r border-[#8c9ba8] text-right">Advance Amount (INR)</th>
-                          <th className="p-2 border-r border-[#8c9ba8]">Disbursed By</th>
-                          <th className="p-2 border-r border-[#8c9ba8]">Remarks</th>
-                          <th className="p-2 text-center w-24">Deduction</th>
+                          <th className="p-2 border-r border-[#8c9ba8] w-12 text-center">Sr No</th>
+                          <th className="p-2 border-r border-[#8c9ba8] w-24">Date</th>
+                          <th className="p-2 border-r border-[#8c9ba8] w-28">Txn No</th>
+                          <th className="p-2 border-r border-[#8c9ba8] w-28">Payment Type</th>
+                          <th className="p-2 border-r border-[#8c9ba8]">Details / Reason</th>
+                          <th className="p-2 border-r border-[#8c9ba8] text-right w-24">Amount (INR)</th>
+                          <th className="p-2 border-r border-[#8c9ba8] text-right w-24">Outstanding</th>
+                          <th className="p-2 border-r border-[#8c9ba8] w-28">Disbursed By</th>
+                          <th className="p-2 text-center w-20">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {currentPool.map((a, idx) => {
                           const isChecked = tempAdvanceSelections.includes(a.id);
+                          const isOverBalance = a.paymentType === 'Previously Over Balance';
+                          const amt = Number(a.amount) || 0;
+                          const outAmt = (a.outstandingAmount !== undefined && a.outstandingAmount !== null)
+                            ? Number(a.outstandingAmount)
+                            : amt;
 
                           return (
                             <tr 
@@ -2455,7 +2598,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                                   setTempAdvanceSelections(prev => [...prev, a.id]);
                                 }
                               }}
-                              className={`hover:bg-amber-50/50 cursor-pointer text-[11px] transition-colors ${isChecked ? 'bg-amber-50/70 font-semibold' : ''}`}
+                              className={`hover:bg-amber-50/50 cursor-pointer text-[11px] transition-colors ${
+                                isChecked ? (isOverBalance ? 'bg-purple-50/70 font-semibold' : 'bg-amber-50/70 font-semibold') : ''
+                              }`}
                             >
                               <td className="p-2 border-r border-gray-200 text-center" onClick={e => e.stopPropagation()}>
                                 <input
@@ -2474,17 +2619,34 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                               <td className="p-2 border-r border-gray-200 text-center font-mono text-gray-600">
                                 {idx + 1}
                               </td>
-                              <td className="p-2 border-r border-gray-200 font-mono font-bold text-gray-800">
+                              <td className="p-2 border-r border-gray-200 font-mono text-gray-800 whitespace-nowrap">
                                 {formatDateWithDay(a.date)}
                               </td>
-                              <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-red-650 text-xs">
-                                ₹{a.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <td className="p-2 border-r border-gray-200 font-mono font-bold text-[#0056b3] whitespace-nowrap">
+                                {a.transactionNo || `ADV-${a.id.slice(0, 6).toUpperCase()}`}
                               </td>
-                              <td className="p-2 border-r border-gray-200 text-gray-700">
+                              <td className="p-2 border-r border-gray-200 whitespace-nowrap">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                                  isOverBalance ? 'bg-purple-100 text-purple-800 border-purple-300' :
+                                  a.paymentType === 'Travel Advance' ? 'bg-indigo-50 text-indigo-800 border-indigo-200' :
+                                  a.paymentType === 'Payment' ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                                  a.paymentType === 'Other Advance' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                  'bg-teal-50 text-teal-800 border-teal-200'
+                                }`}>
+                                  {a.paymentType || 'Site Advance'}
+                                </span>
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-gray-700 max-w-xs truncate" title={a.specifyOtherAdvance || a.remarks || '-'}>
+                                {a.specifyOtherAdvance || a.remarks || (isOverBalance ? 'Carry Forward Deficit' : '-')}
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-red-650">
+                                ₹{amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-amber-800">
+                                ₹{outAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-2 border-r border-gray-200 text-gray-700 whitespace-nowrap truncate max-w-[100px]">
                                 {a.paidBy || '-'}
-                              </td>
-                              <td className="p-2 border-r border-gray-200 text-gray-500 italic max-w-xs truncate" title={a.remarks}>
-                                {a.remarks || '-'}
                               </td>
                               <td className="p-2 text-center">
                                 {isChecked ? (
@@ -2509,23 +2671,42 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             <div className="bg-[#f8f9fa] border-t border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-3 text-[10px] shrink-0">
               {(() => {
                 const currentPool = advanceFilterMode === 'month' ? workerMonthAdvances : workerAllOutstandingAdvances;
-                const totalSelectedAmount = currentPool.filter(a => tempAdvanceSelections.includes(a.id)).reduce((sum, a) => sum + a.amount, 0);
+                const selectedPool = currentPool.filter(a => tempAdvanceSelections.includes(a.id));
+                const selectedRegular = selectedPool
+                  .filter(a => a.paymentType !== 'Previously Over Balance')
+                  .reduce((sum, a) => {
+                    const val = (a.outstandingAmount !== undefined && a.outstandingAmount !== null) ? Number(a.outstandingAmount) : (Number(a.amount) || 0);
+                    return sum + val;
+                  }, 0);
+                const selectedOverBal = selectedPool
+                  .filter(a => a.paymentType === 'Previously Over Balance')
+                  .reduce((sum, a) => {
+                    const val = (a.outstandingAmount !== undefined && a.outstandingAmount !== null) ? Number(a.outstandingAmount) : (Number(a.amount) || 0);
+                    return sum + val;
+                  }, 0);
+                const totalSelectedAmount = selectedRegular + selectedOverBal;
 
                 return (
                   <>
                     <div className="flex flex-wrap gap-4 text-gray-800 bg-white px-3 py-1.5 rounded border border-[#8c9ba8] shadow-xs">
                       <div>
-                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Available Records:</span>
-                        <span className="font-bold text-gray-700 font-mono">{currentPool.length} advances</span>
+                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Selected:</span>
+                        <span className="font-bold text-amber-900 font-mono">{tempAdvanceSelections.length} of {currentPool.length} records</span>
                       </div>
                       <div>
-                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Selected Advances:</span>
-                        <span className="font-bold text-amber-900 font-mono">{tempAdvanceSelections.length} of {currentPool.length}</span>
+                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Regular Advance:</span>
+                        <span className="font-bold text-red-650 font-mono">₹{(selectedRegular || 0).toLocaleString('en-IN')}</span>
                       </div>
+                      {selectedOverBal > 0 && (
+                        <div>
+                          <span className="text-purple-600 font-bold block text-[8px] uppercase">Prev Over Bal:</span>
+                          <span className="font-bold text-purple-800 font-mono">₹{(selectedOverBal || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                      )}
                       <div>
-                        <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Advance Deducted:</span>
+                        <span className="text-gray-500 font-bold block text-[8px] uppercase">Total Advance Deduction:</span>
                         <span className="font-black font-mono text-red-650 text-xs">
-                          ₹{totalSelectedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          ₹{(totalSelectedAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -2538,7 +2719,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                       >
                         <CheckCircle2 size={13} />
                         <span>
-                          Apply Advance Deduction (₹{totalSelectedAmount.toLocaleString('en-IN')})
+                          Apply Advance Deduction (₹{(totalSelectedAmount || 0).toLocaleString('en-IN')})
                         </span>
                       </button>
                       <button

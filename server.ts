@@ -547,6 +547,119 @@ function initDbSchema() {
   try { db.exec("ALTER TABLE advances ADD COLUMN receiptFileType TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE advances ADD COLUMN deductionDetails TEXT"); } catch (e) {}
 
+  // Worker Advance Redesign migrations
+  try { db.exec("ALTER TABLE advances ADD COLUMN transactionNo TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN paymentType TEXT DEFAULT 'Site Advance'"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN specifyOtherAdvance TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN status TEXT DEFAULT 'Outstanding'"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN adjustedAmount REAL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN outstandingAmount REAL"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN adjustedInPaymentId TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN sourcePaymentId TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN createdBy TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN createdDate TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN modifiedBy TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE advances ADD COLUMN modifiedDate TEXT"); } catch (e) {}
+
+  // Worker Ledger synchronization migrations
+  try { db.exec("ALTER TABLE worker_ledger ADD COLUMN particulars TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_ledger ADD COLUMN sourceModule TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_ledger ADD COLUMN sourceTransactionId TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_ledger ADD COLUMN remarks TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_ledger ADD COLUMN modifiedBy TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_ledger ADD COLUMN modifiedDate TEXT"); } catch (e) {}
+
+  // Worker Payment carry-forward and over-balance migrations
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN previouslyOverBalance REAL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN newCarryForwardOverBalance REAL DEFAULT 0"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN consumedAdvanceIds TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN overBalanceAdvanceId TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE worker_payments ADD COLUMN voucherNo TEXT"); } catch (e) {}
+
+  // Repair/backfill existing advances with transactionNo, status, and amounts
+  try {
+    db.exec(`
+      UPDATE advances SET amount = 0 WHERE amount IS NULL;
+      UPDATE advances SET paymentType = 'Site Advance' WHERE paymentType IS NULL;
+      UPDATE advances SET status = 'Outstanding' WHERE status IS NULL;
+      UPDATE advances SET adjustedAmount = 0 WHERE adjustedAmount IS NULL;
+      UPDATE advances SET outstandingAmount = amount WHERE outstandingAmount IS NULL AND (status = 'Outstanding' OR isDeducted = 0);
+      UPDATE advances SET outstandingAmount = 0 WHERE outstandingAmount IS NULL;
+    `);
+
+    const existingAdvances = db.prepare("SELECT * FROM advances WHERE transactionNo IS NULL OR status IS NULL OR outstandingAmount IS NULL").all() as any[];
+    if (existingAdvances.length > 0) {
+      const updateStmt = db.prepare(`
+        UPDATE advances
+        SET transactionNo = COALESCE(transactionNo, ?),
+            paymentType = COALESCE(paymentType, 'Site Advance'),
+            status = ?,
+            adjustedAmount = ?,
+            outstandingAmount = ?
+        WHERE id = ?
+      `);
+      for (const a of existingAdvances) {
+        const amt = parseFloat(a.amount) || 0;
+        const isAdj = a.isDeducted === 1 || (a.deductionAmount && a.deductionAmount >= amt) || a.status === 'Adjusted';
+        const adjAmt = isAdj ? amt : (parseFloat(a.deductionAmount) || 0);
+        const outAmt = isAdj ? 0 : Math.max(0, amt - adjAmt);
+        const statusVal = isAdj || outAmt === 0 ? 'Adjusted' : 'Outstanding';
+        const txNo = a.transactionNo || `ADV-${a.id.slice(0, 6).toUpperCase()}`;
+        updateStmt.run(txNo, statusVal, adjAmt, outAmt, a.id);
+      }
+    }
+  } catch (e) {
+    console.error("Advances data repair error:", e);
+  }
+
+  // Ensure every advance has a synced worker_ledger entry
+  try {
+    const unlinkedAdvances = db.prepare(`
+      SELECT a.* FROM advances a
+      WHERE NOT EXISTS (
+        SELECT 1 FROM worker_ledger wl WHERE wl.advanceId = a.id OR wl.sourceTransactionId = a.id OR wl.id = 'wl-adv-' || a.id
+      )
+    `).all() as any[];
+
+    if (unlinkedAdvances.length > 0) {
+      const insertLedger = db.prepare(`
+        INSERT INTO worker_ledger (
+          id, workerId, projectId, date, voucherNo, description, particulars,
+          entryType, debit, credit, runningBalance, advanceId, sourceModule,
+          sourceTransactionId, remarks, createdBy, createdDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const a of unlinkedAdvances) {
+        let particulars = a.paymentType || 'Site Advance';
+        if (particulars === 'Other Advance' && a.specifyOtherAdvance) {
+          particulars = `Other Advance – ${a.specifyOtherAdvance}`;
+        }
+        insertLedger.run(
+          `wl-adv-${a.id}`,
+          a.workerId,
+          a.projectId,
+          a.date,
+          a.transactionNo || `ADV-${a.id.slice(0, 6).toUpperCase()}`,
+          `${particulars}${a.remarks ? ': ' + a.remarks : ''}`,
+          particulars,
+          'Advance Given',
+          a.amount,
+          0,
+          0,
+          a.id,
+          'Worker Advance',
+          a.id,
+          a.remarks || null,
+          a.createdBy || 'System',
+          a.createdDate || a.date
+        );
+      }
+    }
+  } catch (e) {
+    console.error("Worker ledger backfill error:", e);
+  }
+
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeduction REAL DEFAULT 0"); } catch (e) {}
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeductionDetails TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN floorAbstractsJson TEXT"); } catch (e) {}
@@ -1770,8 +1883,27 @@ async function startServer() {
   // 6. Advances
   app.get("/api/advances", (req, res) => {
     try {
-      const rows = db.prepare("SELECT * FROM advances").all();
-      res.json(rows);
+      const rows = db.prepare("SELECT * FROM advances ORDER BY date DESC, id DESC").all() as any[];
+      const sanitized = rows.map(r => {
+        const amt = parseFloat(r.amount) || 0;
+        const isAdj = r.isDeducted === 1 || r.status === 'Adjusted';
+        const adjAmt = (r.adjustedAmount !== null && r.adjustedAmount !== undefined)
+          ? parseFloat(r.adjustedAmount)
+          : (isAdj ? amt : (parseFloat(r.deductionAmount) || 0));
+        const outAmt = (r.outstandingAmount !== null && r.outstandingAmount !== undefined)
+          ? parseFloat(r.outstandingAmount)
+          : (isAdj ? 0 : Math.max(0, amt - adjAmt));
+        return {
+          ...r,
+          amount: amt,
+          adjustedAmount: adjAmt,
+          outstandingAmount: outAmt,
+          status: r.status || (isAdj || outAmt === 0 ? 'Adjusted' : 'Outstanding'),
+          paymentType: r.paymentType || 'Site Advance',
+          transactionNo: r.transactionNo || `ADV-${r.id.slice(0, 6).toUpperCase()}`
+        };
+      });
+      res.json(sanitized);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1779,16 +1911,107 @@ async function startServer() {
 
   app.post("/api/advances", (req, res) => {
     try {
-      const { id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType, deductionDetails } = req.body;
+      let {
+        id, transactionNo, projectId, workerId, amount, paymentType, specifyOtherAdvance,
+        paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount,
+        receiptProof, receiptFileName, receiptFileType, deductionDetails, status,
+        adjustedAmount, outstandingAmount, adjustedInPaymentId, sourcePaymentId,
+        createdBy, createdDate
+      } = req.body;
+
+      const numAmount = parseFloat(amount || 0);
+      const adjAmt = parseFloat(adjustedAmount || deductionAmount || 0);
+      const outAmt = outstandingAmount !== undefined ? parseFloat(outstandingAmount) : Math.max(0, numAmount - adjAmt);
+      const finalStatus = status || (outAmt === 0 || isDeducted ? 'Adjusted' : 'Outstanding');
+      const finalType = paymentType || 'Site Advance';
+
+      // Auto-generate Transaction No using existing numbering system if not provided
+      if (!transactionNo) {
+        try {
+          const config = db.prepare("SELECT * FROM numbering_settings WHERE moduleKey = 'worker-advance'").get() as any;
+          if (config) {
+            const fyValue = resolveFY(config.fyFormat, date);
+            const seriesVal = getSeriesValue(config.seriesType, config.fyFormat, date, projectId);
+            const prevVal = getCurrentSequenceNumber('worker-advance', seriesVal, config.startingNumber);
+            const nextVal = prevVal + 1;
+            db.prepare("INSERT INTO numbering_sequences (moduleKey, seriesValue, currentNumber) VALUES (?, ?, ?) ON CONFLICT(moduleKey, seriesValue) DO UPDATE SET currentNumber = ?").run('worker-advance', seriesVal, nextVal, nextVal);
+            transactionNo = generateFormattedNumber(config, nextVal, fyValue);
+          }
+        } catch (e) {
+          console.warn("Could not auto-generate numbering sequence:", e);
+        }
+        if (!transactionNo) {
+          transactionNo = `ADV-${Date.now().toString().slice(-6)}`;
+        }
+      }
+
       db.prepare(`
-        INSERT INTO advances (id, projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType, deductionDetails)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO advances (
+          id, transactionNo, projectId, workerId, amount, paymentType, specifyOtherAdvance,
+          paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount,
+          receiptProof, receiptFileName, receiptFileType, deductionDetails, status,
+          adjustedAmount, outstandingAmount, adjustedInPaymentId, sourcePaymentId,
+          createdBy, createdDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        id, projectId, workerId, parseFloat(amount), paidBy, paidByDetails || "", remarks || "", date, 
-        isDeducted ? 1 : 0, deductionMonth || "", parseFloat(deductionAmount || 0), 
-        receiptProof || "", receiptFileName || "", receiptFileType || "", deductionDetails || ""
+        id, transactionNo, projectId, workerId, numAmount, finalType, specifyOtherAdvance || "",
+        paidBy || "Supervisor", paidByDetails || "", remarks || "", date,
+        finalStatus === 'Adjusted' ? 1 : 0, deductionMonth || "", adjAmt,
+        receiptProof || "", receiptFileName || "", receiptFileType || "", deductionDetails || "",
+        finalStatus, adjAmt, outAmt, adjustedInPaymentId || null, sourcePaymentId || null,
+        createdBy || "Admin", createdDate || new Date().toISOString()
       );
-      res.status(201).json(req.body);
+
+      // Synchronize Worker Ledger
+      let particulars = finalType;
+      if (finalType === 'Other Advance' && specifyOtherAdvance) {
+        particulars = `Other Advance – ${specifyOtherAdvance}`;
+      }
+      const ledgerId = `wl-adv-${id}`;
+      try {
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, advanceId, sourceModule,
+            sourceTransactionId, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            voucherNo = excluded.voucherNo,
+            description = excluded.description,
+            particulars = excluded.particulars,
+            debit = excluded.debit,
+            remarks = excluded.remarks,
+            modifiedDate = excluded.createdDate
+        `).run(
+          ledgerId, workerId, projectId, date, transactionNo,
+          `${particulars}${remarks ? ': ' + remarks : ''}`,
+          particulars,
+          'Advance Given',
+          numAmount,
+          0,
+          0,
+          id,
+          'Worker Advance',
+          id,
+          remarks || null,
+          createdBy || 'Admin',
+          createdDate || new Date().toISOString()
+        );
+      } catch (ledgerErr) {
+        console.error("Ledger sync on advance create error:", ledgerErr);
+      }
+
+      res.status(201).json({
+        ...req.body,
+        transactionNo,
+        paymentType: finalType,
+        status: finalStatus,
+        adjustedAmount: adjAmt,
+        outstandingAmount: outAmt
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1797,18 +2020,70 @@ async function startServer() {
   app.put("/api/advances/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { projectId, workerId, amount, paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount, receiptProof, receiptFileName, receiptFileType, deductionDetails } = req.body;
+      const {
+        transactionNo, projectId, workerId, amount, paymentType, specifyOtherAdvance,
+        paidBy, paidByDetails, remarks, date, isDeducted, deductionMonth, deductionAmount,
+        receiptProof, receiptFileName, receiptFileType, deductionDetails, status,
+        adjustedAmount, outstandingAmount, adjustedInPaymentId, sourcePaymentId,
+        modifiedBy
+      } = req.body;
+
+      const numAmount = parseFloat(amount || 0);
+      const adjAmt = parseFloat(adjustedAmount || deductionAmount || 0);
+      const outAmt = outstandingAmount !== undefined ? parseFloat(outstandingAmount) : Math.max(0, numAmount - adjAmt);
+      const finalStatus = status || (outAmt === 0 ? 'Adjusted' : 'Outstanding');
+      const finalType = paymentType || 'Site Advance';
+
       db.prepare(`
         UPDATE advances
-        SET projectId = ?, workerId = ?, amount = ?, paidBy = ?, paidByDetails = ?, remarks = ?, date = ?, 
-            isDeducted = ?, deductionMonth = ?, deductionAmount = ?, receiptProof = ?, receiptFileName = ?, receiptFileType = ?, deductionDetails = ?
+        SET transactionNo = ?, projectId = ?, workerId = ?, amount = ?, paymentType = ?, specifyOtherAdvance = ?,
+            paidBy = ?, paidByDetails = ?, remarks = ?, date = ?, 
+            isDeducted = ?, deductionMonth = ?, deductionAmount = ?, receiptProof = ?, receiptFileName = ?, receiptFileType = ?, deductionDetails = ?,
+            status = ?, adjustedAmount = ?, outstandingAmount = ?, adjustedInPaymentId = ?, sourcePaymentId = ?,
+            modifiedBy = ?, modifiedDate = ?
         WHERE id = ?
       `).run(
-        projectId, workerId, parseFloat(amount), paidBy, paidByDetails || "", remarks || "", date, 
-        isDeducted ? 1 : 0, deductionMonth || "", parseFloat(deductionAmount || 0), 
-        receiptProof || "", receiptFileName || "", receiptFileType || "", deductionDetails || "", id
+        transactionNo || null, projectId, workerId, numAmount, finalType, specifyOtherAdvance || "",
+        paidBy || "", paidByDetails || "", remarks || "", date, 
+        finalStatus === 'Adjusted' ? 1 : 0, deductionMonth || "", adjAmt,
+        receiptProof || "", receiptFileName || "", receiptFileType || "", deductionDetails || "",
+        finalStatus, adjAmt, outAmt, adjustedInPaymentId || null, sourcePaymentId || null,
+        modifiedBy || "Admin", new Date().toISOString(), id
       );
-      res.json(req.body);
+
+      // Synchronize Worker Ledger
+      let particulars = finalType;
+      if (finalType === 'Other Advance' && specifyOtherAdvance) {
+        particulars = `Other Advance – ${specifyOtherAdvance}`;
+      }
+      try {
+        db.prepare(`
+          UPDATE worker_ledger
+          SET workerId = ?, projectId = ?, date = ?, voucherNo = ?,
+              description = ?, particulars = ?, debit = ?, remarks = ?,
+              modifiedBy = ?, modifiedDate = ?
+          WHERE advanceId = ? OR sourceTransactionId = ? OR id = ?
+        `).run(
+          workerId, projectId, date, transactionNo || null,
+          `${particulars}${remarks ? ': ' + remarks : ''}`,
+          particulars,
+          numAmount,
+          remarks || null,
+          modifiedBy || 'Admin',
+          new Date().toISOString(),
+          id, id, `wl-adv-${id}`
+        );
+      } catch (ledgerErr) {
+        console.error("Ledger sync on advance update error:", ledgerErr);
+      }
+
+      res.json({
+        ...req.body,
+        paymentType: finalType,
+        status: finalStatus,
+        adjustedAmount: adjAmt,
+        outstandingAmount: outAmt
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1818,6 +2093,7 @@ async function startServer() {
     try {
       const { id } = req.params;
       db.prepare("DELETE FROM advances WHERE id = ?").run(id);
+      db.prepare("DELETE FROM worker_ledger WHERE advanceId = ? OR sourceTransactionId = ? OR id = ?").run(id, id, `wl-adv-${id}`);
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1827,8 +2103,21 @@ async function startServer() {
   // 7. Worker Payments
   app.get("/api/worker-payments", (req, res) => {
     try {
-      const rows = db.prepare("SELECT * FROM worker_payments").all();
-      res.json(rows);
+      const rows = db.prepare("SELECT * FROM worker_payments ORDER BY date DESC, id DESC").all() as any[];
+      const sanitized = rows.map(r => ({
+        ...r,
+        workAmount: parseFloat(r.workAmount) || 0,
+        messDeduction: parseFloat(r.messDeduction) || 0,
+        kharchiDeduction: parseFloat(r.kharchiDeduction) || 0,
+        advanceDeduction: parseFloat(r.advanceDeduction) || 0,
+        supplyAmount: parseFloat(r.supplyAmount) || 0,
+        recoveryAmount: parseFloat(r.recoveryAmount) || 0,
+        otherDeduction: parseFloat(r.otherDeduction) || 0,
+        netPayment: parseFloat(r.netPayment) || 0,
+        previouslyOverBalance: parseFloat(r.previouslyOverBalance) || 0,
+        newCarryForwardOverBalance: parseFloat(r.newCarryForwardOverBalance) || 0
+      }));
+      res.json(sanitized);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1836,10 +2125,33 @@ async function startServer() {
 
   app.post("/api/worker-payments", (req, res) => {
     try {
-      const { id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails, floorAbstractsJson } = req.body;
+      const {
+        id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction,
+        advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay,
+        overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus,
+        otherDeduction, otherDeductionDetails, floorAbstractsJson, previouslyOverBalance,
+        newCarryForwardOverBalance, consumedAdvanceIds, overBalanceAdvanceId, voucherNo
+      } = req.body;
+
+      // Handle calculated Net and Carry Forward Over Balance
+      const grossPayable = parseFloat(workAmount || 0) + parseFloat(supplyAmount || 0);
+      const totalDeductions = parseFloat(messDeduction || 0) + parseFloat(kharchiDeduction || 0) +
+        parseFloat(advanceDeduction || 0) + parseFloat(previouslyOverBalance || 0) +
+        parseFloat(otherDeduction || 0) + parseFloat(recoveryAmount || 0);
+      const calculatedNet = grossPayable - totalDeductions;
+      const actualNetPayment = calculatedNet >= 0 ? calculatedNet : 0;
+      const carryForwardOverBalance = calculatedNet < 0 ? Math.abs(calculatedNet) : 0;
+      const obAdvId = `adv-ob-${id}`;
+
       db.prepare(`
-        INSERT INTO worker_payments (id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails, floorAbstractsJson)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO worker_payments (
+          id, projectId, workerId, month, workAmount, messDeduction, kharchiDeduction,
+          advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay,
+          overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus,
+          otherDeduction, otherDeductionDetails, floorAbstractsJson, previouslyOverBalance,
+          newCarryForwardOverBalance, consumedAdvanceIds, overBalanceAdvanceId, voucherNo
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         projectId,
@@ -1849,45 +2161,7 @@ async function startServer() {
         parseFloat(messDeduction || 0),
         parseFloat(kharchiDeduction || 0),
         parseFloat(advanceDeduction || 0),
-        parseFloat(netPayment || 0),
-        date,
-        level || null,
-        workCategory || 'Monthly work',
-        workDays ? parseFloat(workDays) : null,
-        ratePerDay ? parseFloat(ratePerDay) : null,
-        overtimeHours ? parseFloat(overtimeHours) : null,
-        allowance ? parseFloat(allowance) : null,
-        parseFloat(supplyAmount || 0),
-        supplyDetails || null,
-        parseFloat(recoveryAmount || 0),
-        paymentStatus || 'Pending',
-        parseFloat(otherDeduction || 0),
-        otherDeductionDetails || "",
-        floorAbstractsJson || null
-      );
-      res.status(201).json(req.body);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  app.put("/api/worker-payments/:id", (req, res) => {
-    try {
-      const { id } = req.params;
-      const { projectId, workerId, month, workAmount, messDeduction, kharchiDeduction, advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay, overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus, otherDeduction, otherDeductionDetails, floorAbstractsJson } = req.body;
-      db.prepare(`
-        UPDATE worker_payments
-        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?, advanceDeduction = ?, netPayment = ?, date = ?, level = ?, workCategory = ?, workDays = ?, ratePerDay = ?, overtimeHours = ?, allowance = ?, supplyAmount = ?, supplyDetails = ?, recoveryAmount = ?, paymentStatus = ?, otherDeduction = ?, otherDeductionDetails = ?, floorAbstractsJson = ?
-        WHERE id = ?
-      `).run(
-        projectId,
-        workerId,
-        month,
-        parseFloat(workAmount || 0),
-        parseFloat(messDeduction || 0),
-        parseFloat(kharchiDeduction || 0),
-        parseFloat(advanceDeduction || 0),
-        parseFloat(netPayment || 0),
+        actualNetPayment,
         date,
         level || null,
         workCategory || 'Monthly work',
@@ -1902,9 +2176,347 @@ async function startServer() {
         parseFloat(otherDeduction || 0),
         otherDeductionDetails || "",
         floorAbstractsJson || null,
+        parseFloat(previouslyOverBalance || 0),
+        carryForwardOverBalance,
+        typeof consumedAdvanceIds === 'string' ? consumedAdvanceIds : JSON.stringify(consumedAdvanceIds || []),
+        carryForwardOverBalance > 0 ? obAdvId : null,
+        voucherNo || `PAY-${month}`
+      );
+
+      // Settle / Link Consumed Advances
+      let advIdList: string[] = [];
+      if (consumedAdvanceIds) {
+        advIdList = typeof consumedAdvanceIds === 'string' ? JSON.parse(consumedAdvanceIds) : consumedAdvanceIds;
+      }
+      if (Array.isArray(advIdList) && advIdList.length > 0) {
+        const updateAdv = db.prepare(`
+          UPDATE advances
+          SET status = 'Adjusted',
+              adjustedInPaymentId = ?,
+              adjustedAmount = amount,
+              outstandingAmount = 0,
+              modifiedDate = ?
+          WHERE id = ?
+        `);
+        for (const advId of advIdList) {
+          updateAdv.run(id, new Date().toISOString(), advId);
+        }
+      }
+
+      // If net payment is negative, auto-create a Previously Over Balance advance
+      if (carryForwardOverBalance > 0) {
+        const obTxNo = `ADV-OB-${(month || date.slice(0, 7)).replace(/[^0-9]/g, '')}-${id.slice(0, 4).toUpperCase()}`;
+        db.prepare(`
+          INSERT INTO advances (
+            id, transactionNo, projectId, workerId, amount, paymentType,
+            paidBy, status, adjustedAmount, outstandingAmount, sourcePaymentId,
+            remarks, date, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            amount = excluded.amount,
+            outstandingAmount = excluded.outstandingAmount,
+            adjustedAmount = 0,
+            status = 'Outstanding',
+            date = excluded.date,
+            remarks = excluded.remarks
+        `).run(
+          obAdvId, obTxNo, projectId, workerId, carryForwardOverBalance,
+          'Previously Over Balance', 'System', 'Outstanding', 0, carryForwardOverBalance,
+          id, `Auto-generated from previous worker payment (${month})`,
+          date, 'System', new Date().toISOString()
+        );
+
+        // Sync ledger for this carry forward over balance
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, advanceId, sourceModule,
+            sourceTransactionId, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            voucherNo = excluded.voucherNo,
+            description = excluded.description,
+            particulars = excluded.particulars,
+            debit = excluded.debit,
+            remarks = excluded.remarks
+        `).run(
+          `wl-adv-${obAdvId}`, workerId, projectId, date, obTxNo,
+          `Previously Over Balance carry forward (${month})`,
+          'Previously Over Balance',
+          'Advance Given',
+          carryForwardOverBalance,
+          0,
+          0,
+          obAdvId,
+          'Worker Advance',
+          obAdvId,
+          'Auto-generated from previous worker payment',
+          'System',
+          new Date().toISOString()
+        );
+      }
+
+      // Synchronize Worker Payment with Worker Ledger
+      if (grossPayable > 0) {
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, paymentId, sourceModule,
+            sourceTransactionId, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            credit = excluded.credit,
+            description = excluded.description,
+            particulars = excluded.particulars
+        `).run(
+          `wl-pay-wage-${id}`, workerId, projectId, date, voucherNo || `PAY-${month}`,
+          `Gross Wages for ${month}`, `Gross Wages (${month})`,
+          'Worker Payment', 0, grossPayable, 0, id, 'Worker Payment', id,
+          `Payroll gross earnings for ${month}`, 'System', new Date().toISOString()
+        );
+      }
+
+      if (actualNetPayment > 0) {
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, paymentId, sourceModule,
+            sourceTransactionId, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            debit = excluded.debit,
+            description = excluded.description,
+            particulars = excluded.particulars
+        `).run(
+          `wl-pay-net-${id}`, workerId, projectId, date, voucherNo || `PAY-${month}`,
+          `Net Paycheck Disbursed for ${month}`, `Payment Disbursed (${month})`,
+          'Worker Payment', actualNetPayment, 0, 0, id, 'Worker Payment', id,
+          `Net wage disbursed for ${month}`, 'System', new Date().toISOString()
+        );
+      }
+
+      res.status(201).json({
+        ...req.body,
+        netPayment: actualNetPayment,
+        newCarryForwardOverBalance: carryForwardOverBalance
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/worker-payments/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        projectId, workerId, month, workAmount, messDeduction, kharchiDeduction,
+        advanceDeduction, netPayment, date, level, workCategory, workDays, ratePerDay,
+        overtimeHours, allowance, supplyAmount, supplyDetails, recoveryAmount, paymentStatus,
+        otherDeduction, otherDeductionDetails, floorAbstractsJson, previouslyOverBalance,
+        newCarryForwardOverBalance, consumedAdvanceIds, overBalanceAdvanceId, voucherNo
+      } = req.body;
+
+      // Un-adjust any advances previously linked to this payment before re-applying
+      db.prepare(`
+        UPDATE advances
+        SET status = 'Outstanding',
+            adjustedInPaymentId = NULL,
+            adjustedAmount = 0,
+            outstandingAmount = amount,
+            modifiedDate = ?
+        WHERE adjustedInPaymentId = ?
+      `).run(new Date().toISOString(), id);
+
+      const grossPayable = parseFloat(workAmount || 0) + parseFloat(supplyAmount || 0);
+      const totalDeductions = parseFloat(messDeduction || 0) + parseFloat(kharchiDeduction || 0) +
+        parseFloat(advanceDeduction || 0) + parseFloat(previouslyOverBalance || 0) +
+        parseFloat(otherDeduction || 0) + parseFloat(recoveryAmount || 0);
+      const calculatedNet = grossPayable - totalDeductions;
+      const actualNetPayment = calculatedNet >= 0 ? calculatedNet : 0;
+      const carryForwardOverBalance = calculatedNet < 0 ? Math.abs(calculatedNet) : 0;
+      const obAdvId = `adv-ob-${id}`;
+
+      db.prepare(`
+        UPDATE worker_payments
+        SET projectId = ?, workerId = ?, month = ?, workAmount = ?, messDeduction = ?, kharchiDeduction = ?,
+            advanceDeduction = ?, netPayment = ?, date = ?, level = ?, workCategory = ?, workDays = ?,
+            ratePerDay = ?, overtimeHours = ?, allowance = ?, supplyAmount = ?, supplyDetails = ?,
+            recoveryAmount = ?, paymentStatus = ?, otherDeduction = ?, otherDeductionDetails = ?,
+            floorAbstractsJson = ?, previouslyOverBalance = ?, newCarryForwardOverBalance = ?,
+            consumedAdvanceIds = ?, overBalanceAdvanceId = ?, voucherNo = ?
+        WHERE id = ?
+      `).run(
+        projectId,
+        workerId,
+        month,
+        parseFloat(workAmount || 0),
+        parseFloat(messDeduction || 0),
+        parseFloat(kharchiDeduction || 0),
+        parseFloat(advanceDeduction || 0),
+        actualNetPayment,
+        date,
+        level || null,
+        workCategory || 'Monthly work',
+        workDays ? parseFloat(workDays) : null,
+        ratePerDay ? parseFloat(ratePerDay) : null,
+        overtimeHours ? parseFloat(overtimeHours) : null,
+        allowance ? parseFloat(allowance) : null,
+        parseFloat(supplyAmount || 0),
+        supplyDetails || null,
+        parseFloat(recoveryAmount || 0),
+        paymentStatus || 'Pending',
+        parseFloat(otherDeduction || 0),
+        otherDeductionDetails || "",
+        floorAbstractsJson || null,
+        parseFloat(previouslyOverBalance || 0),
+        carryForwardOverBalance,
+        typeof consumedAdvanceIds === 'string' ? consumedAdvanceIds : JSON.stringify(consumedAdvanceIds || []),
+        carryForwardOverBalance > 0 ? obAdvId : null,
+        voucherNo || `PAY-${month}`,
         id
       );
-      res.json(req.body);
+
+      // Re-apply consumed advances
+      let advIdList: string[] = [];
+      if (consumedAdvanceIds) {
+        advIdList = typeof consumedAdvanceIds === 'string' ? JSON.parse(consumedAdvanceIds) : consumedAdvanceIds;
+      }
+      if (Array.isArray(advIdList) && advIdList.length > 0) {
+        const updateAdv = db.prepare(`
+          UPDATE advances
+          SET status = 'Adjusted',
+              adjustedInPaymentId = ?,
+              adjustedAmount = amount,
+              outstandingAmount = 0,
+              modifiedDate = ?
+          WHERE id = ?
+        `);
+        for (const advId of advIdList) {
+          updateAdv.run(id, new Date().toISOString(), advId);
+        }
+      }
+
+      // Handle over balance advance record
+      if (carryForwardOverBalance > 0) {
+        const obTxNo = `ADV-OB-${(month || date.slice(0, 7)).replace(/[^0-9]/g, '')}-${id.slice(0, 4).toUpperCase()}`;
+        db.prepare(`
+          INSERT INTO advances (
+            id, transactionNo, projectId, workerId, amount, paymentType,
+            paidBy, status, adjustedAmount, outstandingAmount, sourcePaymentId,
+            remarks, date, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            amount = excluded.amount,
+            outstandingAmount = excluded.outstandingAmount,
+            adjustedAmount = 0,
+            status = 'Outstanding',
+            date = excluded.date,
+            remarks = excluded.remarks
+        `).run(
+          obAdvId, obTxNo, projectId, workerId, carryForwardOverBalance,
+          'Previously Over Balance', 'System', 'Outstanding', 0, carryForwardOverBalance,
+          id, `Auto-generated from previous worker payment (${month})`,
+          date, 'System', new Date().toISOString()
+        );
+
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, advanceId, sourceModule,
+            sourceTransactionId, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            voucherNo = excluded.voucherNo,
+            description = excluded.description,
+            particulars = excluded.particulars,
+            debit = excluded.debit,
+            remarks = excluded.remarks
+        `).run(
+          `wl-adv-${obAdvId}`, workerId, projectId, date, obTxNo,
+          `Previously Over Balance carry forward (${month})`,
+          'Previously Over Balance',
+          'Advance Given',
+          carryForwardOverBalance,
+          0,
+          0,
+          obAdvId,
+          'Worker Advance',
+          obAdvId,
+          'Auto-generated from previous worker payment',
+          'System',
+          new Date().toISOString()
+        );
+      } else {
+        // If not negative anymore, remove any previous over balance advance and ledger
+        db.prepare("DELETE FROM advances WHERE id = ?").run(obAdvId);
+        db.prepare("DELETE FROM worker_ledger WHERE advanceId = ? OR sourceTransactionId = ? OR id = ?").run(obAdvId, obAdvId, `wl-adv-${obAdvId}`);
+      }
+
+      // Update Wage Credit in ledger
+      if (grossPayable > 0) {
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, paymentId, sourceModule,
+            sourceTransactionId, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            credit = excluded.credit,
+            description = excluded.description,
+            particulars = excluded.particulars
+        `).run(
+          `wl-pay-wage-${id}`, workerId, projectId, date, voucherNo || `PAY-${month}`,
+          `Gross Wages for ${month}`, `Gross Wages (${month})`,
+          'Worker Payment', 0, grossPayable, 0, id, 'Worker Payment', id,
+          `Payroll gross earnings for ${month}`, 'System', new Date().toISOString()
+        );
+      }
+
+      // Update Net Disbursed in ledger
+      if (actualNetPayment > 0) {
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, paymentId, sourceModule,
+            sourceTransactionId, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            debit = excluded.debit,
+            description = excluded.description,
+            particulars = excluded.particulars
+        `).run(
+          `wl-pay-net-${id}`, workerId, projectId, date, voucherNo || `PAY-${month}`,
+          `Net Paycheck Disbursed for ${month}`, `Payment Disbursed (${month})`,
+          'Worker Payment', actualNetPayment, 0, 0, id, 'Worker Payment', id,
+          `Net wage disbursed for ${month}`, 'System', new Date().toISOString()
+        );
+      } else {
+        db.prepare("DELETE FROM worker_ledger WHERE id = ?").run(`wl-pay-net-${id}`);
+      }
+
+      res.json({
+        ...req.body,
+        netPayment: actualNetPayment,
+        newCarryForwardOverBalance: carryForwardOverBalance
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1913,6 +2525,25 @@ async function startServer() {
   app.delete("/api/worker-payments/:id", (req, res) => {
     try {
       const { id } = req.params;
+      // Revert adjusted advances
+      db.prepare(`
+        UPDATE advances
+        SET status = 'Outstanding',
+            adjustedInPaymentId = NULL,
+            adjustedAmount = 0,
+            outstandingAmount = amount,
+            modifiedDate = ?
+        WHERE adjustedInPaymentId = ?
+      `).run(new Date().toISOString(), id);
+
+      // Delete carry forward advance
+      const obAdvId = `adv-ob-${id}`;
+      db.prepare("DELETE FROM advances WHERE id = ?").run(obAdvId);
+      db.prepare("DELETE FROM worker_ledger WHERE advanceId = ? OR sourceTransactionId = ? OR id = ?").run(obAdvId, obAdvId, `wl-adv-${obAdvId}`);
+
+      // Delete worker payment ledger entries
+      db.prepare("DELETE FROM worker_ledger WHERE paymentId = ?").run(id);
+
       db.prepare("DELETE FROM worker_payments WHERE id = ?").run(id);
       res.json({ success: true, id });
     } catch (err: any) {
@@ -1932,10 +2563,18 @@ async function startServer() {
 
   app.post("/api/worker-ledger", (req, res) => {
     try {
-      const { id, workerId, projectId, date, voucherNo, description, entryType, debit, credit, runningBalance, paymentId, advanceId, createdBy, createdDate } = req.body;
+      const {
+        id, workerId, projectId, date, voucherNo, description, particulars,
+        entryType, debit, credit, runningBalance, paymentId, advanceId,
+        sourceModule, sourceTransactionId, remarks, createdBy, createdDate
+      } = req.body;
       db.prepare(`
-        INSERT INTO worker_ledger (id, workerId, projectId, date, voucherNo, description, entryType, debit, credit, runningBalance, paymentId, advanceId, createdBy, createdDate)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO worker_ledger (
+          id, workerId, projectId, date, voucherNo, description, particulars,
+          entryType, debit, credit, runningBalance, paymentId, advanceId,
+          sourceModule, sourceTransactionId, remarks, createdBy, createdDate
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         workerId,
@@ -1943,12 +2582,16 @@ async function startServer() {
         date,
         voucherNo || null,
         description,
+        particulars || description,
         entryType,
         parseFloat(debit || 0),
         parseFloat(credit || 0),
         parseFloat(runningBalance || 0),
         paymentId || null,
         advanceId || null,
+        sourceModule || 'Manual Entry',
+        sourceTransactionId || id,
+        remarks || null,
         createdBy || null,
         createdDate || null
       );
@@ -1961,10 +2604,17 @@ async function startServer() {
   app.put("/api/worker-ledger/:id", (req, res) => {
     try {
       const { id } = req.params;
-      const { workerId, projectId, date, voucherNo, description, entryType, debit, credit, runningBalance, paymentId, advanceId, createdBy, createdDate } = req.body;
+      const {
+        workerId, projectId, date, voucherNo, description, particulars,
+        entryType, debit, credit, runningBalance, paymentId, advanceId,
+        sourceModule, sourceTransactionId, remarks, modifiedBy, modifiedDate
+      } = req.body;
       db.prepare(`
         UPDATE worker_ledger
-        SET workerId = ?, projectId = ?, date = ?, voucherNo = ?, description = ?, entryType = ?, debit = ?, credit = ?, runningBalance = ?, paymentId = ?, advanceId = ?, createdBy = ?, createdDate = ?
+        SET workerId = ?, projectId = ?, date = ?, voucherNo = ?, description = ?,
+            particulars = ?, entryType = ?, debit = ?, credit = ?, runningBalance = ?,
+            paymentId = ?, advanceId = ?, sourceModule = ?, sourceTransactionId = ?,
+            remarks = ?, modifiedBy = ?, modifiedDate = ?
         WHERE id = ?
       `).run(
         workerId,
@@ -1972,14 +2622,18 @@ async function startServer() {
         date,
         voucherNo || null,
         description,
+        particulars || description,
         entryType,
         parseFloat(debit || 0),
         parseFloat(credit || 0),
         parseFloat(runningBalance || 0),
         paymentId || null,
         advanceId || null,
-        createdBy || null,
-        createdDate || null,
+        sourceModule || 'Manual Entry',
+        sourceTransactionId || id,
+        remarks || null,
+        modifiedBy || 'Admin',
+        modifiedDate || new Date().toISOString(),
         id
       );
       res.json(req.body);

@@ -548,7 +548,7 @@ export const WorkerLedger: React.FC = () => {
       events.push({
         date: a.date,
         title: 'Advance Issued',
-        description: `Personal loan ₹${a.amount.toLocaleString('en-IN')} issued. Purpose: ${a.remarks || 'General'}`,
+        description: `Personal loan ₹${(Number(a.amount) || 0).toLocaleString('en-IN')} issued. Purpose: ${a.remarks || 'General'}`,
         type: 'advance'
       });
     });
@@ -557,16 +557,16 @@ export const WorkerLedger: React.FC = () => {
       events.push({
         date: k.date,
         title: 'Pocket money (Kharchi)',
-        description: `Received weekly pocket money allowance: ₹${k.amount.toLocaleString('en-IN')}`,
+        description: `Received weekly pocket money allowance: ₹${(Number(k.amount) || 0).toLocaleString('en-IN')}`,
         type: 'kharchi'
       });
     });
 
-    workerPayments.filter(p => p.workerId === activeWorkerId && p.netPayment > 0).forEach(p => {
+    workerPayments.filter(p => p.workerId === activeWorkerId && (Number(p.netPayment) || 0) > 0).forEach(p => {
       events.push({
         date: p.date || `${p.month}-28`,
         title: 'Payment Done',
-        description: `Wage settlement ₹${p.netPayment.toLocaleString('en-IN')} disbursed for ${p.month}`,
+        description: `Wage settlement ₹${(Number(p.netPayment) || 0).toLocaleString('en-IN')} disbursed for ${p.month}`,
         type: 'payment'
       });
     });
@@ -1461,14 +1461,14 @@ export const WorkerLedger: React.FC = () => {
                               <td className="p-2 font-mono text-[#0a6ed1] font-bold">PAY-{p.id.substring(0,6).toUpperCase()}</td>
                               <td className="p-2 font-bold text-gray-700">{projectMap[p.projectId] || 'Unregistered'}</td>
                               <td className="p-2 font-medium text-gray-500">{p.paymentStatus || 'Disbursed Payroll'}</td>
-                              <td className="p-2 text-right font-mono text-green-700 font-bold bg-green-50/5">₹{p.netPayment.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-green-700 font-bold bg-green-50/5">₹{(Number(p.netPayment) || 0).toLocaleString('en-IN')}</td>
                               <td className="p-2 text-gray-500 font-medium">{p.level || 'System'}</td>
                             </tr>
                           ))}
                           {filteredPayments.length > 0 && (
                             <tr className="bg-gray-100 font-bold border-t border-gray-300">
                               <td colSpan={4} className="p-2 uppercase text-gray-700">Total Payments Given</td>
-                              <td className="p-2 text-right font-mono text-green-700 text-[11px] font-extrabold">₹{totalPayment.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-green-700 text-[11px] font-extrabold">₹{(totalPayment || 0).toLocaleString('en-IN')}</td>
                               <td></td>
                             </tr>
                           )}
@@ -1499,14 +1499,14 @@ export const WorkerLedger: React.FC = () => {
                               <td className="p-2 font-mono text-gray-500">{a.date}</td>
                               <td className="p-2 font-bold text-gray-700">{projectMap[a.projectId] || 'Unregistered'}</td>
                               <td className="p-2 text-gray-500 font-medium italic">{a.remarks || 'General Cash Advance'}</td>
-                              <td className="p-2 text-right font-mono text-red-650 font-bold">₹{a.amount.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-red-650 font-bold">₹{(Number(a.amount) || 0).toLocaleString('en-IN')}</td>
                               <td className="p-2 text-[#0a6ed1] font-bold">{a.paidBy || 'System'}</td>
                             </tr>
                           ))}
                           {filteredAdvances.length > 0 && (
                             <tr className="bg-gray-100 font-bold border-t border-gray-300">
                               <td colSpan={3} className="p-2 uppercase text-gray-700">Total Advances Taken</td>
-                              <td className="p-2 text-right font-mono text-red-650 text-[11px] font-extrabold">₹{filteredAdvances.reduce((s,a)=> s+a.amount, 0).toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-red-650 text-[11px] font-extrabold">₹{(filteredAdvances.reduce((s,a)=> s + (Number(a.amount) || 0), 0)).toLocaleString('en-IN')}</td>
                               <td></td>
                             </tr>
                           )}
@@ -1537,14 +1537,14 @@ export const WorkerLedger: React.FC = () => {
                               <td className="p-2 font-mono text-gray-500">{k.date}</td>
                               <td className="p-2 font-bold text-gray-700">{projectMap[k.projectId] || 'Unregistered'}</td>
                               <td className="p-2 text-gray-400 italic font-medium">Weekly pocket cash allowance</td>
-                              <td className="p-2 text-right font-mono text-amber-850 font-bold">₹{k.amount.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-amber-850 font-bold">₹{(Number(k.amount) || 0).toLocaleString('en-IN')}</td>
                               <td className="p-2 text-gray-500 font-semibold">Supervisor</td>
                             </tr>
                           ))}
                           {filteredKharchis.length > 0 && (
                             <tr className="bg-gray-100 font-bold border-t border-gray-300">
                               <td colSpan={3} className="p-2 uppercase text-gray-700">Total Kharchi Issued</td>
-                              <td className="p-2 text-right font-mono text-amber-800 text-[11px] font-extrabold">₹{totalKharchi.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-amber-800 text-[11px] font-extrabold">₹{(totalKharchi || 0).toLocaleString('en-IN')}</td>
                               <td></td>
                             </tr>
                           )}
@@ -1569,18 +1569,18 @@ export const WorkerLedger: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-150">
-                          {filteredPayments.filter(p => p.messDeduction > 0).map(p => (
+                          {filteredPayments.filter(p => (Number(p.messDeduction) || 0) > 0).map(p => (
                             <tr key={p.id} className="hover:bg-blue-50/20 divide-x divide-gray-150">
                               <td className="p-2 font-mono text-gray-500">{p.date || p.month}</td>
                               <td className="p-2 font-bold text-gray-700">{projectMap[p.projectId] || 'Unregistered'}</td>
                               <td className="p-2 text-gray-400 italic font-medium">Automatic mess boarding charges</td>
-                              <td className="p-2 text-right font-mono text-red-500 font-bold">₹{p.messDeduction.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-red-500 font-bold">₹{(Number(p.messDeduction) || 0).toLocaleString('en-IN')}</td>
                             </tr>
                           ))}
-                          {filteredPayments.filter(p => p.messDeduction > 0).length > 0 && (
+                          {filteredPayments.filter(p => (Number(p.messDeduction) || 0) > 0).length > 0 && (
                             <tr className="bg-gray-100 font-bold border-t border-gray-300">
                               <td colSpan={3} className="p-2 uppercase text-gray-700">Total Mess Deduct</td>
-                              <td className="p-2 text-right font-mono text-red-500 text-[11px] font-extrabold">₹{totalMess.toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-right font-mono text-red-500 text-[11px] font-extrabold">₹{(totalMess || 0).toLocaleString('en-IN')}</td>
                             </tr>
                           )}
                           {filteredPayments.filter(p => p.messDeduction > 0).length === 0 && (

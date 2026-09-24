@@ -1248,18 +1248,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addAdvance = async (advance: Omit<Advance, 'id'>) => {
-    const newAdvance = { ...advance, id: generateId() };
-    setState(s => ({ ...s, advances: [...s.advances, newAdvance] }));
+  const refreshFinancials = async () => {
     try {
-      await fetch('/api/advances', {
+      const [advRes, payRes, ledRes] = await Promise.all([
+        fetch('/api/advances').then(r => r.ok ? r.json() : null),
+        fetch('/api/worker-payments').then(r => r.ok ? r.json() : null),
+        fetch('/api/worker-ledger').then(r => r.ok ? r.json() : null)
+      ]);
+      setState(s => ({
+        ...s,
+        advances: Array.isArray(advRes) ? advRes : s.advances,
+        workerPayments: Array.isArray(payRes) ? payRes : s.workerPayments,
+        workerLedger: Array.isArray(ledRes) ? ledRes : s.workerLedger
+      }));
+      if (Array.isArray(advRes)) saveAllToStore('advances', advRes).catch(() => {});
+      if (Array.isArray(payRes)) saveAllToStore('workerPayments', payRes).catch(() => {});
+      if (Array.isArray(ledRes)) saveAllToStore('workerLedger', ledRes).catch(() => {});
+    } catch (err) {
+      console.error("Refresh financials error:", err);
+    }
+  };
+
+  const addAdvance = async (advance: Omit<Advance, 'id'>) => {
+    const newAdvance = {
+      ...advance,
+      id: generateId(),
+      paymentType: advance.paymentType || 'Site Advance',
+      status: advance.status || 'Outstanding',
+      adjustedAmount: advance.adjustedAmount || 0,
+      outstandingAmount: advance.outstandingAmount !== undefined ? advance.outstandingAmount : advance.amount,
+      createdBy: advance.createdBy || user?.username || 'Admin',
+      createdDate: advance.createdDate || new Date().toISOString()
+    };
+    setState(s => ({ ...s, advances: [newAdvance, ...s.advances] }));
+    try {
+      const res = await fetch('/api/advances', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newAdvance)
       });
-      await saveAllToStore('advances', [...state.advances, newAdvance]);
+      if (res.ok) {
+        const saved = await res.json();
+        setState(s => ({
+          ...s,
+          advances: s.advances.map(a => a.id === newAdvance.id ? saved : a)
+        }));
+      }
+      await refreshFinancials();
     } catch (e) {
       console.error(e);
+      await saveAllToStore('advances', [...state.advances, newAdvance]);
     }
   };
 
@@ -1268,13 +1306,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const existing = state.advances.find(a => a.id === id);
       if (existing) {
-        const merged = { ...existing, ...advance };
+        const merged = { ...existing, ...advance, modifiedBy: user?.username || 'Admin', modifiedDate: new Date().toISOString() };
         await fetch(`/api/advances/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(merged)
         });
-        await saveAllToStore('advances', state.advances.map(a => a.id === id ? merged : a));
+        await refreshFinancials();
       }
     } catch (e) {
       console.error(e);
@@ -1285,7 +1323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(s => ({ ...s, advances: s.advances.filter(a => a.id !== id) }));
     try {
       await fetch(`/api/advances/${id}`, { method: 'DELETE' });
-      await saveAllToStore('advances', state.advances.filter(a => a.id !== id));
+      await refreshFinancials();
     } catch (e) {
       console.error(e);
     }
@@ -1293,16 +1331,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addWorkerPayment = async (payment: Omit<WorkerPayment, 'id'>) => {
     const newPayment = { ...payment, id: generateId() };
-    setState(s => ({ ...s, workerPayments: [...s.workerPayments, newPayment] }));
+    setState(s => ({ ...s, workerPayments: [newPayment, ...s.workerPayments] }));
     try {
       await fetch('/api/worker-payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPayment)
       });
-      await saveAllToStore('workerPayments', [...state.workerPayments, newPayment]);
+      await refreshFinancials();
     } catch (e) {
       console.error(e);
+      await saveAllToStore('workerPayments', [...state.workerPayments, newPayment]);
     }
   };
 
@@ -1317,7 +1356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(merged)
         });
-        await saveAllToStore('workerPayments', state.workerPayments.map(wp => wp.id === id ? merged : wp));
+        await refreshFinancials();
       }
     } catch (e) {
       console.error(e);
@@ -1328,7 +1367,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(s => ({ ...s, workerPayments: s.workerPayments.filter(wp => wp.id !== id) }));
     try {
       await fetch(`/api/worker-payments/${id}`, { method: 'DELETE' });
-      await saveAllToStore('workerPayments', state.workerPayments.filter(wp => wp.id !== id));
+      await refreshFinancials();
     } catch (e) {
       console.error(e);
     }

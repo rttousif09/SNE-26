@@ -120,9 +120,17 @@ export interface Kharchi {
 
 export interface Advance {
   id: string;
+  transactionNo?: string;
   projectId: string;
   workerId: string;
   amount: number;
+  paymentType?: 'Site Advance' | 'Payment' | 'Travel Advance' | 'Other Advance' | 'Previously Over Balance';
+  specifyOtherAdvance?: string;
+  status?: 'Outstanding' | 'Adjusted';
+  adjustedAmount?: number;
+  outstandingAmount?: number;
+  adjustedInPaymentId?: string;
+  sourcePaymentId?: string;
   paidBy: string;
   paidByDetails?: string;
   remarks: string;
@@ -134,6 +142,10 @@ export interface Advance {
   receiptFileName?: string;
   receiptFileType?: string;
   deductionDetails?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
 }
 
 export interface SupplyDetail {
@@ -153,6 +165,10 @@ export interface WorkerPayment {
   messDeduction: number;
   kharchiDeduction: number;
   advanceDeduction: number;
+  previouslyOverBalance?: number;
+  newCarryForwardOverBalance?: number;
+  consumedAdvanceIds?: string | string[];
+  overBalanceAdvanceId?: string;
   netPayment: number;
   date: string;
   level?: string;
@@ -171,6 +187,7 @@ export interface WorkerPayment {
   towerName?: string;
   kharchiDetailsJson?: string;
   advanceDetailsJson?: string;
+  voucherNo?: string;
 }
 
 export interface WorkerLedgerEntry {
@@ -180,15 +197,20 @@ export interface WorkerLedgerEntry {
   date: string;
   voucherNo?: string;
   description: string;
+  particulars?: string;
   entryType: 'Opening Balance' | 'Advance Given' | 'Advance Recovery' | 'Worker Payment' | 'Bonus' | 'Deduction' | 'Other';
   debit: number;
   credit: number;
   runningBalance: number;
   paymentId?: string;
   advanceId?: string;
+  sourceModule?: string;
+  sourceTransactionId?: string;
   remarks?: string;
   createdBy?: string;
   createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
 }
 
 export interface WorkerHold {
