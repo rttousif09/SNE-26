@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, X, Check, Filter } from 'lucide-react';
+import { Search, X, Check, Filter, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export interface OptionItem {
@@ -180,9 +180,9 @@ export const SAPSelect: React.FC<SAPSelectProps> = ({
             if (!disabled) setIsOpen(true);
           }}
           className="ml-1 px-1 py-0.5 bg-gradient-to-b from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 border-l border-[#8c9ba8] text-gray-700 flex items-center justify-center rounded-r-xs shrink-0"
-          title="F4 Value Help"
+          title="Add / Select (F4)"
         >
-          <Search size={11} className="text-[#002f6c]" />
+          <Plus size={11} className="text-[#002f6c] stroke-[2.5]" />
         </button>
       </div>
 

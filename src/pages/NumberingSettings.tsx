@@ -247,7 +247,7 @@ export const NumberingSettingsPage: React.FC = () => {
             Document Numbering Settings
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Configure automated transaction coding schedules, financial year partitions, and reset policies across SN ENTERPRISES.
+            Configure automated transaction coding schedules, financial year partitions, and reset policies across SN ENTERPRISE.
           </p>
         </div>
         

@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
-  Download, Upload, Building2, User, LogOut, ChevronDown, 
-  Moon, Sun, Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, 
-  Check, Search, Clock, QrCode, Copy, Settings, GitFork, Shield,
-  Layers, Lock, Command, ChevronRight, HardHat, FileSpreadsheet
+  Building2, User, LogOut, ChevronDown, 
+  Moon, Sun, Bell, Check, Search, Clock, QrCode, Download, Settings, GitFork, Shield,
+  Lock, ArrowLeft, Save, Printer, RefreshCw, MoreHorizontal, FileSpreadsheet, Menu,
+  Maximize2, Minimize2, CheckSquare
 } from 'lucide-react';
 import { SNLogo } from './SNLogo';
 import { useAppContext } from '../store';
@@ -12,9 +12,8 @@ import {
   getTCodeList, 
   addRecentTCode, 
   getRecentTCodes, 
-  getFavoriteTCodes, 
-  logTCodeExecution, 
-  checkUserPrivilege 
+  logTCodeExecution,
+  DEFAULT_TCODES 
 } from '../lib/tcodeService';
 
 interface TopBarProps {
@@ -25,6 +24,108 @@ interface TopBarProps {
   onOpenCommandPalette?: () => void;
   onOpenAlertCenter?: () => void;
   breadcrumbs?: string[];
+  currentTab?: string;
+  onToggleSidebar?: () => void;
+  isSidebarCollapsed?: boolean;
+  onGoBack?: () => void;
+  canGoBack?: boolean;
+}
+
+const TCODE_MAPPING: Record<string, string> = {
+  'WFT01': 'advance',
+  'WRK01': 'workers',
+  'WRK02': 'workers',
+  'WRK03': 'worker-ledger',
+  'WRK04': 'dlr',
+  'WRK05': 'advance',
+  'WRK06': 'worker-payment',
+  'PAY01': 'worker-payment',
+  'WKP01': 'worker-payment',
+  'WKL01': 'worker-ledger',
+  'KHAR01': 'kharchi',
+  'ADV01': 'advance',
+  'BIL01': 'billing',
+  'BILL01': 'billing',
+  'CPAY01': 'client-payment',
+  'BOQ01': 'boqs',
+  'PRJ01': 'projects',
+  'DLR01': 'dlr',
+  'MAT01': 'materials',
+  'EQP01': 'assets',
+  'SC01': 'subcontractors',
+  'SCM01': 'subcontractors-master',
+  'SCB01': 'subcontractors-billing',
+  'SCP01': 'subcontractors-payments',
+  'SCL01': 'subcontractors-ledger',
+  'SCA01': 'subcontractors-audit',
+  'EXP01': 'expenses',
+  'EXPS01': 'expenses-summary',
+  'REP01': 'site-monthly-summary',
+  'RPT01': 'site-monthly-summary',
+  'DSR01': 'daily-site-summary',
+  'BTR01': 'bill-tracking',
+  'FLR01': 'floor-abstracts',
+  'FAB01': 'floor-abstracts',
+  'FYA01': 'financial-year-archive',
+  'BI01': 'analytics',
+  'RPT06': 'analytics',
+  'NUM01': 'numbering-settings',
+  'SET02': 'numbering-settings',
+  'TCD01': 'tcode-master',
+  'SET06': 'tcode-master',
+  'STF01': 'staff-management',
+  'SET03': 'staff-management',
+  'AUD01': 'activity-log',
+  'APR01': 'approvals',
+  'DF01': 'document-flow',
+  'FB03': 'document-flow',
+  'DMS01': 'dms',
+  'DOC01': 'dms',
+  'DASH01': 'dashboard',
+  'MESS01': 'mess'
+};
+
+export function getTabTCodeDisplay(tab: string): { tcode: string; title: string } {
+  switch (tab) {
+    case 'advance': return { tcode: 'WFT01', title: 'Worker Financial Transactions' };
+    case 'workers': return { tcode: 'WRK01', title: 'Worker Master' };
+    case 'worker-payment': return { tcode: 'PAY01', title: 'Worker Payment' };
+    case 'worker-ledger': return { tcode: 'WKL01', title: 'Worker Ledger & Recovery' };
+    case 'kharchi': return { tcode: 'KHAR01', title: 'Weekly Kharchi (Pocket Money)' };
+    case 'billing': return { tcode: 'BIL01', title: 'RA Billing' };
+    case 'client-payment': return { tcode: 'CPAY01', title: 'Client Payments & Receipts' };
+    case 'boqs': return { tcode: 'BOQ01', title: 'BOQ Master' };
+    case 'projects': return { tcode: 'PRJ01', title: 'Project Management' };
+    case 'dlr': return { tcode: 'DLR01', title: 'Daily Attendance (DLR)' };
+    case 'materials': return { tcode: 'MAT01', title: 'Materials & Inventory Store' };
+    case 'assets': return { tcode: 'EQP01', title: 'Equipment & Asset Register' };
+    case 'subcontractors':
+    case 'subcontractors-master':
+    case 'subcontractors-billing':
+    case 'subcontractors-payments':
+    case 'subcontractors-ledger':
+    case 'subcontractors-audit':
+      return { tcode: 'SC01', title: 'Subcontractor Management' };
+    case 'expenses': return { tcode: 'EXP01', title: 'Site Expenses Ledger' };
+    case 'expenses-summary': return { tcode: 'EXPS01', title: 'Expenses Summary Analysis' };
+    case 'site-monthly-summary': return { tcode: 'REP01', title: 'Site Monthly Summary' };
+    case 'daily-site-summary': return { tcode: 'DSR01', title: 'Daily Site Summary (AI)' };
+    case 'bill-tracking': return { tcode: 'BTR01', title: 'Bill Tracking Workflow' };
+    case 'floor-abstracts': return { tcode: 'FLR01', title: 'Floor Abstracts' };
+    case 'financial-year-archive': return { tcode: 'FYA01', title: 'Financial Year Archive' };
+    case 'analytics': return { tcode: 'BI01', title: 'Graphs & Analytics (BI)' };
+    case 'numbering-settings': return { tcode: 'NUM01', title: 'Document Numbering Settings' };
+    case 'tcode-master': return { tcode: 'TCD01', title: 'SAP T-Code Registry' };
+    case 'staff-management': return { tcode: 'STF01', title: 'Staff & Access Management' };
+    case 'activity-log': return { tcode: 'AUD01', title: 'System Audit Logs' };
+    case 'approvals': return { tcode: 'APR01', title: 'Pending Approvals' };
+    case 'dms': return { tcode: 'DMS01', title: 'DMS Document Center' };
+    case 'document-flow': return { tcode: 'DF01', title: 'SAP Document Flow' };
+    case 'mess': return { tcode: 'MESS01', title: 'Site Mess Management' };
+    case 'dashboard':
+    default:
+      return { tcode: 'DASH01', title: 'Dashboard Overview' };
+  }
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ 
@@ -34,27 +135,34 @@ export const TopBar: React.FC<TopBarProps> = ({
   onLock,
   onOpenCommandPalette,
   onOpenAlertCenter,
-  breadcrumbs = ['Overview']
+  breadcrumbs = ['Overview'],
+  currentTab = 'dashboard',
+  onToggleSidebar,
+  isSidebarCollapsed = false,
+  onGoBack,
+  canGoBack = false
 }) => {
   const erpStore = useAppContext();
   const {
     projects = [],
-    workers = [],
-    trackedBills = [],
     approvals = [],
     advanceSheetApprovals = [],
     kharchiApprovals = [],
     paymentSheetApprovals = [],
     expensesLedger = [],
-    materialIssues = [],
-    materialReturns = []
+    currentProjectId,
+    setCurrentProjectId
   } = erpStore as any;
 
+  const [tcodeInput, setTcodeInput] = useState<string>('');
+  const [tcodeError, setTcodeError] = useState<boolean>(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(currentProjectId || 'all');
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Modals
   const [showMyProfile, setShowMyProfile] = useState(false);
@@ -69,7 +177,17 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const tcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // Current screen T-Code info
+  const screenInfo = useMemo(() => getTabTCodeDisplay(currentTab), [currentTab]);
+
+  // Sync T-Code input with current screen
+  useEffect(() => {
+    setTcodeInput(screenInfo.tcode);
+    setTcodeError(false);
+  }, [screenInfo.tcode]);
 
   // Unread alerts calculation
   const unreadAlertCount = useMemo(() => {
@@ -103,7 +221,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     window.dispatchEvent(new CustomEvent('theme-changed', { detail: { darkMode: newDarkMode } }));
   };
 
-  // Close dropdowns when clicking outside
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -112,10 +230,54 @@ export const TopBar: React.FC<TopBarProps> = ({
       if (projectDropdownRef.current && !projectDropdownRef.current.contains(event.target as Node)) {
         setIsProjectDropdownOpen(false);
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleExecuteTCode = (codeToRun?: string) => {
+    const raw = (codeToRun || tcodeInput).trim();
+    if (!raw) return;
+
+    // Normalize: remove leading /n or /o or /
+    let cleaned = raw.toUpperCase();
+    if (cleaned.startsWith('/N') || cleaned.startsWith('/O')) {
+      cleaned = cleaned.substring(2);
+    } else if (cleaned.startsWith('/')) {
+      cleaned = cleaned.substring(1);
+    }
+    cleaned = cleaned.trim();
+
+    const targetTab = TCODE_MAPPING[cleaned];
+    if (targetTab && onNavigate) {
+      addRecentTCode(cleaned);
+      logTCodeExecution(cleaned, user?.name || user?.username || 'User', 'Execute via T-Code toolbar');
+      onNavigate(targetTab);
+      setTcodeError(false);
+    } else {
+      // Check in DEFAULT_TCODES
+      const matched = DEFAULT_TCODES.find(t => t.code.toUpperCase() === cleaned);
+      if (matched && onNavigate) {
+        addRecentTCode(cleaned);
+        logTCodeExecution(cleaned, user?.name || user?.username || 'User', 'Execute via T-Code toolbar');
+        onNavigate(matched.tab, matched.name, matched.props);
+        setTcodeError(false);
+      } else {
+        setTcodeError(true);
+        setTimeout(() => setTcodeError(false), 2500);
+      }
+    }
+  };
+
+  const handleTCodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleExecuteTCode();
+    }
+  };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,115 +341,176 @@ export const TopBar: React.FC<TopBarProps> = ({
     }
   };
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  };
+
+  const handleAction = (actionType: 'save' | 'print' | 'export' | 'refresh') => {
+    if (actionType === 'save') {
+      window.dispatchEvent(new CustomEvent('sap-action-save'));
+    } else if (actionType === 'print') {
+      window.dispatchEvent(new CustomEvent('sap-action-print'));
+      window.print();
+    } else if (actionType === 'export') {
+      window.dispatchEvent(new CustomEvent('sap-action-export'));
+    } else if (actionType === 'refresh') {
+      window.dispatchEvent(new CustomEvent('sap-action-refresh'));
+    }
+  };
+
   const selectedProject = projects.find((p: any) => p.id === selectedProjectId);
 
   return (
-    <header className="bg-[#0F4C81] dark:bg-[#0A2540] text-white border-b border-blue-900 dark:border-slate-800 shadow-md select-none font-sans z-30 shrink-0 h-[48px]">
-      <div className="px-4 h-full flex items-center justify-between gap-3">
-        
-        {/* Left Section: Brand & Breadcrumbs */}
-        <div className="flex items-center space-x-3 min-w-0 flex-1 lg:flex-initial">
+    <header className="select-none font-sans z-30 shrink-0 border-b border-[#bcc8d0]">
+      {/* 1. TOP ROW: Application Header (Pale SAP blue #b8d3e6, height 38px) */}
+      <div className="bg-[#b8d3e6] text-[#303b44] h-[38px] px-3 flex items-center justify-between border-b border-[#bcc8d0] text-[12px]">
+        {/* Left: ☰ | SN ENTERPRISE ERP | Current Screen Title */}
+        <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+          <button
+            onClick={onToggleSidebar}
+            className="p-1 hover:bg-[#a6c5da] active:bg-[#93b5cc] rounded-none text-[#303b44] transition cursor-pointer flex items-center justify-center shrink-0 border border-[#a2bfd3]"
+            title={isSidebarCollapsed ? "Expand Menu" : "Collapse Menu"}
+          >
+            <Menu size={15} />
+          </button>
+
           <div 
             onClick={() => onNavigate && onNavigate('dashboard')}
-            className="flex items-center space-x-2.5 cursor-pointer hover:opacity-95 transition shrink-0"
-            title="Return to Dashboard"
+            className="flex items-center space-x-1.5 cursor-pointer font-bold tracking-tight text-[#303b44] shrink-0"
+            title="SN ENTERPRISE ERP - Return to Home"
           >
-            <SNLogo size={24} className="text-white" />
-            <span className="font-extrabold text-sm tracking-wide text-white font-mono">
-              SN ENTERPRISES
-            </span>
-            <span className="text-[9px] font-mono font-bold text-blue-200 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-400/30">
-              ERP_PRD
+            <SNLogo size={17} className="text-[#2d6f91]" />
+            <span className="font-bold text-[13px] tracking-wide">
+              SN ENTERPRISE ERP
             </span>
           </div>
 
-          {/* Breadcrumb path */}
-          <div className="hidden lg:flex items-center space-x-1.5 text-xs text-blue-200 pl-2 border-l border-blue-700/60 min-w-0 flex-1 truncate">
-            {breadcrumbs.map((crumb, idx) => (
-              <React.Fragment key={idx}>
-                {idx > 0 && <ChevronRight size={12} className="text-blue-400/80 shrink-0" />}
-                <span className={`truncate ${idx === breadcrumbs.length - 1 ? 'font-bold text-white' : 'hover:text-white transition'}`}>
-                  {crumb}
-                </span>
-              </React.Fragment>
-            ))}
+          <span className="text-[#9bb2c2] font-light hidden sm:inline">|</span>
+
+          {/* Current Screen / Transaction Title (Flat, no oversized saturated badge) */}
+          <div className="font-semibold text-[12px] text-[#303b44] truncate flex items-center space-x-1.5 min-w-0">
+            <span className="bg-white/70 border border-[#9bb2c2] text-[#2d6f91] font-mono font-bold text-[11px] px-1.5 py-0.2 rounded-none shrink-0">
+              {screenInfo.tcode}
+            </span>
+            <span className="truncate text-[#303b44] font-medium">{screenInfo.title}</span>
           </div>
         </div>
 
-        {/* Center: Command Palette Trigger Input */}
-        <div className="flex-1 max-w-lg hidden md:block min-w-0 mx-2">
-          <button
-            onClick={() => onOpenCommandPalette ? onOpenCommandPalette() : onOpenAlertCenter && onOpenAlertCenter()}
-            className="w-full flex items-center justify-between px-3 py-1.5 bg-blue-950/50 dark:bg-slate-900/70 hover:bg-blue-900/60 text-blue-100 dark:text-slate-300 border border-blue-400/30 dark:border-slate-700 rounded-lg text-xs transition-all shadow-inner group cursor-pointer overflow-hidden"
-          >
-            <div className="flex items-center space-x-2 min-w-0 flex-1 pr-2">
-              <Search size={14} className="text-blue-300 group-hover:text-white shrink-0" />
-              <span className="text-blue-200/90 group-hover:text-white text-xs truncate">
-                Jump to module, worker, project, bill or T-Code (/n)...
-              </span>
-            </div>
-            <kbd className="bg-blue-900/80 text-blue-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-blue-400/40 shrink-0 hidden sm:block">
-              Ctrl + K
-            </kbd>
-          </button>
-        </div>
+        {/* Right: User | Company | Window Controls */}
+        <div className="flex items-center space-x-2 shrink-0 text-[12px]">
+          {/* User Profile */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="flex items-center space-x-1 px-2 py-0.5 bg-white/70 hover:bg-white border border-[#bcc8d0] rounded-none text-[#303b44] text-[11px] font-medium cursor-pointer transition"
+              title="Current User Profile"
+            >
+              <User size={12} className="text-[#2d6f91]" />
+              <span className="max-w-[110px] truncate">{user?.name || user?.username || 'User'}</span>
+              <ChevronDown size={11} className="text-[#63717b]" />
+            </button>
 
-        {/* Right Section: Context, Actions & User Pill */}
-        <div className="flex items-center space-x-2 shrink-0">
-          
-          {/* Project Context Selector Dropdown */}
+            {isOpen && (
+              <div className="absolute right-0 mt-1 w-64 bg-white border border-[#bcc8d0] shadow-md rounded-none z-50 text-[#303b44] text-[12px]">
+                <div className="bg-[#edf3f7] p-2.5 border-b border-[#bcc8d0] flex items-center space-x-2">
+                  <div className="w-7 h-7 bg-[#2d6f91] text-white rounded-none flex items-center justify-center font-bold text-xs">
+                    {(user?.name || 'U').charAt(0)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold truncate">{user?.name}</div>
+                    <div className="text-[10px] text-[#63717b] font-mono">@{user?.username}</div>
+                  </div>
+                </div>
+                <div className="p-1 space-y-0.5">
+                  <button
+                    onClick={() => { setShowMyProfile(true); setIsOpen(false); }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-[#edf2f5] flex items-center space-x-2"
+                  >
+                    <User size={13} className="text-[#2d6f91]" />
+                    <span>My Profile</span>
+                  </button>
+                  <button
+                    onClick={() => { setShowChangePassword(true); setIsOpen(false); }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-[#edf2f5] flex items-center space-x-2"
+                  >
+                    <Shield size={13} className="text-amber-700" />
+                    <span>Change Password</span>
+                  </button>
+                  <button
+                    onClick={() => { onNavigate && onNavigate('activity-log'); setIsOpen(false); }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-[#edf2f5] flex items-center space-x-2"
+                  >
+                    <Clock size={13} className="text-[#2d6f91]" />
+                    <span>System Audit Log</span>
+                  </button>
+                  <button
+                    onClick={() => { handleBackupDatabase(); setIsOpen(false); }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-[#edf2f5] flex items-center space-x-2 text-emerald-800"
+                  >
+                    <Download size={13} />
+                    <span>Backup Database (JSON)</span>
+                  </button>
+                  <div className="border-t border-[#bcc8d0] my-1 pt-1">
+                    <button
+                      onClick={() => { setIsOpen(false); onLogout(); }}
+                      className="w-full text-left px-2 py-1.5 hover:bg-rose-50 text-rose-800 font-semibold flex items-center space-x-2"
+                    >
+                      <LogOut size={13} />
+                      <span>Log Off ERP</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Company / Project Context */}
           <div className="relative" ref={projectDropdownRef}>
             <button
               onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-              className="flex items-center space-x-1.5 px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md text-xs font-semibold text-white transition cursor-pointer"
-              title="Filter Active Project Context"
+              className="flex items-center space-x-1 px-2 py-0.5 bg-white/70 hover:bg-white border border-[#bcc8d0] rounded-none text-[#303b44] text-[11px] font-medium cursor-pointer transition"
+              title="Active Site Context"
             >
-              <Building2 size={13} className="text-blue-200" />
-              <span className="max-w-[120px] truncate text-[11px]">
-                {selectedProjectId === 'all' ? 'All Projects' : selectedProject?.name || 'Project'}
+              <Building2 size={12} className="text-[#63717b]" />
+              <span className="max-w-[130px] truncate hidden md:inline">
+                {selectedProjectId === 'all' ? 'SN Enterprise (All)' : selectedProject?.name || 'Company'}
               </span>
-              <ChevronDown size={11} className="text-blue-200" />
+              <ChevronDown size={11} className="text-[#63717b]" />
             </button>
 
             {isProjectDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-[#1E2228] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1 z-50 text-slate-800 dark:text-slate-200">
-                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase text-slate-400 font-mono">
-                  Switch Active Project
+              <div className="absolute right-0 mt-1 w-64 bg-white border border-[#bcc8d0] shadow-md rounded-none z-50 text-[#303b44] text-[12px]">
+                <div className="bg-[#edf3f7] px-2.5 py-1 border-b border-[#bcc8d0] font-semibold text-[11px] uppercase text-[#63717b]">
+                  Select Site Context
                 </div>
-                <div className="max-h-60 overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
+                <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
                   <button
                     onClick={() => {
                       setSelectedProjectId('all');
+                      if (setCurrentProjectId) setCurrentProjectId('');
                       setIsProjectDropdownOpen(false);
                     }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded text-xs font-semibold flex items-center justify-between cursor-pointer ${
-                      selectedProjectId === 'all' 
-                        ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-bold' 
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
+                    className={`w-full text-left px-2 py-1 rounded-none flex items-center justify-between text-[11px] ${selectedProjectId === 'all' ? 'bg-[#dcecf6] text-[#2d6f91] font-bold' : 'hover:bg-[#f7f9fa]'}`}
                   >
-                    <span>All Construction Projects</span>
-                    {selectedProjectId === 'all' && <Check size={13} className="text-blue-600" />}
+                    <span>SN Enterprise Pvt Ltd (All Sites)</span>
+                    {selectedProjectId === 'all' && <Check size={12} />}
                   </button>
-
                   {projects.map((p: any) => (
                     <button
                       key={p.id}
                       onClick={() => {
                         setSelectedProjectId(p.id);
+                        if (setCurrentProjectId) setCurrentProjectId(p.id);
                         setIsProjectDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded text-xs flex items-center justify-between cursor-pointer ${
-                        selectedProjectId === p.id 
-                          ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-bold' 
-                          : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
+                      className={`w-full text-left px-2 py-1 rounded-none flex items-center justify-between text-[11px] ${selectedProjectId === p.id ? 'bg-[#dcecf6] text-[#2d6f91] font-bold' : 'hover:bg-[#f7f9fa]'}`}
                     >
-                      <div className="min-w-0 pr-2">
-                        <p className="font-semibold truncate">{p.name}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{p.clientName || 'N/A'}</p>
-                      </div>
-                      {selectedProjectId === p.id && <Check size={13} className="text-blue-600 shrink-0" />}
+                      <span className="truncate">{p.name}</span>
+                      {selectedProjectId === p.id && <Check size={12} className="shrink-0" />}
                     </button>
                   ))}
                 </div>
@@ -295,211 +518,235 @@ export const TopBar: React.FC<TopBarProps> = ({
             )}
           </div>
 
-          {/* Financial Year Badge */}
-          <div className="hidden sm:flex items-center px-2 py-1 bg-blue-950/60 border border-blue-400/30 rounded-md text-[10px] font-mono font-bold text-blue-100">
-            FY 2026-27
+          <span className="text-[#9bb2c2] font-light">|</span>
+
+          {/* Minimize-style controls: ─ □ ✕ */}
+          <div className="flex items-center space-x-0.5">
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('sap-minimize-panel'))}
+              className="w-5 h-5 flex items-center justify-center hover:bg-[#a6c5da] text-[#303b44] font-bold cursor-pointer"
+              title="Minimize"
+            >
+              <span className="text-[11px] leading-none mb-1">─</span>
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="w-5 h-5 flex items-center justify-center hover:bg-[#a6c5da] text-[#303b44] font-bold cursor-pointer"
+              title={isFullscreen ? "Restore Screen" : "Maximize"}
+            >
+              <span className="text-[10px] leading-none">□</span>
+            </button>
+            <button
+              onClick={onLogout}
+              className="w-5 h-5 flex items-center justify-center hover:bg-rose-600 hover:text-white text-[#303b44] font-bold cursor-pointer"
+              title="Close Application"
+            >
+              <span className="text-[10px] leading-none">✕</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. COMMAND / TRANSACTION TOOLBAR (Height 27px, #edf3f7) */}
+      <div className="bg-[#edf3f7] text-[#303b44] h-[27px] px-2 flex items-center justify-between border-b border-[#bcc8d0] text-[12px]">
+        {/* Left: T-Code command field + Action buttons */}
+        <div className="flex items-center space-x-1.5">
+          {/* SAP Command Field: [ PAY01________ ] [✓] */}
+          <div className="flex items-center">
+            <input
+              ref={tcodeInputRef}
+              type="text"
+              value={tcodeInput}
+              onChange={e => setTcodeInput(e.target.value)}
+              onKeyDown={handleTCodeKeyDown}
+              placeholder=""
+              className={`h-[24px] w-24 sm:w-28 px-1.5 text-[12px] font-mono uppercase bg-white border border-[#b7c2ca] rounded-none transition ${
+                tcodeError ? 'border-red-500 bg-red-50 text-red-700' : 'text-[#303b44] focus:bg-[#fffde7] focus:border-[#d97706]'
+              }`}
+              title="Enter Transaction Code (e.g. PAY01, WFT01, WRK01, BIL01)"
+            />
+            <button
+              type="button"
+              onClick={() => handleExecuteTCode()}
+              className="h-[24px] w-[24px] bg-[#edf2f5] hover:bg-[#dcecf6] text-[#2d6f91] border border-[#b7c2ca] border-l-0 rounded-none flex items-center justify-center cursor-pointer font-bold"
+              title="Execute (Enter)"
+            >
+              <Check size={11} />
+            </button>
+            {tcodeError && (
+              <span className="text-[10px] text-red-600 font-bold ml-1">
+                ?
+              </span>
+            )}
           </div>
 
-          {/* Document Flow Quick Button */}
-          <button
-            onClick={() => onNavigate && onNavigate('document-flow')}
-            className="flex items-center space-x-1 px-2 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md text-xs font-semibold text-white transition cursor-pointer"
-            title="Launch SAP Document Flow (DF01)"
-          >
-            <GitFork size={13} className="text-blue-200" />
-            <span className="hidden xl:inline text-[11px]">Doc Flow</span>
-          </button>
+          <span className="text-[#bcc8d0] mx-0.5">|</span>
 
-          {/* Notifications / Alerts Button */}
+          {/* Standard SAP Desktop Actions */}
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={onGoBack}
+              disabled={!canGoBack}
+              className="sap-btn disabled:opacity-40"
+              title="Back (F3)"
+            >
+              <ArrowLeft size={11} />
+              <span className="hidden sm:inline">Back</span>
+            </button>
+
+            <button
+              onClick={() => handleAction('save')}
+              className="sap-btn sap-btn-save"
+              title="Save Record (Ctrl+S)"
+            >
+              <Save size={11} />
+              <span>Save</span>
+            </button>
+
+            <button
+              onClick={() => handleAction('print')}
+              className="sap-btn"
+              title="Print Current Screen (Ctrl+P)"
+            >
+              <Printer size={11} />
+              <span className="hidden md:inline">Print</span>
+            </button>
+
+            <button
+              onClick={() => handleAction('export')}
+              className="sap-btn"
+              title="Export Current Table"
+            >
+              <FileSpreadsheet size={11} className="text-emerald-700" />
+              <span className="hidden md:inline">Export</span>
+            </button>
+
+            <button
+              onClick={() => handleAction('refresh')}
+              className="sap-btn"
+              title="Refresh (F5)"
+            >
+              <RefreshCw size={11} />
+              <span className="hidden md:inline">Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Right: Quick shortcuts & More */}
+        <div className="flex items-center space-x-1 shrink-0">
           <button
             onClick={() => onOpenAlertCenter && onOpenAlertCenter()}
-            className="relative p-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md text-white transition cursor-pointer"
-            title="System Alert & Exception Center"
+            className="sap-btn relative"
+            title="Exception & Approval Center"
           >
-            <Bell size={15} className="text-blue-100" />
+            <Bell size={11} className={unreadAlertCount > 0 ? "text-amber-700" : "text-[#63717b]"} />
+            <span className="hidden lg:inline">Alerts</span>
             {unreadAlertCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white shadow-xs animate-pulse">
+              <span className="bg-red-700 text-white font-mono text-[9px] font-bold px-1 rounded-none ml-0.5">
                 {unreadAlertCount}
               </span>
             )}
           </button>
 
-          {/* Theme Toggle Button */}
           <button
-            onClick={toggleDarkMode}
-            className="p-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md text-white transition cursor-pointer"
-            title={darkMode ? "Switch to Light Theme" : "Switch to Dark Theme"}
+            onClick={() => onOpenCommandPalette ? onOpenCommandPalette() : handleExecuteTCode()}
+            className="sap-btn"
+            title="Search Commands (Ctrl+K)"
           >
-            {darkMode ? <Sun size={15} className="text-amber-300" /> : <Moon size={15} className="text-blue-200" />}
+            <Search size={11} />
+            <span className="hidden xl:inline">Find</span>
           </button>
 
-          {/* Session Lock Button */}
-          <button
-            onClick={onLock}
-            className="hidden sm:flex p-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-md text-white transition cursor-pointer"
-            title="Lock ERP Workspace"
-          >
-            <Lock size={15} className="text-blue-200" />
-          </button>
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+              className="sap-btn"
+              title="More"
+            >
+              <MoreHorizontal size={12} />
+              <span>More</span>
+            </button>
 
-          {/* User Profile Pill & Dropdown */}
-          {user && (
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center space-x-2 pl-1.5 pr-2 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full transition cursor-pointer"
-              >
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center font-bold text-[10px] text-white uppercase border border-blue-200 shadow-2xs shrink-0">
-                  {user.name.charAt(0)}
-                </div>
-                <span className="font-semibold text-xs text-white max-w-[90px] truncate">
-                  {user.name}
-                </span>
-                <ChevronDown size={11} className={`text-blue-200 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1E2228] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 text-slate-800 dark:text-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                  {/* User Profile Header */}
-                  <div className="bg-[#0F4C81] dark:bg-[#0A2540] text-white p-3.5 flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center font-bold text-sm text-white uppercase border-2 border-white/40">
-                      {user.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-xs truncate">{user.name}</h4>
-                      <p className="text-[10px] text-blue-200 font-mono">@{user.username}</p>
-                      <span className="inline-block bg-white/20 text-white text-[9px] font-bold px-1.5 py-0.2 rounded mt-1">
-                        {user.username === 'saddamsne' ? 'Owner / Director' : 'Executive Member'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Profile Menu Actions */}
-                  <div className="p-2 space-y-1 text-xs border-b border-slate-100 dark:border-slate-800">
-                    <button
-                      onClick={() => { setShowMyProfile(true); setIsOpen(false); }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold flex items-center space-x-2 cursor-pointer"
-                    >
-                      <User size={14} className="text-blue-600" />
-                      <span>My Profile</span>
-                    </button>
-
-                    <button
-                      onClick={() => { setShowChangePassword(true); setIsOpen(false); }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold flex items-center space-x-2 cursor-pointer"
-                    >
-                      <Shield size={14} className="text-amber-600" />
-                      <span>Security & Password</span>
-                    </button>
-
-                    <button
-                      onClick={() => { onNavigate && onNavigate('activity-log'); setIsOpen(false); }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold flex items-center space-x-2 cursor-pointer"
-                    >
-                      <Clock size={14} className="text-indigo-600" />
-                      <span>Audit Activity Log</span>
-                    </button>
-
-                    <button
-                      onClick={() => { onNavigate && onNavigate('numbering-settings'); setIsOpen(false); }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold flex items-center space-x-2 cursor-pointer"
-                    >
-                      <Settings size={14} className="text-slate-600" />
-                      <span>Document Settings</span>
-                    </button>
-
-                    <button
-                      onClick={() => { handleBackupDatabase(); setIsOpen(false); }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold flex items-center space-x-2 cursor-pointer text-emerald-700 dark:text-emerald-400"
-                    >
-                      <Download size={14} />
-                      <span>Export Database Backup</span>
-                    </button>
-                  </div>
-
-                  {/* QR Site Report Download */}
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800 text-center space-y-2">
-                    <span className="text-[10px] font-bold uppercase text-slate-500 flex items-center justify-center gap-1">
-                      <QrCode size={12} /> Scan for Site Reports PDF
-                    </span>
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + '/?download-all-sites-pdf=true')}`}
-                      alt="Reports QR"
-                      className="w-20 h-20 mx-auto rounded border border-slate-200 dark:border-slate-700 p-1 bg-white"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="flex items-center space-x-1 justify-center">
-                      <button
-                        onClick={handleDirectDownload}
-                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-                      >
-                        <Download size={10} /> PDF Download
-                      </button>
-                      <button
-                        onClick={handleCopyUrl}
-                        className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-[10px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition cursor-pointer"
-                      >
-                        {copied ? "Copied!" : "Copy Link"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Logout Action */}
-                  <div className="p-2">
-                    <button
-                      onClick={() => { setIsOpen(false); onLogout(); }}
-                      className="w-full py-1.5 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 rounded-md font-bold text-xs flex items-center justify-center space-x-2 transition cursor-pointer"
-                    >
-                      <LogOut size={13} />
-                      <span>Log Out System</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            {isMoreMenuOpen && (
+              <div className="absolute right-0 mt-1 w-52 bg-white border border-[#bcc8d0] shadow-md rounded-none z-50 text-[#303b44] text-[12px] p-1 space-y-0.5">
+                <button
+                  onClick={() => { onNavigate && onNavigate('document-flow'); setIsMoreMenuOpen(false); }}
+                  className="w-full text-left px-2.5 py-1.5 hover:bg-[#F4F6F7] rounded-[2px] flex items-center space-x-2"
+                >
+                  <GitFork size={13} className="text-[#0A6ED1]" />
+                  <span>Document Flow (DF01)</span>
+                </button>
+                <button
+                  onClick={() => { toggleDarkMode(); setIsMoreMenuOpen(false); }}
+                  className="w-full text-left px-2.5 py-1.5 hover:bg-[#F4F6F7] rounded-[2px] flex items-center space-x-2"
+                >
+                  {darkMode ? <Sun size={13} className="text-amber-500" /> : <Moon size={13} className="text-slate-600" />}
+                  <span>{darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}</span>
+                </button>
+                <button
+                  onClick={() => { onLock && onLock(); setIsMoreMenuOpen(false); }}
+                  className="w-full text-left px-2.5 py-1.5 hover:bg-[#F4F6F7] rounded-[2px] flex items-center space-x-2"
+                >
+                  <Lock size={13} className="text-slate-600" />
+                  <span>Lock Session</span>
+                </button>
+                <button
+                  onClick={() => { handleDirectDownload(); setIsMoreMenuOpen(false); }}
+                  className="w-full text-left px-2.5 py-1.5 hover:bg-[#F4F6F7] rounded-[2px] flex items-center space-x-2 text-[#0A6ED1]"
+                >
+                  <Download size={13} />
+                  <span>Consolidated Sites PDF</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Profile Modal */}
       {showMyProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs font-sans text-slate-800 dark:text-slate-200">
-          <div className="w-full max-w-md bg-white dark:bg-[#1E2228] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-            <div className="bg-[#0F4C81] dark:bg-[#0A2540] text-white px-5 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-sm">Operator Profile Card</h3>
-              <button onClick={() => setShowMyProfile(false)} className="text-white/80 hover:text-white">✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 font-sans text-[#2F3B45]">
+          <div className="w-full max-w-md bg-white border border-[#B8C3CC] rounded-[3px] shadow-2xl overflow-hidden">
+            <div className="bg-[#B7D3E8] text-[#2F3B45] px-4 py-2.5 flex items-center justify-between border-b border-[#B8C3CC]">
+              <h3 className="font-bold text-[13px]">User Profile & Authorization</h3>
+              <button onClick={() => setShowMyProfile(false)} className="text-[#2F3B45] hover:text-red-700 font-bold">✕</button>
             </div>
-            <div className="p-5 space-y-3 text-xs">
-              <div className="flex items-center space-x-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-200 dark:border-slate-800">
-                <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center text-lg font-bold">
-                  {user?.name.charAt(0)}
+            <div className="p-4 space-y-3 text-[12px]">
+              <div className="flex items-center space-x-3 bg-[#F4F6F7] p-3 rounded-[2px] border border-[#B8C3CC]">
+                <div className="w-12 h-12 bg-[#0A6ED1] rounded-[2px] flex items-center justify-center font-bold text-lg text-white">
+                  {(user?.name || 'U').charAt(0)}
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm">{user?.name}</h4>
-                  <p className="text-slate-500 dark:text-slate-400 font-mono">@{user?.username}</p>
-                  <p className="text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
-                    {user?.username === 'saddamsne' ? 'Managing Director / Owner' : 'Executive Member'}
-                  </p>
+                  <h4 className="font-bold text-[13px]">{user?.name}</h4>
+                  <p className="text-[11px] text-[#5F6B75] font-mono">ID: @{user?.username}</p>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-[2px] mt-1 inline-block">
+                    Authorization: Full Access Admin
+                  </span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded border border-slate-200 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-mono block">Node Mode</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">Production Live</span>
+              <div className="space-y-1.5">
+                <div className="flex justify-between py-1 border-b border-[#B8C3CC]">
+                  <span className="text-[#5F6B75]">Company:</span>
+                  <span className="font-semibold">SN Enterprise Pvt Ltd</span>
                 </div>
-                <div className="p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded border border-slate-200 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-mono block">Access Tier</span>
-                  <span className="font-bold text-emerald-600">Full Enterprise Privilege</span>
+                <div className="flex justify-between py-1 border-b border-[#B8C3CC]">
+                  <span className="text-[#5F6B75]">Platform:</span>
+                  <span className="font-semibold">SAP Enterprise Desktop Edition</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[#B8C3CC]">
+                  <span className="text-[#5F6B75]">Fiscal Year:</span>
+                  <span className="font-mono font-semibold">2026-2027</span>
                 </div>
               </div>
-            </div>
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-              <button
-                onClick={() => setShowMyProfile(false)}
-                className="px-4 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 font-bold rounded-lg text-xs transition"
-              >
-                Close
-              </button>
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowMyProfile(false)}
+                  className="sap-btn px-4 py-1"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -507,64 +754,64 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Change Password Modal */}
       {showChangePassword && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs font-sans text-slate-800 dark:text-slate-200">
-          <div className="w-full max-w-md bg-white dark:bg-[#1E2228] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-            <div className="bg-[#0F4C81] dark:bg-[#0A2540] text-white px-5 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-sm">Update ERP Account Password</h3>
-              <button onClick={() => setShowChangePassword(false)} className="text-white/80 hover:text-white">✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 font-sans text-[#2F3B45]">
+          <div className="w-full max-w-md bg-white border border-[#B8C3CC] rounded-[3px] shadow-2xl overflow-hidden">
+            <div className="bg-[#B7D3E8] text-[#2F3B45] px-4 py-2.5 flex items-center justify-between border-b border-[#B8C3CC]">
+              <h3 className="font-bold text-[13px]">Change ERP Password</h3>
+              <button onClick={() => setShowChangePassword(false)} className="text-[#2F3B45] hover:text-red-700 font-bold">✕</button>
             </div>
-            <form onSubmit={handlePasswordSubmit} className="p-5 space-y-3 text-xs">
+            <form onSubmit={handlePasswordSubmit} className="p-4 space-y-3 text-[12px]">
               {passError && (
-                <div className="p-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-xs font-semibold">
+                <div className="p-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-[2px] text-[11px] font-semibold">
                   {passError}
                 </div>
               )}
               {passSuccess && (
-                <div className="p-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-semibold">
+                <div className="p-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-[2px] text-[11px] font-semibold">
                   {passSuccess}
                 </div>
               )}
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Current Password</label>
+                <label className="block font-bold text-[#2F3B45] mb-1">Current Password:</label>
                 <input
                   type="password"
                   value={currentPass}
                   onChange={e => setCurrentPass(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                  className="sap-input w-full"
                   required
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">New Password</label>
+                <label className="block font-bold text-[#2F3B45] mb-1">New Password:</label>
                 <input
                   type="password"
                   value={newPass}
                   onChange={e => setNewPass(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                  className="sap-input w-full"
                   required
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Confirm New Password</label>
+                <label className="block font-bold text-[#2F3B45] mb-1">Confirm New Password:</label>
                 <input
                   type="password"
                   value={confirmPass}
                   onChange={e => setConfirmPass(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                  className="sap-input w-full"
                   required
                 />
               </div>
-              <div className="pt-3 flex justify-end space-x-2">
+              <div className="pt-2 flex justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setShowChangePassword(false)}
-                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg font-semibold"
+                  className="sap-btn px-3"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold"
+                  className="sap-btn sap-btn-primary px-4"
                 >
                   Update Password
                 </button>

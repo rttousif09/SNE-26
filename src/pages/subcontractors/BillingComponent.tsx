@@ -48,11 +48,14 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
       <span className="font-medium text-gray-800" title={val || ''}>{val || '-'}</span>
     )},
     { key: 'grossAmount', header: 'Gross Certified', sortable: true, filterable: true, render: (val) => (
-      <span className="font-mono font-semibold">₹{val.toLocaleString()}</span>
+      <span className="font-mono font-semibold">₹{(Number(val) || 0).toLocaleString()}</span>
     )},
     { key: 'deductions', header: 'Deductions (GST, Ret, TDS, Rec)', sortable: true, filterable: true, render: (_, row) => {
-      const totalDeductions = row.retentionAmount + row.tdsAmount + row.recoveryAmount;
-      const formattedDeductions = `Ret: ${row.retentionAmount.toLocaleString()} | TDS: ${row.tdsAmount.toLocaleString()} | Recovery: ${row.recoveryAmount.toLocaleString()}`;
+      const retAmt = Number(row.retentionAmount) || 0;
+      const tdsAmt = Number(row.tdsAmount) || 0;
+      const recAmt = Number(row.recoveryAmount) || 0;
+      const totalDeductions = retAmt + tdsAmt + recAmt;
+      const formattedDeductions = `Ret: ${retAmt.toLocaleString()} | TDS: ${tdsAmt.toLocaleString()} | Recovery: ${recAmt.toLocaleString()}`;
       return (
         <div title={formattedDeductions}>
           <span className="font-mono font-medium">₹{totalDeductions.toLocaleString()}</span>
@@ -61,7 +64,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
       );
     }},
     { key: 'netPayableAmount', header: 'Net Accrued', sortable: true, filterable: true, render: (val) => (
-      <span className="font-mono font-bold text-gray-950">₹{val.toLocaleString()}</span>
+      <span className="font-mono font-bold text-gray-950">₹{(Number(val) || 0).toLocaleString()}</span>
     )},
     { key: 'status', header: 'Status', sortable: true, filterable: true, render: (val) => (
       <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${
@@ -627,7 +630,7 @@ export const BillingComponent: React.FC<BillingComponentProps> = ({
                         <ShieldCheck size={10} className="text-amber-300 animate-pulse" />
                         <span>6. NET CLEARANCE AMOUNT</span>
                       </span>
-                      <span className="text-sm font-extrabold font-mono text-white mt-0.5">₹{parseFloat(billForm.netPayableAmount || '0').toLocaleString()}</span>
+                      <span className="text-sm font-extrabold font-mono text-white mt-0.5">₹{(parseFloat(billForm.netPayableAmount || '0') || 0).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>

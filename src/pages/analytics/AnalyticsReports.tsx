@@ -126,7 +126,7 @@ export const AnalyticsReports: React.FC<AnalyticsReportsProps> = ({
     };
 
     return {
-      companyName: 'SN ENTERPRISES',
+      companyName: 'SN ENTERPRISE',
       reportName: reportTypeNames[filters.reportType] || 'Executive Graphs & Analytics Report',
       projectName: proj ? proj.name : (filters.projectId === 'All' ? 'All Projects (Consolidated)' : filters.projectId),
       clientName: filters.clientId === 'All' ? 'All Clients' : filters.clientId,
@@ -224,7 +224,7 @@ export const AnalyticsReports: React.FC<AnalyticsReportsProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-[16px] font-bold tracking-tight text-slate-900">SN ENTERPRISES</h1>
+                <h1 className="text-[16px] font-bold tracking-tight text-slate-900">SN ENTERPRISE</h1>
                 <span className="bg-[#002f6c] text-white text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase">
                   {filters.reportType === 'all' ? 'RPT06' : 
                    filters.reportType === 'financial' ? 'RPT07' :

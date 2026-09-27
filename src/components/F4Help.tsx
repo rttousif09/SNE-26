@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface F4HelpProps {
@@ -15,7 +15,7 @@ interface F4HelpProps {
 }
 
 export const F4Help: React.FC<F4HelpProps> = ({
-  value, onChange, options, displayKey, columns, title = "Search", placeholder = "", disabled = false, className = ""
+  value, onChange, options, displayKey, columns, title = "Select", placeholder = "", disabled = false, className = ""
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -41,10 +41,11 @@ export const F4Help: React.FC<F4HelpProps> = ({
         <button 
           type="button"
           onClick={() => !disabled && setIsOpen(true)}
-          className="absolute right-0 top-0 bottom-0 px-2 bg-gray-200 border-l border-[#8c9ba8] hover:bg-gray-300 flex items-center justify-center text-gray-600 rounded-r-sm"
+          className="absolute right-0 top-0 bottom-0 px-2 bg-gray-200 border-l border-[#8c9ba8] hover:bg-gray-300 flex items-center justify-center text-[#002f6c] rounded-r-sm"
           disabled={disabled}
+          title="Add / Select (F4)"
         >
-          <Search size={14} />
+          <Plus size={14} className="stroke-[2.5]" />
         </button>
       </div>
 

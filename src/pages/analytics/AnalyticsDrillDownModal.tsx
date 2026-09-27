@@ -156,7 +156,7 @@ export const AnalyticsDrillDownModal: React.FC<AnalyticsDrillDownModalProps> = (
 
         {/* Modal Footer */}
         <div className="bg-slate-100 border-t border-slate-300 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500">
-          <span>SN ENTERPRISES ERP &bull; Business Intelligence Drilldown</span>
+          <span>SN ENTERPRISE ERP &bull; Business Intelligence Drilldown</span>
           <button
             onClick={onClose}
             className="px-4 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium rounded border border-slate-300 transition-colors"

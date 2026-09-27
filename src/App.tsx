@@ -562,16 +562,21 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--color-sap-bg)] text-[11px] font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#F4F6F7] text-[12px] font-sans overflow-hidden text-[#2F3B45]">
       <div className="print:hidden">
         <TopBar 
           user={user} 
           onLogout={onLogout} 
-          onNavigate={setCurrentTab}
+          onNavigate={handleSetCurrentTab}
           onLock={() => setIsSessionLocked(true)}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           onOpenAlertCenter={() => setIsAlertCenterOpen(true)}
           breadcrumbs={getBreadcrumbs(currentTab)}
+          currentTab={currentTab}
+          onToggleSidebar={() => setIsSidebarCollapsed(prev => !prev)}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onGoBack={handleGoBack}
+          canGoBack={navHistory.index > 0}
         />
       </div>
       <div className="flex flex-1 overflow-hidden">
@@ -586,34 +591,34 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         </div>
 
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-          {/* Editor Tabs */}
-          <div className="flex items-end justify-between bg-[#eef2f6] dark:bg-slate-900 pt-1 px-1 border-b border-[#8c9ba8] dark:border-slate-800 print:hidden shrink-0 h-[29px]">
+          {/* Editor Tabs - Classic SAP Workbench style */}
+          <div className="flex items-end justify-between bg-[#edf3f7] pt-1 px-1 border-b border-[#bcc8d0] print:hidden shrink-0 h-[28px]">
             <div className="flex items-center space-x-1 h-full">
               <button
                 onClick={() => setCurrentTab('dashboard')}
-                title="SAP Easy Access: Home / Workspace Modules"
-                className={`flex items-center px-3 h-[24px] rounded-t-[3px] space-x-1.5 border text-[11px] font-bold cursor-pointer transition-all relative top-[1px] z-10 ${
+                title="SNE Easy Access: Home / Workspace Modules"
+                className={`flex items-center px-2.5 h-[23px] rounded-none space-x-1.5 border text-[11px] font-semibold cursor-pointer transition-all relative top-[1px] z-10 ${
                   currentTab === 'dashboard'
-                    ? 'bg-white dark:bg-[#1E2228] border-[#8c9ba8] dark:border-slate-700 border-b-white dark:border-b-[#1E2228] text-[#0056b3] dark:text-blue-400 shadow-xs'
-                    : 'bg-gradient-to-b from-[#f0f4f9] to-[#d8e3ed] dark:from-slate-800 dark:to-slate-900 hover:from-white hover:to-[#e6f0fa] border-[#9cb0c2] dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    ? 'bg-white border-[#bcc8d0] border-b-white text-[#2d6f91] font-bold'
+                    : 'bg-[#edf2f5] hover:bg-white border-[#bcc8d0] text-[#303b44]'
                 }`}
               >
-                <div className={`w-3.5 h-3.5 rounded-[2px] flex items-center justify-center ${currentTab === 'dashboard' ? 'bg-[#0056b3] text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                <div className={`w-3.5 h-3.5 rounded-none flex items-center justify-center ${currentTab === 'dashboard' ? 'bg-[#2d6f91] text-white' : 'bg-slate-300 text-slate-700'}`}>
                   <Home size={10} />
                 </div>
-                <span className="tracking-tight">Home (Easy Access)</span>
+                <span className="tracking-tight">Easy Access</span>
               </button>
 
               {currentTab !== 'dashboard' && (
-                <div className="flex items-center h-[24px] bg-white dark:bg-[#1E2228] border border-[#8c9ba8] dark:border-slate-700 border-b-white dark:border-b-[#1E2228] px-3 rounded-t-[3px] space-x-2 relative top-[1px] z-10 shadow-xs">
-                  <Server size={12} className="text-[#0056b3] dark:text-blue-400" />
-                  <span className="font-semibold text-[11px] text-slate-900 dark:text-slate-100">{getTabNameForType(currentTab)}</span>
+                <div className="flex items-center h-[23px] bg-white border border-[#bcc8d0] border-b-white px-2.5 rounded-none space-x-1.5 relative top-[1px] z-10 text-[#303b44]">
+                  <Server size={11} className="text-[#2d6f91]" />
+                  <span className="font-bold text-[11px] text-[#303b44]">{getTabNameForType(currentTab)}</span>
                   <button
                     onClick={() => setCurrentTab('dashboard')}
                     title="Close module and return to Home"
-                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded ml-1 cursor-pointer transition-colors flex items-center justify-center"
+                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded-none ml-1 cursor-pointer transition-colors flex items-center justify-center"
                   >
-                    <X size={12} />
+                    <X size={11} />
                   </button>
                 </div>
               )}
@@ -621,27 +626,27 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
           </div>
             
           {/* Main Editor Area */}
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.4 }} className="flex-1 overflow-hidden flex flex-col bg-slate-100">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="flex-1 overflow-hidden flex flex-col bg-[#f7f9fa]">
             {/* Breadcrumbs Banner */}
-            <div className="bg-[#f1f5f9] border-b border-[#cbd5e1] px-3 py-1 flex items-center justify-between text-[10px] text-slate-500 font-sans select-none shrink-0 print:hidden h-[28px]">
+            <div className="bg-white border-b border-[#bcc8d0] px-3 py-1 flex items-center justify-between text-[11px] text-[#63717b] font-sans select-none shrink-0 print:hidden h-[26px]">
               <div className="flex items-center space-x-1.5 min-w-0">
                 <button 
-                  className="hover:text-blue-800 hover:underline cursor-pointer font-bold uppercase tracking-tight text-[#0056b3] flex items-center space-x-1"
+                  className="hover:text-[#2d6f91] cursor-pointer font-bold uppercase tracking-tight text-[#2d6f91] flex items-center space-x-1"
                   onClick={() => setCurrentTab('dashboard')}
-                  title="Go to Home (All Modules)"
+                  title="Go to Home"
                 >
                   <Home size={11} />
                   <span>Home</span>
                 </button>
-                <span className="text-slate-350">/</span>
+                <span className="text-[#bcc8d0]">/</span>
                 {getBreadcrumbs(currentTab).map((crumb, idx, arr) => {
                   const isLast = idx === arr.length - 1;
                   return (
                     <React.Fragment key={idx}>
-                      <span className={isLast ? 'text-[var(--color-sap-blue-val)] font-extrabold font-sans truncate' : 'text-slate-600 font-medium truncate'}>
+                      <span className={isLast ? 'text-[#2d6f91] font-bold truncate' : 'text-[#303b44] font-medium truncate'}>
                         {crumb}
                       </span>
-                      {!isLast && <span className="text-slate-300">/</span>}
+                      {!isLast && <span className="text-[#bcc8d0]">/</span>}
                     </React.Fragment>
                   );
                 })}
@@ -650,18 +655,16 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
               {currentTab !== 'dashboard' && (
                 <button
                   onClick={() => setCurrentTab('dashboard')}
-                  className="flex items-center space-x-1.5 px-2 py-0.5 bg-gradient-to-b from-[#ffffff] to-[#e4ebf5] hover:bg-[#cce8ff] border border-[#8c9ba8] hover:border-[#0056b3] rounded-[2px] text-[#00386b] text-[9px] font-bold cursor-pointer shadow-2xs active:translate-y-[0.5px] transition-all shrink-0 ml-2"
-                  title="Return to Home to select another module"
+                  className="sap-btn h-[20px] px-1.5 text-[10px]"
+                  title="Return to Easy Access Menu"
                 >
-                  <div className="w-3 h-3 bg-[#0056b3] text-white rounded-[2px] flex items-center justify-center">
-                    <Home size={8} />
-                  </div>
-                  <span>Switch Module (Home)</span>
+                  <Home size={10} />
+                  <span>Easy Access</span>
                 </button>
               )}
             </div>
 
-            <main className="flex-1 overflow-y-auto bg-white p-2">
+            <main className="flex-1 overflow-y-auto bg-[#f7f9fa] p-2">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentTab}
@@ -903,7 +906,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       {/* Persistent Enterprise Status Footer */}
       <footer className="bg-[#eef2f6] border-t border-[#8c9ba8] px-4 py-1 flex items-center justify-between text-[9px] text-slate-500 font-mono shrink-0 select-none print:hidden">
         <div className="flex items-center space-x-3">
-          <span className="font-extrabold text-[var(--color-sap-blue-val)]">SN ENTERPRISES ERP</span>
+          <span className="font-extrabold text-[var(--color-sap-blue-val)]">SN ENTERPRISE ERP</span>
           <span className="text-slate-300">|</span>
           <span>Version: 3.4.0-Enterprise</span>
         </div>

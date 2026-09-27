@@ -3,6 +3,7 @@ import { SAPSelect } from '../components/SAPSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../store';
 import { PDFExportButton } from '../components/PDFExportButton';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
 import { 
   User, Search, Plus, Trash2, Edit2, Lock, Unlock, History, AlertCircle, 
   CheckCircle, FileText, ArrowUpRight, ArrowDownLeft, DollarSign, TrendingUp, 
@@ -575,7 +576,7 @@ export const WorkerLedger: React.FC = () => {
       events.push({
         date: activeWorker.exitDate,
         title: 'Project Completed / Exited',
-        description: 'Successfully completed tenure and marked exit from Sn Enterprises registry',
+        description: 'Successfully completed tenure and marked exit from Sn Enterprise registry',
         type: 'exit'
       });
     }
@@ -745,26 +746,18 @@ export const WorkerLedger: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6f8] text-gray-800 font-sans p-4 space-y-4 print:bg-white print:p-0">
-      
-      {/* Title & Organization Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-300 pb-3 gap-2 print:hidden">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-[#0a6ed1] flex items-center space-x-2">
-            <Calculator className="w-5 h-5 shrink-0" />
-            <span>SN ENTERPRISES Construction ERP</span>
-          </h1>
-          <p className="text-[11px] text-gray-500 font-medium">Worker Ledger Statement & Centralized Account Book (SAP Fiori Style)</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <span className="bg-white border border-gray-300 text-gray-700 font-mono text-[10px] px-2.5 py-1 rounded-[4px] shadow-sm">
-            UTC Time: <strong className="font-bold">2026-07-02 06:03:24</strong>
-          </span>
-          <span className="bg-blue-50 border border-blue-200 text-[#0a6ed1] text-[10px] font-bold px-2.5 py-1 rounded-[4px] shadow-sm">
-            Active System Session
-          </span>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#F4F6F7] text-[#2F3B45] font-sans space-y-2 print:bg-white print:p-0 text-[12px]">
+      {/* SAP Screen Header: WKL01 */}
+      <SAPTransactionHeader
+        tcode="WKL01"
+        title="Worker Ledger & Recovery Statement"
+        subtitle="Worker Centralized Account Book, Earnings, Advance Recovery & Wage Holds"
+        onRefresh={() => window.location.reload()}
+        onPrint={() => window.print()}
+        canSave={false}
+        canEdit={false}
+        canDelete={false}
+      />
 
       {/* Main Grid: Three-Panel Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">

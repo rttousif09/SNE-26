@@ -3,11 +3,14 @@ import { SAPSelect } from '../components/SAPSelect';
 import { motion } from 'motion/react';
 import { useAppContext } from '../store';
 import { F4Help } from '../components/F4Help';
-import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet, FolderOpen, Calendar, CheckSquare, Square } from 'lucide-react';
+import { Save, Edit, X, Trash2, Send, Lock, AlertCircle, CheckCircle2, RefreshCw, FileSpreadsheet, FolderOpen, Calendar, CheckSquare, Square, Eye, Plus, ChevronRight } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { checkWorkerPaymentDuplicate, addOverrideLog } from '../lib/duplicateChecker';
 import { DuplicateWarningModal } from '../components/DuplicateWarningModal';
 import { PDFExportButton } from '../components/PDFExportButton';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
+import { SAPTabs } from '../components/common/SAPTabs';
+import { SapSection, SapFieldGrid, SapField, SapLookupField } from '../components/common/SapComponents';
 import * as XLSX from 'xlsx';
 
 export interface WorkerPaymentProps {
@@ -48,6 +51,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
   const [selectedCategory, setSelectedCategory] = useState('Monthly work');
   const [selectedTower, setSelectedTower] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'details' | 'earnings' | 'deductions' | 'abstract' | 'ledger'>('details');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -728,358 +732,804 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
   };
 
   return (
-    <div className="text-[11px] space-y-3">
-      {/* Selector controls panel */}
-      <div className="sap-panel p-2.5 flex flex-wrap items-center gap-4 bg-[#f8f9fa] border border-[#8c9ba8]">
-        <div className="flex items-center space-x-2">
-          <label className="font-bold text-gray-700">Project Site:</label>
-          <SAPSelect 
-            className="sap-input w-48 font-semibold" 
-            value={selectedProject} 
-            onChange={e => {
-              setSelectedProject(e.target.value);
-              setSelectedTower('');
-            }}
-          >
-            <option value="">-- Choose Project --</option>
-            {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </SAPSelect>
-          <label className="flex items-center space-x-1 ml-4 cursor-pointer text-gray-600">
-            <input 
-              type="checkbox" 
-              checked={showCompleted} 
-              onChange={e => setShowCompleted(e.target.checked)} 
-              className="rounded"
-            />
-            <span>Show Completed Projects (Read-only)</span>
-          </label>
-        </div>
+    <div className="text-[12px] space-y-2 font-sans text-[#303b44] pb-12">
+      {/* SAP Screen Header: PAY01 */}
+      <SAPTransactionHeader
+        tcode="PAY01"
+        title="Worker Payment Settlement"
+        subtitle="Monthly Payroll Postings, Kharchi/Advance Deductions & Floor Abstract Sync"
+        onNew={handleCancel}
+        onSave={() => handleSubmit({ preventDefault: () => {} } as any)}
+        onRefresh={() => window.location.reload()}
+        onPrint={() => window.print()}
+        onExport={exportToExcel}
+        canSave={!isLocked && !isReadOnly && !!formData.workerId}
+        canEdit={false}
+        canDelete={false}
+      />
 
-        {selectedProject && (
-          <>
-            <div className="flex items-center space-x-2">
-              <label className="font-bold text-gray-700">Wage Month:</label>
-              <input 
-                type="month" 
-                className="sap-input w-36 font-semibold" 
-                value={selectedMonth} 
-                onChange={e => {
-                  setSelectedMonth(e.target.value);
-                  handleCancel();
-                }}
+      {/* 1. SELECTION PARAMETERS (Classic SAP Selection screen header) */}
+      <div className="bg-[#f4f7f8] border border-[#bcc8d0] p-2 text-[12px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5 items-center">
+          {/* Project Site */}
+          <div className="flex items-center space-x-2">
+            <label className="w-24 shrink-0 text-right text-[#303b44] font-normal">Project:</label>
+            <SAPSelect 
+              className="sap-input flex-1 min-w-0 font-medium" 
+              value={selectedProject} 
+              onChange={e => {
+                setSelectedProject(e.target.value);
+                setSelectedTower('');
+                handleCancel();
+              }}
+            >
+              <option value="">-- Choose Project --</option>
+              {projects.filter(p => showCompleted ? true : (!p.status || p.status === 'Ongoing')).map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </SAPSelect>
+          </div>
+
+          {/* Wage Month */}
+          <div className="flex items-center space-x-2">
+            <label className="w-24 shrink-0 text-right text-[#303b44] font-normal">Wage Month:</label>
+            <input 
+              type="month" 
+              className="sap-input flex-1 min-w-0 font-medium" 
+              value={selectedMonth} 
+              onChange={e => {
+                setSelectedMonth(e.target.value);
+                handleCancel();
+              }}
+            />
+          </div>
+
+          {/* Work Type */}
+          <div className="flex items-center space-x-2">
+            <label className="w-24 shrink-0 text-right text-[#303b44] font-normal">Work Type:</label>
+            <SAPSelect 
+              className="sap-input flex-1 min-w-0 font-medium" 
+              value={selectedCategory} 
+              onChange={e => {
+                setSelectedCategory(e.target.value);
+                handleCancel();
+              }}
+            >
+              <option value="Monthly work">Monthly work</option>
+              <option value="Contract work">Contract work</option>
+            </SAPSelect>
+          </div>
+
+          {/* Tower / Block */}
+          <div className="flex items-center space-x-2">
+            <label className="w-24 shrink-0 text-right text-[#303b44] font-normal">Tower/Block:</label>
+            <SAPSelect 
+              className="sap-input flex-1 min-w-0 font-medium" 
+              value={selectedTower} 
+              onChange={e => {
+                setSelectedTower(e.target.value);
+                handleCancel();
+              }}
+            >
+              <option value="">All Towers</option>
+              {availableTowers.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </SAPSelect>
+          </div>
+
+          {/* Search Worker with attached [+] */}
+          <div className="flex items-center space-x-2">
+            <label className="w-24 shrink-0 text-right text-[#303b44] font-normal">Search Worker:</label>
+            <div className="flex-1 min-w-0 flex items-center">
+              <input
+                type="text"
+                className="sap-input flex-1 min-w-0"
+                placeholder="Name or ID..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
               />
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <label className="font-bold text-gray-700">Work Category:</label>
-              <SAPSelect 
-                className="sap-input w-40 font-semibold" 
-                value={selectedCategory} 
-                onChange={e => {
-                  setSelectedCategory(e.target.value);
-                  handleCancel();
-                }}
+              <button
+                type="button"
+                onClick={() => {}}
+                className="sap-lookup-btn"
+                title="Add / Filter Worker"
               >
-                <option value="Monthly work">Monthly work</option>
-                <option value="Contract work">Contract work</option>
-              </SAPSelect>
+                <Plus size={11} className="stroke-[2.5]" />
+              </button>
             </div>
-            
-            <div className="flex items-center space-x-2">
-              <label className="font-bold text-gray-700">Tower/Block:</label>
-              <SAPSelect 
-                className="sap-input w-40 font-semibold text-indigo-700 bg-indigo-50 border-indigo-300" 
-                value={selectedTower} 
-                onChange={e => {
-                  setSelectedTower(e.target.value);
-                  handleCancel();
-                }}
-              >
-                <option value="">All Towers</option>
-                {availableTowers.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </SAPSelect>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  className="sap-input w-48 font-bold"
-                  placeholder="Search worker name or ID..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black font-bold">×</button>
-                )}
-              </div>
-            </div>
-          </>
-        )}
+          </div>
+
+          {/* Show completed projects */}
+          <div className="flex items-center space-x-2 pl-2">
+            <label className="flex items-center space-x-1.5 cursor-pointer text-[#63717b] text-[11px]">
+              <input 
+                type="checkbox" 
+                checked={showCompleted} 
+                onChange={e => setShowCompleted(e.target.checked)} 
+                className="rounded-none border-[#bcc8d0]"
+              />
+              <span>Show Completed Projects</span>
+            </label>
+          </div>
+        </div>
       </div>
 
-      {/* Lock and Approval Workflows Indicators */}
+      {/* Lock and Approval Workflows Indicators (Flat, minimal) */}
       {selectedProject && currentApproval && (
-        <div className={`p-2.5 border-l-4 flex items-start space-x-2 rounded-sm ${
-          currentApproval.status === 'Approved' 
-            ? 'bg-green-50 border-l-green-600 border-green-200 text-green-900'
-            : currentApproval.status === 'Rejected'
-            ? 'bg-red-50 border-l-red-600 border-red-200 text-red-900'
-            : 'bg-yellow-50 border-l-yellow-600 border-yellow-250 text-yellow-900'
-        }`}>
-          {currentApproval.status === 'Approved' ? (
-            <CheckCircle2 className="text-green-600 shrink-0 mt-0.5" size={14} />
-          ) : currentApproval.status === 'Rejected' ? (
-            <AlertCircle className="text-red-600 shrink-0 mt-0.5" size={14} />
-          ) : (
-            <Lock className="text-yellow-650 shrink-0 mt-0.5" size={14} />
-          )}
-          <div className="flex-1">
-            <div className="font-bold text-[11px] flex items-center justify-between">
-              <span>
-                Monthly Payment Sheet Status: <strong className="uppercase">{currentApproval.status}</strong>
-              </span>
-              <span className="font-mono text-[9px] text-gray-500 font-normal">
-                Submitted: {currentApproval.date}
-              </span>
-            </div>
-            <p className="text-[10px] text-gray-700 font-sans mt-0.5 leading-relaxed">
-              {currentApproval.status === 'Approved' 
-                ? '🔒 This sheet has been Approved by Owner Saddam Hussain. All records are locked for audit compliance.'
-                : currentApproval.status === 'Rejected'
-                ? '⚠️ This monthly sheet was Rejected by the Owner. You can modify records below and resubmit for approval.'
-                : '⏳ This sheet is currently Pending review by Saddam Hussain. All entry controls are locked until decision.'
-              }
-            </p>
+        <div className="bg-[#f4f7f8] border border-[#bcc8d0] px-3 py-1 flex items-center justify-between text-[11px] text-[#303b44]">
+          <div className="flex items-center space-x-2 min-w-0">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${currentApproval.status === 'Approved' ? 'bg-emerald-600' : currentApproval.status === 'Rejected' ? 'bg-red-600' : 'bg-amber-500'}`}></span>
+            <span className="font-semibold">Sheet Status: {currentApproval.status}</span>
+            <span className="text-[#63717b] truncate">| Submitted: {currentApproval.date}</span>
             {currentApproval.remarks && (
-              <div className="text-[10px] mt-1 italic font-sans text-gray-600">
-                Owner Remarks: "{currentApproval.remarks}"
-              </div>
+              <span className="text-[#63717b] italic font-mono text-[10px] truncate">("{currentApproval.remarks}")</span>
             )}
           </div>
+          {isLocked && <span className="text-amber-800 font-mono text-[10px] shrink-0 font-medium ml-2">🔒 Records Locked</span>}
         </div>
       )}
 
       {selectedProject && projects.find(p => p.id === selectedProject)?.status === 'Completed' && (
-        <div className="bg-red-50 border border-red-300 text-red-800 p-2.5 rounded mb-3 text-[11px] font-bold">
-          This project is marked as Completed. New entries are not allowed.
+        <div className="bg-[#fffde7] border border-[#bcc8d0] text-amber-900 px-3 py-1 text-[11px] font-semibold">
+          This project is marked as Completed. New entries and updates are read-only.
         </div>
       )}
 
-      {/* Payment entry form (Hidden when locked) */}
-      {selectedProject && !isLocked && projects.find(p => p.id === selectedProject)?.status !== 'Completed' && (
-        <div className="sap-panel p-2.5 border-l-4 border-l-[#0056b3]">
-          <div className="font-bold mb-2.5 pb-1 border-b border-[#8c9ba8] text-[#0056b3] uppercase tracking-wider text-[10px]">
-            {editingId ? 'Modify Recorded Payment Details' : 'Record Worker Wages & Deductions'}
-          </div>
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1">Select Worker:</label>
-                <SAPSelect 
-                  required 
-                  className="sap-input" 
-                  value={formData.workerId} 
-                  onChange={e => setFormData({
-                    ...formData, 
-                    workerId: e.target.value,
-                    manualKharchi: '',
-                    selectedKharchiIds: [],
-                    manualAdvance: '',
-                    selectedAdvanceIds: [],
-                    selectedFloorAbstracts: []
-                  })}
-                >
-                  <option value="">-- Choose Worker --</option>
-                  {projectWorkers.map(w => <option key={w.id} value={w.id}>{w.name} ({w.workerId})</option>)}
-                </SAPSelect>
-              </div>
+      {/* 2. TRANSACTION SUB-TABS (Classic SAP Tab Bar: Flat, thin underline, no pills) */}
+      {selectedProject && (
+        <SAPTabs
+          tabs={[
+            { id: 'details', label: 'Payment Details' },
+            { id: 'earnings', label: 'Earnings' },
+            { id: 'deductions', label: 'Deductions' },
+            { id: 'abstract', label: 'Abstract', count: formData.selectedFloorAbstracts?.length || 0 },
+            { id: 'ledger', label: 'Ledger', count: searchFilteredPayments.length },
+          ]}
+          activeTab={activeTab}
+          onChange={(tabId: any) => setActiveTab(tabId)}
+          className="my-1"
+        />
+      )}
 
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1 font-mono">Month:</label>
-                <input 
-                  required 
-                  type="month" 
-                  className="sap-input font-bold bg-[#f1f3f5]" 
-                  value={formData.month} 
-                  disabled
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1">Wage Issue Date:</label>
-                <input 
-                  required 
-                  type="date" 
-                  className="sap-input" 
-                  value={formData.date} 
-                  onChange={e => setFormData({...formData, date: e.target.value})} 
-                />
-              </div>
-            </div>
-
-            {selectedCategory === 'Monthly work' && (
-              <div className="bg-blue-50/50 p-2 border border-blue-100 rounded-sm mb-3 mt-1">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[11px] font-bold text-[var(--color-sap-blue-val)] uppercase">Monthly Work Details</span>
-                  {formData.workerId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempFloorSelections(formData.selectedFloorAbstracts || []);
-                        setFloorFilterLevel('');
-                        setShowFloorAbstractPopup(true);
-                      }}
-                      className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] font-bold py-1 px-2.5 rounded border border-blue-700 transition"
-                    >
-                      Import From Floor Abstract
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-700">Work Days:</label>
-                    <input
-                      required
-                      type="number"
-                      step="any"
-                      className="sap-input font-bold"
-                      value={formData.workDays}
-                      onChange={e => setFormData({...formData, workDays: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-700">Rate / Day (INR):</label>
-                    <input
-                      required
-                      type="number"
-                      step="any"
-                      className="sap-input font-bold"
-                      value={formData.ratePerDay}
-                      onChange={e => setFormData({...formData, ratePerDay: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-700">OT (Hours):</label>
-                    <input
-                      type="number"
-                      step="any"
-                      className="sap-input font-bold"
-                      value={formData.overtimeHours}
-                      onChange={e => setFormData({...formData, overtimeHours: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-700">Allowance (INR):</label>
-                    <input
-                      type="number"
-                      step="any"
-                      className="sap-input font-bold text-green-700"
-                      value={formData.allowance}
-                      onChange={e => setFormData({...formData, allowance: e.target.value})}
-                    />
-                  </div>
-                </div>
-                {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 && (
-                  <div className="bg-white border border-blue-200 rounded p-2 text-[10px] space-y-1.5 mt-2">
-                    <div className="flex justify-between items-center font-bold text-blue-800 border-b border-blue-200 pb-1">
-                      <span>Linked Floor Abstracts ({formData.selectedFloorAbstracts.length})</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTempFloorSelections(formData.selectedFloorAbstracts || []);
-                          setFloorFilterLevel('');
-                          setShowFloorAbstractPopup(true);
-                        }}
-                        className="text-blue-700 hover:underline font-semibold"
-                      >
-                        + Add/Edit
-                      </button>
+      {!selectedProject ? (
+        <div className="bg-white border border-[#bcc8d0] p-8 text-center text-[#63717b]">
+          <p className="font-semibold text-[13px] text-[#303b44]">Please select a Project Site above to enter PAY01 Worker Payment Settlement.</p>
+          <p className="text-[11px] mt-1">Select project site and wage month to post payroll settlements, manage deductions, or generate wage register.</p>
+        </div>
+      ) : (
+        <>
+          {/* TAB 1: PAYMENT DETAILS (Classic SAP Transaction Screen) */}
+          {activeTab === 'details' && (
+            <div className="space-y-3">
+              {!isLocked && projects.find(p => p.id === selectedProject)?.status !== 'Completed' && (
+                <form onSubmit={handleSubmit} className="space-y-2">
+                  <div className="bg-white border border-[#bcc8d0] p-3">
+                    {/* Header Group: Worker Payment Details */}
+                    <div className="sap-section-header">
+                      <span>Worker Payment Details</span>
                     </div>
-                    <div className="max-h-24 overflow-y-auto pr-1 space-y-1">
-                      {formData.selectedFloorAbstracts.map(fa => (
-                        <div key={fa.floorAbstractId} className="flex justify-between items-center bg-blue-50 p-1.5 rounded">
-                          <span className="font-mono text-[9px] text-gray-600 truncate mr-2">
-                            Lvl: {fa.level} | Flat: {fa.flatNo}
-                          </span>
-                          <span className="font-bold text-green-700">₹{fa.amount} ({fa.hajira} Hajira)</span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1.5 text-[12px] mb-2">
+                      {/* Worker Selection with attached [+] */}
+                      <div className="flex items-center space-x-2">
+                        <label className="w-28 shrink-0 text-right text-[#303b44]">
+                          Worker<span className="text-red-600 ml-0.5">*</span>:
+                        </label>
+                        <div className="flex-1 min-w-0">
+                          <SAPSelect 
+                            required 
+                            className="sap-input w-full" 
+                            value={formData.workerId} 
+                            onChange={e => setFormData({
+                              ...formData, 
+                              workerId: e.target.value,
+                              manualKharchi: '',
+                              selectedKharchiIds: [],
+                              manualAdvance: '',
+                              selectedAdvanceIds: [],
+                              selectedFloorAbstracts: []
+                            })}
+                          >
+                            <option value="">-- Choose Worker --</option>
+                            {projectWorkers.map(w => (
+                              <option key={w.id} value={w.id}>{w.workerId} - {w.name}</option>
+                            ))}
+                          </SAPSelect>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                      </div>
 
-            {/* Contract Work Gross Amount (if contract work) */}
-            {selectedCategory === 'Contract work' && (
-              <div className="bg-blue-50/40 p-2.5 border border-blue-200 rounded-sm mb-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-gray-700 text-[11px]">Gross Work Amount (INR):</label>
-                  {formData.workerId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempFloorSelections(formData.selectedFloorAbstracts || []);
-                        setFloorFilterLevel('');
-                        setShowFloorAbstractPopup(true);
-                      }}
-                      className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] font-bold py-1 px-2.5 rounded border border-blue-700 transition shadow-xs"
-                    >
-                      Import From Floor Abstract
-                    </button>
-                  )}
-                </div>
-                <input 
-                  required 
-                  type="number" 
-                  step="any"
-                  className="sap-input font-bold" 
-                  placeholder="₹ Gross amount"
-                  value={formData.workAmount} 
-                  onChange={e => setFormData({...formData, workAmount: e.target.value})} 
-                />
-
-                {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 && (
-                  <div className="bg-white border border-blue-200 rounded p-2 text-[10px] space-y-1.5 mt-1.5">
-                    <div className="flex justify-between items-center font-bold text-blue-800 border-b border-blue-200 pb-1">
-                      <span>Linked Floor Abstracts ({formData.selectedFloorAbstracts.length})</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTempFloorSelections(formData.selectedFloorAbstracts || []);
-                          setFloorFilterLevel('');
-                          setShowFloorAbstractPopup(true);
-                        }}
-                        className="text-blue-700 hover:underline font-semibold"
-                      >
-                        + Add More
-                      </button>
+                      {/* Issue Date */}
+                      <div className="flex items-center space-x-2">
+                        <label className="w-28 shrink-0 text-right text-[#303b44]">
+                          Issue Date<span className="text-red-600 ml-0.5">*</span>:
+                        </label>
+                        <div className="flex-1 min-w-0">
+                          <input 
+                            required 
+                            type="date" 
+                            className="sap-input w-full" 
+                            value={formData.date} 
+                            onChange={e => setFormData({...formData, date: e.target.value})} 
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="max-h-24 overflow-y-auto divide-y divide-blue-105">
-                      {formData.selectedFloorAbstracts.map((item) => (
-                        <div key={item.floorAbstractId} className="flex items-center justify-between py-1 text-gray-700 font-sans">
-                          <span>
-                            Floor {item.level} (Flat {item.flatNo})
-                          </span>
-                          <div className="flex items-center space-x-2 font-mono">
-                            <span className="font-bold">₹{item.amount.toLocaleString('en-IN')}</span>
+
+                    {/* Earnings Fields (Work Days, Rate/Day, OT Hours, Allowance) */}
+                    {selectedCategory === 'Monthly work' ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-[12px] mb-2 p-2 bg-[#f4f7f8] border border-[#bcc8d0]/60">
+                        <div className="flex items-center space-x-1.5">
+                          <label className="w-20 shrink-0 text-right text-[#303b44]">Work Days:</label>
+                          <input
+                            required
+                            type="number"
+                            step="any"
+                            className="sap-input flex-1 min-w-0 font-medium"
+                            value={formData.workDays}
+                            onChange={e => setFormData({...formData, workDays: e.target.value})}
+                          />
+                        </div>
+                        <div className="flex items-center space-x-1.5">
+                          <label className="w-20 shrink-0 text-right text-[#303b44]">Rate/Day:</label>
+                          <input
+                            required
+                            type="number"
+                            step="any"
+                            className="sap-input flex-1 min-w-0 font-medium"
+                            value={formData.ratePerDay}
+                            onChange={e => setFormData({...formData, ratePerDay: e.target.value})}
+                          />
+                        </div>
+                        <div className="flex items-center space-x-1.5">
+                          <label className="w-20 shrink-0 text-right text-[#303b44]">OT Hours:</label>
+                          <input
+                            type="number"
+                            step="any"
+                            className="sap-input flex-1 min-w-0 font-medium"
+                            value={formData.overtimeHours}
+                            onChange={e => setFormData({...formData, overtimeHours: e.target.value})}
+                          />
+                        </div>
+                        <div className="flex items-center space-x-1.5">
+                          <label className="w-20 shrink-0 text-right text-[#303b44]">Allowance:</label>
+                          <input
+                            type="number"
+                            step="any"
+                            className="sap-input flex-1 min-w-0 font-medium"
+                            value={formData.allowance}
+                            onChange={e => setFormData({...formData, allowance: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1.5 text-[12px] mb-2 p-2 bg-[#f4f7f8] border border-[#bcc8d0]/60">
+                        <div className="flex items-center space-x-2">
+                          <label className="w-28 shrink-0 text-right text-[#303b44]">Gross Amount:</label>
+                          <div className="flex-1 min-w-0 flex items-center">
+                            <span className="text-[#63717b] mr-1">₹</span>
+                            <input 
+                              required 
+                              type="number" 
+                              step="any"
+                              className="sap-input flex-1 min-w-0 font-medium" 
+                              placeholder="0.00"
+                              value={formData.workAmount} 
+                              onChange={e => setFormData({...formData, workAmount: e.target.value})} 
+                            />
+                          </div>
+                        </div>
+                        {formData.workerId && (
+                          <div className="flex items-center space-x-2">
                             <button
                               type="button"
                               onClick={() => {
-                                const updated = formData.selectedFloorAbstracts.filter(x => x.floorAbstractId !== item.floorAbstractId);
-                                const totalAmount = updated.reduce((sum, x) => sum + x.amount, 0);
-                                setFormData({
-                                  ...formData,
-                                  selectedFloorAbstracts: updated,
-                                  workAmount: totalAmount.toString()
-                                });
+                                setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                                setFloorFilterLevel('');
+                                setShowFloorAbstractPopup(true);
                               }}
-                              className="text-red-500 hover:text-red-750 font-bold px-1 text-xs"
+                              className="sap-btn"
+                            >
+                              Import From Floor Abstract
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Tower, Location & Supply Work */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-[12px] mb-1">
+                      <div className="flex items-center space-x-1.5">
+                        <label className="w-24 shrink-0 text-right text-[#303b44]">Tower/Block:</label>
+                        <SAPSelect 
+                          className="sap-input flex-1 min-w-0" 
+                          value={formData.towerName} 
+                          onChange={e => setFormData({...formData, towerName: e.target.value})}
+                          disabled={availableTowers.length === 0}
+                        >
+                          <option value="">{availableTowers.length === 0 ? 'No Towers' : '-- Select --'}</option>
+                          {availableTowers.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </SAPSelect>
+                      </div>
+
+                      <div className="flex items-center space-x-1.5">
+                        <label className="w-20 shrink-0 text-right text-[#303b44]">Work Area:</label>
+                        <input 
+                          type="text" 
+                          className="sap-input flex-1 min-w-0"
+                          placeholder="Level / Area"
+                          value={formData.level}
+                          onChange={e => setFormData({...formData, level: e.target.value})}
+                        />
+                      </div>
+
+                      <div className="flex items-center space-x-1.5">
+                        <label className="w-24 shrink-0 text-right text-[#303b44]">Supply Amt:</label>
+                        <div className="flex-1 min-w-0 flex items-center">
+                          <span className="text-[#63717b] mr-1">₹</span>
+                          <input 
+                            type="number" 
+                            step="any"
+                            readOnly
+                            className="sap-input flex-1 min-w-0 bg-[#edf2f5]" 
+                            value={formData.supplyAmount} 
+                          />
+                          <button 
+                            type="button" 
+                            onClick={() => setShowSupplyModal(true)} 
+                            className="sap-btn ml-1"
+                            title="Add / Edit Supply Work Details"
+                          >
+                            + Details
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Linked floor abstracts indicator */}
+                    {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 && (
+                      <div className="flex items-center justify-between text-[11px] bg-[#edf3f7] px-2 py-1 mt-1 border border-[#bcc8d0]/60">
+                        <span className="text-[#303b44]">
+                          Linked Floor Abstracts: <strong>{formData.selectedFloorAbstracts.length} item(s)</strong> (Floors: {formData.selectedFloorAbstracts.map(x => x.level).join(', ')})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                            setFloorFilterLevel('');
+                            setShowFloorAbstractPopup(true);
+                          }}
+                          className="text-[#2d6f91] hover:underline font-semibold"
+                        >
+                          Manage Abstract Links
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Group: Deductions (Compact SAP-style form/table as specified in requirement 7) */}
+                    <div className="sap-section-header mt-4">
+                      <span>Deductions</span>
+                    </div>
+
+                    <div className="border border-[#bcc8d0] bg-white divide-y divide-[#bcc8d0]/60 text-[12px]">
+                      {/* Weekly Kharchi */}
+                      <div className="flex items-center justify-between px-3 py-1.5 hover:bg-[#f7f9fa]">
+                        <span className="w-48 text-[#303b44] font-normal">Weekly Kharchi</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[#63717b]">₹</span>
+                          <input 
+                            type="number" 
+                            step="any"
+                            className="sap-input w-36 text-right font-medium" 
+                            placeholder={autoCalculations.kharchi > 0 ? autoCalculations.kharchi.toString() : "0.00"}
+                            value={formData.manualKharchi} 
+                            onChange={e => setFormData({...formData, manualKharchi: e.target.value, selectedKharchiIds: []})} 
+                          />
+                          <button
+                            type="button"
+                            onClick={handleOpenKharchiModal}
+                            className="sap-btn"
+                            title="Select Specific Kharchi Dates"
+                          >
+                            Select ({formData.selectedKharchiIds.length > 0 ? formData.selectedKharchiIds.length : workerMonthKharchis.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleOpenKharchiModal}
+                            className="sap-btn"
+                            title="View Date-by-Date Kharchi List"
+                          >
+                            Details
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Outstanding Advances */}
+                      <div className="flex items-center justify-between px-3 py-1.5 hover:bg-[#f7f9fa]">
+                        <span className="w-48 text-[#303b44] font-normal">Outstanding Advances</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[#63717b]">₹</span>
+                          <input 
+                            type="number" 
+                            step="any"
+                            className="sap-input w-36 text-right font-medium" 
+                            placeholder={totalRegularOutstandingAdvance > 0 ? totalRegularOutstandingAdvance.toString() : "0.00"}
+                            value={formData.manualAdvance !== '' ? formData.manualAdvance : ''} 
+                            onChange={e => setFormData({...formData, manualAdvance: e.target.value, selectedAdvanceIds: []})} 
+                          />
+                          <button
+                            type="button"
+                            onClick={handleOpenAdvanceModal}
+                            className="sap-btn"
+                            title="Select Specific Advances"
+                          >
+                            Select ({formData.selectedAdvanceIds.length > 0 ? formData.selectedAdvanceIds.length : workerAllOutstandingAdvances.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleOpenAdvanceModal}
+                            className="sap-btn"
+                            title="View Outstanding Advance Breakdown"
+                          >
+                            Details
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Previously Over Balance */}
+                      <div className="flex items-center justify-between px-3 py-1.5 hover:bg-[#f7f9fa]">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[#303b44] font-normal">Previously Over Balance</span>
+                          {calculatedValues.previouslyOverBalance > 0 && (
+                            <span className="text-[10px] bg-[#dcecf6] text-[#2d6f91] px-1 font-mono">
+                              Carry Forward Deficit
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[#63717b]">₹</span>
+                          <input 
+                            type="text" 
+                            readOnly
+                            className="sap-input w-36 text-right font-medium bg-[#edf2f5]" 
+                            value={calculatedValues.previouslyOverBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          />
+                          <div className="w-[66px]"></div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('deductions')}
+                            className="sap-btn"
+                            title="View Over Balance History"
+                          >
+                            Details
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Mess Deduction */}
+                      <div className="flex items-center justify-between px-3 py-1.5 hover:bg-[#f7f9fa]">
+                        <span className="w-48 text-[#303b44] font-normal">Mess Deduction</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[#63717b]">₹</span>
+                          <input 
+                            required 
+                            type="number" 
+                            step="any"
+                            className="sap-input w-36 text-right font-medium" 
+                            placeholder="0.00"
+                            value={formData.messDeduction} 
+                            onChange={e => setFormData({...formData, messDeduction: e.target.value})} 
+                          />
+                          <div className="w-[136px]"></div>
+                        </div>
+                      </div>
+
+                      {/* Other Deduction */}
+                      <div className="flex items-center justify-between px-3 py-1.5 hover:bg-[#f7f9fa]">
+                        <div className="flex items-center space-x-2 flex-1 mr-4">
+                          <span className="w-36 shrink-0 text-[#303b44] font-normal">Other Deduction</span>
+                          <input 
+                            type="text" 
+                            className="sap-input flex-1 min-w-0"
+                            placeholder="Reason / Details for other deduction..."
+                            value={formData.otherDeductionDetails}
+                            onChange={e => setFormData({...formData, otherDeductionDetails: e.target.value})}
+                          />
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0">
+                          <span className="text-[#63717b]">₹</span>
+                          <input 
+                            type="number" 
+                            step="any"
+                            className="sap-input w-36 text-right font-medium" 
+                            placeholder="0.00"
+                            value={formData.otherDeduction}
+                            onChange={e => setFormData({...formData, otherDeduction: e.target.value})}
+                          />
+                          <div className="w-[136px]"></div>
+                        </div>
+                      </div>
+
+                      {/* Total Deduction Row */}
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-[#edf3f7] font-semibold">
+                        <span className="text-[#303b44]">Total Deduction</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[#63717b]">₹</span>
+                          <input 
+                            type="text" 
+                            readOnly
+                            className="sap-input w-36 text-right font-bold bg-white" 
+                            value={(calculatedValues.totalDeductions || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          />
+                          <div className="w-[136px]"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Settlement Summary */}
+                    <div className="sap-section-header mt-4">
+                      <span>Settlement Summary</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-[#f4f7f8] border border-[#bcc8d0] p-2.5 text-[12px]">
+                      <div className="flex items-center space-x-2">
+                        <label className="w-28 shrink-0 text-right text-[#303b44]">Gross Earnings:</label>
+                        <span className="font-mono font-bold text-[#303b44] text-[13px]">
+                          ₹{(calculatedValues.grossPayable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <label className="w-28 shrink-0 text-right text-[#303b44]">Total Deduction:</label>
+                        <span className="font-mono font-bold text-red-700 text-[13px]">
+                          ₹{(calculatedValues.totalDeductions || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <label className="w-24 shrink-0 text-right text-[#2d6f91] font-bold">Net Payment:</label>
+                        <span className="font-mono font-bold text-[#2d6f91] text-[14px]">
+                          ₹{(calculatedValues.netPayment || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <label className="w-20 shrink-0 text-right text-[#303b44]">Status:</label>
+                        <SAPSelect 
+                          className="sap-input flex-1 min-w-0 font-semibold text-[#2d6f91]"
+                          value={formData.paymentStatus}
+                          onChange={e => setFormData({...formData, paymentStatus: e.target.value})}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Paid">Paid</option>
+                        </SAPSelect>
+                      </div>
+                    </div>
+
+                    {/* Negative Net Deficit Carry Forward Notice */}
+                    {calculatedValues.calculatedNet < 0 && (
+                      <div className="bg-[#fffde7] border border-[#d97706] text-[#303b44] px-3 py-1.5 mt-2 text-[11px] flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5">
+                          <AlertCircle size={13} className="text-[#d97706] shrink-0" />
+                          <span>
+                            <strong>Negative Net (-₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}):</strong> Cash payout is set to ₹0.00. The remaining balance of <strong>₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}</strong> will automatically carry forward to next month as <strong>Previously Over Balance</strong>.
+                          </span>
+                        </div>
+                        <span className="font-mono font-bold text-[#d97706] text-[11px] shrink-0 ml-2">
+                          Carry Fwd: ₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Bottom Action Bar */}
+                    <div className="sap-action-bar mt-3">
+                      {editingId && (
+                        <button 
+                          type="button" 
+                          onClick={handleCancel} 
+                          className="sap-btn"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      <button 
+                        type="submit" 
+                        disabled={isLocked || isReadOnly} 
+                        className="sap-btn sap-btn-save disabled:opacity-50"
+                      >
+                        <Save size={11} />
+                        <span>{editingId ? 'Update Settlement' : 'Save Settlement'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {/* Quick Settled Workers Register (ALV table underneath form) */}
+              <div className="bg-white border border-[#bcc8d0] p-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[#bcc8d0] mb-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-semibold text-[12px] text-[#303b44]">
+                      Settled Workers for {selectedMonth} ({searchFilteredPayments.length})
+                    </span>
+                    <span className="text-[11px] text-[#63717b]">| Net Total: ₹{(totals.net || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('ledger')}
+                    className="text-[#2d6f91] hover:underline text-[11px] font-semibold flex items-center space-x-1"
+                  >
+                    <span>Open Full Wage Ledger View</span>
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="sap-alv-table w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="px-2 py-1 text-left w-12">Sr</th>
+                        <th className="px-2 py-1 text-left w-20">ID</th>
+                        <th className="px-2 py-1 text-left">Worker Name</th>
+                        <th className="px-2 py-1 text-left w-24">Tower</th>
+                        <th className="px-2 py-1 text-right w-24">Gross</th>
+                        <th className="px-2 py-1 text-right w-20">Supply</th>
+                        <th className="px-2 py-1 text-right w-20">Kharchi</th>
+                        <th className="px-2 py-1 text-right w-20">Advance</th>
+                        <th className="px-2 py-1 text-right w-24 font-bold text-[#2d6f91]">Net Payable</th>
+                        <th className="px-2 py-1 text-center w-16">Status</th>
+                        {!isLocked && <th className="px-2 py-1 text-center w-20">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {searchFilteredPayments.length === 0 ? (
+                        <tr>
+                          <td colSpan={isLocked ? 10 : 11} className="px-3 py-4 text-center text-[#63717b] italic">
+                            No settled payment records found for {selectedMonth}. Fill out the form above to record settlements.
+                          </td>
+                        </tr>
+                      ) : (
+                        searchFilteredPayments.map(p => {
+                          const w = getWorkerDetails(p.workerId);
+                          const isCurrentEdit = editingId === p.id;
+                          return (
+                            <tr
+                              key={p.id}
+                              onClick={() => handleEdit(p)}
+                              className={`cursor-pointer transition-colors ${
+                                isCurrentEdit ? 'bg-[#dcecf6] font-semibold text-[#2d6f91]' : 'hover:bg-[#eef6fb]'
+                              }`}
+                            >
+                              <td className="px-2 py-1 text-gray-500 font-mono text-[11px]">{w.srNo || '-'}</td>
+                              <td className="px-2 py-1 font-mono text-[11px] text-[#2d6f91]">{w.idNo}</td>
+                              <td className="px-2 py-1 font-medium text-[#303b44]">{w.name}</td>
+                              <td className="px-2 py-1 text-gray-600">{p.towerName || '-'}</td>
+                              <td className="px-2 py-1 text-right font-mono">₹{(Number(p.workAmount) || 0).toLocaleString('en-IN')}</td>
+                              <td className="px-2 py-1 text-right font-mono text-green-700">₹{(Number(p.supplyAmount) || 0).toLocaleString('en-IN')}</td>
+                              <td className="px-2 py-1 text-right font-mono text-red-650">₹{(Number(p.kharchiDeduction) || 0).toLocaleString('en-IN')}</td>
+                              <td className="px-2 py-1 text-right font-mono text-red-650">₹{(Number(p.advanceDeduction) || 0).toLocaleString('en-IN')}</td>
+                              <td className="px-2 py-1 text-right font-mono font-bold text-[#2d6f91]">
+                                ₹{(Number(p.netPayment) || 0).toLocaleString('en-IN')}
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <span className={`px-1 py-0.2 text-[9px] uppercase font-mono ${
+                                  p.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {p.paymentStatus || 'Pending'}
+                                </span>
+                              </td>
+                              {!isLocked && (
+                                <td className="px-2 py-1 text-center" onClick={e => e.stopPropagation()}>
+                                  <div className="flex items-center justify-center space-x-1.5">
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleEdit(p)} 
+                                      className="text-[#2d6f91] hover:text-[#1a496b]" 
+                                      title="Edit Record"
+                                    >
+                                      <Edit size={11} />
+                                    </button>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => setDeleteId(p.id)} 
+                                      className="text-red-600 hover:text-red-800" 
+                                      title="Delete Record"
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: EARNINGS BREAKDOWN */}
+          {activeTab === 'earnings' && (
+            <div className="bg-white border border-[#bcc8d0] p-3 space-y-3">
+              <div className="sap-section-header">
+                <span>Earnings Details: {selectedCategory} ({selectedMonth})</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[12px]">
+                {/* Base Work Formula */}
+                <div className="border border-[#bcc8d0] p-2.5 bg-[#f4f7f8]">
+                  <h4 className="font-semibold text-[#303b44] mb-2 border-b border-[#bcc8d0] pb-1">
+                    Base Wage Computation
+                  </h4>
+                  {selectedCategory === 'Monthly work' ? (
+                    <div className="space-y-1.5 text-[11.5px]">
+                      <div className="flex justify-between">
+                        <span className="text-[#63717b]">Work Days Logged:</span>
+                        <span className="font-mono font-bold">{formData.workDays || 0} days</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#63717b]">Daily Rate:</span>
+                        <span className="font-mono font-bold">₹{Number(formData.ratePerDay || 0).toLocaleString('en-IN')} / day</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#63717b]">Overtime Hours:</span>
+                        <span className="font-mono">{formData.overtimeHours || 0} hrs</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#63717b]">Allowance:</span>
+                        <span className="font-mono font-bold text-green-700">₹{Number(formData.allowance || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="border-t border-[#bcc8d0] pt-1.5 flex justify-between font-bold text-[#303b44]">
+                        <span>Calculated Gross Wages:</span>
+                        <span className="font-mono text-[13px]">₹{(calculatedValues.workAmount || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 text-[11.5px]">
+                      <div className="flex justify-between">
+                        <span className="text-[#63717b]">Contract Gross Work Amount:</span>
+                        <span className="font-mono font-bold text-[13px]">₹{Number(formData.workAmount || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <p className="text-[10px] text-[#63717b] mt-1">
+                        Contract work is valued as a fixed lumpsum certified amount per bill or floor abstract schedule.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Supply Work Summary */}
+                <div className="border border-[#bcc8d0] p-2.5 bg-[#f4f7f8]">
+                  <div className="flex items-center justify-between mb-2 border-b border-[#bcc8d0] pb-1">
+                    <h4 className="font-semibold text-[#303b44]">Supply Work Items ({formData.supplyDetails?.length || 0})</h4>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowSupplyModal(true)} 
+                      className="sap-btn"
+                    >
+                      <Plus size={11} />
+                      <span>Add Supply Item</span>
+                    </button>
+                  </div>
+
+                  {formData.supplyDetails && formData.supplyDetails.length > 0 ? (
+                    <div className="max-h-36 overflow-y-auto space-y-1">
+                      {formData.supplyDetails.map(item => (
+                        <div key={item.id} className="flex items-center justify-between bg-white border border-[#bcc8d0] p-1.5 text-[11px]">
+                          <div>
+                            <div className="font-medium text-[#303b44]">{item.description}</div>
+                            <div className="text-[10px] text-[#63717b] font-mono">{item.hours} hrs @ ₹{item.rate}/hr</div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono font-bold text-green-700">₹{item.total.toLocaleString('en-IN')}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSupplyWork(item.id)}
+                              className="text-red-600 hover:text-red-800"
                               title="Remove"
                             >
                               &times;
@@ -1088,604 +1538,443 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Deductions Panel: Kharchi, Advance & Mess */}
-            <div className="bg-gray-50/70 p-2.5 border border-[#8c9ba8] rounded-sm space-y-2">
-              <div className="text-[10px] font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200 pb-1 flex justify-between items-center">
-                <span>Deductions (Weekly Kharchi, Advance & Mess)</span>
-                {formData.workerId && (
-                  <span className="text-gray-500 font-normal">
-                    Click date list to select specific deductions
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* 1. KHARCHI DEDUCTION */}
-                <div className="flex flex-col bg-white p-2 border border-blue-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-gray-700 text-[11px]">Kharchi Deduction:</label>
-                    <button
-                      type="button"
-                      onClick={handleOpenKharchiModal}
-                      className="sap-btn bg-blue-50 border-blue-400 text-[#0056b3] hover:bg-blue-100 text-[10px] px-2 py-0.5 flex items-center space-x-1 font-bold shadow-xs transition"
-                      title="Select date-by-date kharchis for this worker"
-                    >
-                      <Calendar size={11} className="text-[#0056b3]" />
-                      <span>Select Kharchi ({workerMonthKharchis.length})</span>
-                    </button>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <span className="text-gray-500 font-bold text-xs">₹</span>
-                    <input 
-                      type="number" 
-                      step="any"
-                      className="sap-input font-bold text-red-650 flex-1" 
-                      placeholder={autoCalculations.kharchi > 0 ? autoCalculations.kharchi.toString() : "0.00"}
-                      value={formData.manualKharchi} 
-                      onChange={e => setFormData({...formData, manualKharchi: e.target.value, selectedKharchiIds: []})} 
-                    />
-                    <button
-                      type="button"
-                      onClick={handleOpenKharchiModal}
-                      className="sap-btn px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] border-blue-700"
-                      title="Open Date-by-Date Kharchi List"
-                    >
-                      Date List
-                    </button>
-                  </div>
-                  {formData.selectedKharchiIds.length > 0 ? (
-                    <div className="flex items-center justify-between text-[9px] text-[#0056b3] font-bold mt-1 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                      <span>✓ {formData.selectedKharchiIds.length} kharchi date(s) selected</span>
-                      <button 
-                        type="button" 
-                        onClick={() => setFormData({...formData, selectedKharchiIds: [], manualKharchi: ''})}
-                        className="text-red-600 hover:underline ml-1"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  ) : workerMonthKharchis.length > 0 ? (
-                    <div className="text-[9px] text-gray-500 mt-1">
-                      {workerMonthKharchis.length} kharchi date(s) in {formData.month} (Total ₹{autoCalculations.kharchi.toLocaleString('en-IN')})
-                    </div>
                   ) : (
-                    <div className="text-[9px] text-gray-400 mt-1 italic">
-                      No kharchi logged for this month
-                    </div>
+                    <p className="text-[11px] text-[#63717b] italic py-3 text-center">
+                      No additional supply work items attached to this worker's settlement. Click "+ Add Supply Item" to register extra tasks.
+                    </p>
                   )}
-                </div>
-
-                {/* 2. CURRENT OUTSTANDING ADVANCES DEDUCTION */}
-                <div className="flex flex-col bg-white p-2 border border-amber-300 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-gray-700 text-[11px]">Current Outstanding Advances:</label>
-                    <button
-                      type="button"
-                      onClick={handleOpenAdvanceModal}
-                      className="sap-btn bg-amber-50 border-amber-400 text-amber-850 hover:bg-amber-100 text-[10px] px-2 py-0.5 flex items-center space-x-1 font-bold shadow-xs transition"
-                      title="Select date-by-date advances for this worker"
-                    >
-                      <Calendar size={11} className="text-amber-800" />
-                      <span>Select Advances ({workerAllOutstandingAdvances.length})</span>
-                    </button>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <span className="text-gray-500 font-bold text-xs">₹</span>
-                    <input 
-                      type="number" 
-                      step="any"
-                      className="sap-input font-bold text-red-650 flex-1" 
-                      placeholder={totalRegularOutstandingAdvance > 0 ? totalRegularOutstandingAdvance.toString() : "0.00"}
-                      value={formData.manualAdvance !== '' ? formData.manualAdvance : ''} 
-                      onChange={e => setFormData({...formData, manualAdvance: e.target.value, selectedAdvanceIds: []})} 
-                    />
-                    <button
-                      type="button"
-                      onClick={handleOpenAdvanceModal}
-                      className="sap-btn px-2.5 py-1 bg-amber-700 hover:bg-amber-800 text-white font-bold text-[10px] border-amber-800"
-                      title="Open Date-by-Date Advance List"
-                    >
-                      Date List
-                    </button>
-                  </div>
-                  {formData.selectedAdvanceIds.length > 0 ? (
-                    <div className="flex items-center justify-between text-[9px] text-amber-900 font-bold mt-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                      <span>✓ {formData.selectedAdvanceIds.length} advance(s) selected</span>
-                      <button 
-                        type="button" 
-                        onClick={() => setFormData({...formData, selectedAdvanceIds: [], manualAdvance: ''})}
-                        className="text-red-600 hover:underline ml-1"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-[9px] text-gray-500 mt-1">
-                      {workerAllOutstandingAdvances.length} outstanding advance(s) up to payment date (Total ₹{totalRegularOutstandingAdvance.toLocaleString('en-IN')})
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. PREVIOUSLY OVER BALANCE (CARRY FORWARD) */}
-                <div className={`flex flex-col p-2 border rounded transition-colors ${calculatedValues.previouslyOverBalance > 0 ? 'bg-purple-50 border-purple-300' : 'bg-gray-50 border-gray-200'}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-purple-900 text-[11px] flex items-center space-x-1">
-                      <span>Previously Over Balance:</span>
-                      {calculatedValues.previouslyOverBalance > 0 && (
-                        <span className="bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded">
-                          Carry Forward
-                        </span>
-                      )}
-                    </label>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <span className="text-purple-700 font-bold text-xs">₹</span>
-                    <input 
-                      type="text" 
-                      readOnly
-                      className="sap-input font-bold text-purple-800 flex-1 bg-white cursor-not-allowed" 
-                      value={calculatedValues.previouslyOverBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    />
-                  </div>
-                  <div className="text-[9px] text-purple-700 mt-1 font-medium">
-                    {calculatedValues.previouslyOverBalance > 0 
-                      ? 'Absorbed deficit from previous payment(s). Deducted automatically.' 
-                      : 'No previous over-balance carry forward for this worker.'}
-                  </div>
-                </div>
-
-                {/* 4. MESS DEDUCTION */}
-                <div className="flex flex-col bg-white p-2 border border-gray-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-gray-700 text-[11px]">Mess Deduction (INR):</label>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <span className="text-gray-500 font-bold text-xs">₹</span>
-                    <input 
-                      required 
-                      type="number" 
-                      step="any"
-                      className="sap-input font-bold text-red-650 flex-1" 
-                      placeholder="Deducted mess cost sum"
-                      value={formData.messDeduction} 
-                      onChange={e => setFormData({...formData, messDeduction: e.target.value})} 
-                    />
-                  </div>
-                  <div className="text-[9px] text-gray-400 mt-1">
-                    Worker monthly mess consumption deduction
+                  <div className="border-t border-[#bcc8d0] mt-2 pt-1.5 flex justify-between font-bold text-[#303b44] text-[11.5px]">
+                    <span>Total Supply Earnings:</span>
+                    <span className="font-mono text-green-700">₹{Number(formData.supplyAmount || 0).toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
             </div>
+          )}
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1">Tower / Block:</label>
-                <SAPSelect 
-                  className="sap-input font-semibold" 
-                  value={formData.towerName} 
-                  onChange={e => setFormData({...formData, towerName: e.target.value})}
-                  disabled={availableTowers.length === 0}
-                >
-                  <option value="">{availableTowers.length === 0 ? 'No Towers Listed' : '-- Select Tower --'}</option>
-                  {availableTowers.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </SAPSelect>
+          {/* TAB 3: DEDUCTIONS MANAGEMENT */}
+          {activeTab === 'deductions' && (
+            <div className="bg-white border border-[#bcc8d0] p-3 space-y-3">
+              <div className="sap-section-header">
+                <span>Deductions Register & Historical Balances</span>
               </div>
 
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1">Work Area / Location (Level):</label>
-                <input 
-                  type="text" 
-                  className="sap-input font-semibold"
-                  placeholder="Work location / level details"
-                  value={formData.level}
-                  onChange={e => setFormData({...formData, level: e.target.value})}
-                />
-              </div>
-
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-600 mb-1">Supply Amount (INR):</label>
-                <div className="flex flex-row space-x-2">
-                  <input 
-                    type="number" 
-                    step="any"
-                    readOnly
-                    className="sap-input font-bold text-green-700 flex-1 bg-gray-50" 
-                    placeholder="₹ Supply amount"
-                    value={formData.supplyAmount} 
-                  />
-                  <button type="button" onClick={() => setShowSupplyModal(true)} className="sap-btn bg-gray-800 hover:bg-gray-900 border-gray-900 text-white flex items-center space-x-1 px-3">
-                    <span className="text-white">+ Details</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 bg-amber-50/30 p-2 border border-amber-200 rounded-sm">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col">
-                  <label className="font-semibold text-gray-700 mb-1">Other Deduction (INR):</label>
-                  <input 
-                    type="number" 
-                    step="any"
-                    className="sap-input text-red-650"
-                    placeholder="E.g. 500"
-                    value={formData.otherDeduction}
-                    onChange={e => setFormData({...formData, otherDeduction: e.target.value})}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="font-semibold text-gray-700 mb-1">Other Deduction Details:</label>
-                  <input 
-                    type="text" 
-                    className="sap-input"
-                    placeholder="Reason..."
-                    value={formData.otherDeductionDetails}
-                    onChange={e => setFormData({...formData, otherDeductionDetails: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col">
-                <label className="font-semibold text-gray-700 mb-1">Payment Status:</label>
-                <SAPSelect 
-                  className="sap-input font-bold text-blue-700"
-                  value={formData.paymentStatus}
-                  onChange={e => setFormData({...formData, paymentStatus: e.target.value})}
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Paid">Paid</option>
-                </SAPSelect>
-              </div>
-            </div>
-
-            {/* Calculations Workspace: Gross Earnings, Mess, Kharchi, Current Outstanding Advances, Previously Over Balance, Other Deductions, Total Deductions, Net Payment, New Carry Forward */}
-            <div className="p-3 border border-[#8c9ba8] rounded-sm bg-[#eef2f6] space-y-2">
-              <div className="text-[10px] font-bold text-[#0056b3] uppercase tracking-wider border-b border-gray-300 pb-1 flex items-center justify-between">
-                <span>Payment Calculation Breakdown</span>
-                <span className="font-normal text-gray-500 lowercase">
-                  (gross payable - total deductions = net payable)
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 text-[10px]">
-                {/* 1. Gross Earnings */}
-                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
-                  <span className="text-gray-500 uppercase font-bold text-[9px]">Gross Earnings</span>
-                  <span className="font-mono font-bold text-gray-900 text-xs mt-0.5">
-                    ₹{(calculatedValues.grossPayable || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* 2. Mess */}
-                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
-                  <span className="text-gray-500 uppercase font-bold text-[9px]">Mess</span>
-                  <span className="font-mono font-bold text-red-650 text-xs mt-0.5">
-                    ₹{(Number(formData.messDeduction) || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* 3. Kharchi */}
-                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
-                  <span className="text-gray-500 uppercase font-bold text-[9px]">Kharchi</span>
-                  <span className="font-mono font-bold text-red-650 text-xs mt-0.5">
-                    ₹{(calculatedValues.kharchi || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* 4. Current Outstanding Advances */}
-                <div className="flex flex-col bg-white p-2 rounded border border-amber-200">
-                  <span className="text-amber-800 uppercase font-bold text-[9px]">Advances</span>
-                  <span className="font-mono font-bold text-red-650 text-xs mt-0.5">
-                    ₹{(calculatedValues.advance || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* 5. Previously Over Balance */}
-                <div className="flex flex-col bg-purple-50 p-2 rounded border border-purple-200">
-                  <span className="text-purple-800 uppercase font-bold text-[9px]">Prev Over Bal</span>
-                  <span className="font-mono font-bold text-purple-900 text-xs mt-0.5">
-                    ₹{(calculatedValues.previouslyOverBalance || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* 6. Other Deductions */}
-                <div className="flex flex-col bg-white p-2 rounded border border-gray-200">
-                  <span className="text-gray-500 uppercase font-bold text-[9px]">Other Ded.</span>
-                  <span className="font-mono font-bold text-red-700 text-xs mt-0.5">
-                    ₹{(calculatedValues.otherDeduction || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* 7. Total Deductions */}
-                <div className="flex flex-col bg-red-50 p-2 rounded border border-red-200">
-                  <span className="text-red-700 uppercase font-bold text-[9px]">Total Deductions</span>
-                  <span className="font-mono font-bold text-red-700 text-xs mt-0.5">
-                    ₹{(calculatedValues.totalDeductions || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* 8. Net Payment */}
-                <div className="flex flex-col justify-center bg-[#cce5ff] p-2 border border-[#99ccff] rounded col-span-1 sm:col-span-2 md:col-span-1">
-                  <span className="text-[9px] text-[#0056b3] uppercase font-bold">Net Payment</span>
-                  <span className="font-mono font-black text-[#0056b3] text-sm leading-none mt-0.5">
-                    ₹{(calculatedValues.netPayment || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-
-              {/* 9. Negative Payment & Carry Forward Alert */}
-              {calculatedValues.calculatedNet < 0 && (
-                <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 p-2 text-[10px] rounded flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle size={14} className="text-amber-700 shrink-0" />
-                    <span>
-                      <strong>Negative Calculated Net (-₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}):</strong> Cash payment is set to ₹0.00.
-                      The remaining balance of <strong>₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}</strong> will automatically be carried forward to the next payment as <strong>Previously Over Balance</strong>.
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[12px]">
+                {/* Kharchi Deductions Detail */}
+                <div className="border border-[#bcc8d0] p-2.5 bg-[#f4f7f8]">
+                  <div className="flex items-center justify-between mb-2 border-b border-[#bcc8d0] pb-1">
+                    <span className="font-semibold text-[#303b44]">
+                      Weekly Kharchi for {formData.month} ({workerMonthKharchis.length} total)
                     </span>
-                  </div>
-                  <span className="bg-amber-200 text-amber-950 font-bold px-2 py-0.5 rounded text-[9px] uppercase tracking-wider shrink-0 font-mono">
-                    Carry Fwd: ₹{(calculatedValues.newCarryForwardOverBalance || 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-1">
-              <button type="submit" className="sap-btn flex items-center space-x-1">
-                <Save size={12} className="text-[#0056b3]"/>
-                <span>{editingId ? 'Update Ledger' : 'Record Wage Ledger'}</span>
-              </button>
-              {editingId && (
-                <button type="button" onClick={handleCancel} className="sap-btn flex items-center space-x-1">
-                  <X size={12} className="text-red-600"/>
-                  <span>Cancel</span>
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-      )}
-
-      {selectedProject && (
-        <div className="space-y-3">
-          {/* Table Header Row with dynamic submission widget if MD is active and not submitted yet */}
-          <div className="flex items-center justify-between pb-1 text-gray-800">
-            <span className="text-[12px] font-bold text-[var(--color-sap-blue-val)] bg-[#eef2f6] px-2 py-0.5 border border-[#8c9ba8]">
-              Wage Ledger Table: {selectedMonth} | {selectedCategory}
-            </span>
-
-            <div className="flex space-x-2 items-center">
-              <PDFExportButton
-                title={`${selectedCategory} Payment Sheet`}
-                subtitle={`Month: ${selectedMonth}`}
-                siteName={projects.find(p => p.id === selectedProject)?.name}
-                headers={['Sr No', 'ID No', 'Worker Name', 'Tower / Block', 'Work Area', 'Gross Wages', 'Total Deductions', 'Net Payable', 'Status']}
-                data={searchFilteredPayments.map(p => {
-                  const w = getWorkerDetails(p.workerId);
-                  const totalDed = (Number(p.messDeduction) || 0) + (Number(p.kharchiDeduction) || 0) + (Number(p.advanceDeduction) || 0) + (Number(p.recoveryAmount) || 0) + (Number(p.otherDeduction) || 0);
-                  return [
-                    w.srNo,
-                    w.idNo,
-                    w.name,
-                    p.towerName || '-',
-                    p.level ? p.level : (p.floorAbstractsJson ? Array.from(new Set(JSON.parse(p.floorAbstractsJson).map((x: any) => x.level))).join(', ') : '-'),
-                    `Rs. ${(Number(p.workAmount) || 0).toLocaleString('en-IN')}`,
-                    `Rs. ${(totalDed || 0).toLocaleString('en-IN')}`,
-                    `Rs. ${(Number(p.netPayment) || 0).toLocaleString('en-IN')}`,
-                    p.paymentStatus || 'Pending'
-                  ];
-                })}
-                totals={[
-                  '', '', '', '', 'Totals:', 
-                  `Rs. ${(totals.gross || 0).toLocaleString('en-IN')}`, 
-                  `Rs. ${(((totals.mess || 0) + (totals.kharchi || 0) + (totals.advance || 0) + (totals.recovery || 0) + (totals.otherDeduction || 0)) || 0).toLocaleString('en-IN')}`, 
-                  `Rs. ${(totals.net || 0).toLocaleString('en-IN')}`, 
-                  ''
-                ]}
-              />
-              <button
-                onClick={exportToExcel}
-                disabled={searchFilteredPayments.length === 0}
-                className="sap-btn bg-[#107c41]/10 text-[#107c41] border-[#107c41]/30 hover:bg-[#107c41] hover:text-white disabled:opacity-50 disabled:bg-transparent disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed font-bold flex items-center space-x-1 py-1 text-xs"
-                title="Export this wage ledger sheet to Excel"
-              >
-                <FileSpreadsheet size={11} />
-                <span>Export Excel</span>
-              </button>
-              {searchFilteredPayments.length > 0 && (
-                <>
-                  <button
-                    onClick={() => setShowPaymentSheetReport(true)}
-                    className="sap-btn bg-[#f8f9fa] border-gray-300 text-gray-800 hover:bg-gray-100 font-bold flex items-center space-x-1 py-1"
-                  >
-                    <span>Print Sheet</span>
-                  </button>
-                  <button
-                    onClick={() => setShowSupplyReport(true)}
-                    className="sap-btn bg-[#f8f9fa] border-gray-300 text-gray-800 hover:bg-gray-100 font-bold flex items-center space-x-1 py-1"
-                  >
-                    <span>Supply Work Report</span>
-                  </button>
-                </>
-              )}
-
-              {!isLocked && searchFilteredPayments.length > 0 && (
-                <div>
-                  {!isSubmittingSheet ? (
                     <button
-                      onClick={() => setIsSubmittingSheet(true)}
-                      className="sap-btn bg-green-700 hover:bg-green-800 text-white font-bold flex items-center space-x-1 py-1"
+                      type="button"
+                      onClick={handleOpenKharchiModal}
+                      className="sap-btn"
                     >
-                      <Send size={11} className="text-white" />
-                      <span>Submit {selectedMonth} Sheet to Owner</span>
+                      Date Selection
                     </button>
-                  ) : (
-                    <form onSubmit={handleSendToApproval} className="flex items-center space-x-2 bg-[#f8f9fa] border border-[#8c9ba8] p-1 shadow-sm rounded-sm">
-                      <input
-                        type="text"
-                        className="sap-input w-48 py-0.5 px-1.5"
-                        placeholder="Remarks / Note for owner..."
-                        value={submitRemarks}
-                        onChange={e => setSubmitRemarks(e.target.value)}
-                      />
-                      <button type="submit" className="sap-btn py-0.5 px-2 bg-green-700 text-white font-bold">
-                        Confirm Submit
+                  </div>
+                  <div className="space-y-1 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Month Kharchi Sum:</span>
+                      <span className="font-mono font-bold text-red-650">₹{autoCalculations.kharchi.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Selected Kharchi Dates:</span>
+                      <span className="font-mono">{formData.selectedKharchiIds.length > 0 ? `${formData.selectedKharchiIds.length} dates selected` : 'All month dates applied'}</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t border-[#bcc8d0] pt-1">
+                      <span>Applied Kharchi Deduction:</span>
+                      <span className="font-mono text-red-700">₹{(calculatedValues.kharchi || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Outstanding Advances Detail */}
+                <div className="border border-[#bcc8d0] p-2.5 bg-[#f4f7f8]">
+                  <div className="flex items-center justify-between mb-2 border-b border-[#bcc8d0] pb-1">
+                    <span className="font-semibold text-[#303b44]">
+                      Outstanding Advances ({workerAllOutstandingAdvances.length} records)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleOpenAdvanceModal}
+                      className="sap-btn"
+                    >
+                      Select Advances
+                    </button>
+                  </div>
+                  <div className="space-y-1 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Unadjusted Advances Total:</span>
+                      <span className="font-mono font-bold text-amber-800">₹{totalRegularOutstandingAdvance.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Selected Advances:</span>
+                      <span className="font-mono">{formData.selectedAdvanceIds.length > 0 ? `${formData.selectedAdvanceIds.length} advance(s)` : 'Auto-deduct all up to gross'}</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t border-[#bcc8d0] pt-1">
+                      <span>Applied Advance Deduction:</span>
+                      <span className="font-mono text-red-700">₹{(calculatedValues.totalAdvanceDeduction || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Over Balance Carry Forward */}
+                <div className="border border-[#bcc8d0] p-2.5 bg-[#f4f7f8]">
+                  <h4 className="font-semibold text-[#303b44] mb-2 border-b border-[#bcc8d0] pb-1">
+                    Previously Over Balance (Historical Deficit)
+                  </h4>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Carried Over Balance:</span>
+                      <span className="font-mono font-bold text-purple-900">
+                        ₹{(calculatedValues.previouslyOverBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#63717b]">
+                      When deductions exceed gross pay in previous settlements, the remaining deficit is absorbed and carried forward as Previously Over Balance.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Mess & Other Deductions */}
+                <div className="border border-[#bcc8d0] p-2.5 bg-[#f4f7f8]">
+                  <h4 className="font-semibold text-[#303b44] mb-2 border-b border-[#bcc8d0] pb-1">
+                    Mess & Sundry Deductions
+                  </h4>
+                  <div className="space-y-1 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Mess Bill Deduction:</span>
+                      <span className="font-mono font-bold">₹{Number(formData.messDeduction || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Other Deduction:</span>
+                      <span className="font-mono font-bold">₹{Number(formData.otherDeduction || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    {formData.otherDeductionDetails && (
+                      <div className="text-[10px] text-[#63717b] italic font-sans">
+                        Reason: {formData.otherDeductionDetails}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: FLOOR ABSTRACT */}
+          {activeTab === 'abstract' && (
+            <div className="bg-white border border-[#bcc8d0] p-3 space-y-3">
+              <div className="sap-section-header">
+                <span>Linked Floor Abstract Quantity Schedules</span>
+              </div>
+
+              <div className="flex items-center justify-between pb-2 border-b border-[#bcc8d0]">
+                <p className="text-[11px] text-[#63717b]">
+                  Sync labour hajira and flat task completion directly from FLR01 Floor Abstracts.
+                </p>
+                {formData.workerId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempFloorSelections(formData.selectedFloorAbstracts || []);
+                      setFloorFilterLevel('');
+                      setShowFloorAbstractPopup(true);
+                    }}
+                    className="sap-btn"
+                  >
+                    + Add / Sync Floor Abstracts
+                  </button>
+                )}
+              </div>
+
+              {formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="sap-alv-table w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="px-2 py-1 text-left">Level / Floor</th>
+                        <th className="px-2 py-1 text-left">Flat / Unit No</th>
+                        <th className="px-2 py-1 text-right">Hajira / Days</th>
+                        <th className="px-2 py-1 text-right">Computed Amount (INR)</th>
+                        <th className="px-2 py-1 text-center w-16">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.selectedFloorAbstracts.map(item => (
+                        <tr key={item.floorAbstractId} className="hover:bg-[#f7f9fa]">
+                          <td className="px-2 py-1 font-medium">{item.level}</td>
+                          <td className="px-2 py-1">{item.flatNo}</td>
+                          <td className="px-2 py-1 text-right font-mono">{item.hajira}</td>
+                          <td className="px-2 py-1 text-right font-mono font-bold text-green-700">₹{item.amount.toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = formData.selectedFloorAbstracts.filter(x => x.floorAbstractId !== item.floorAbstractId);
+                                const totalAmt = updated.reduce((sum, x) => sum + x.amount, 0);
+                                setFormData({
+                                  ...formData,
+                                  selectedFloorAbstracts: updated,
+                                  workAmount: selectedCategory === 'Contract work' ? totalAmt.toString() : formData.workAmount
+                                });
+                              }}
+                              className="text-red-600 hover:text-red-800 font-bold"
+                              title="Unlink"
+                            >
+                              &times;
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-center text-[#63717b] italic py-6">
+                  No Floor Abstracts linked to this payment entry. Click "+ Add / Sync Floor Abstracts" to associate task abstracts with this worker.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: WAGE LEDGER (Full Classic SAP ALV Table) */}
+          {activeTab === 'ledger' && (
+            <div className="bg-white border border-[#bcc8d0] p-2.5 space-y-2">
+              {/* ALV Toolbar Header */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[#bcc8d0] bg-[#edf3f7] px-2 py-1">
+                <span className="font-semibold text-[12px] text-[#303b44]">
+                  Wage Ledger Table: {selectedMonth} | {selectedCategory} ({searchFilteredPayments.length} records)
+                </span>
+
+                <div className="flex items-center space-x-1.5">
+                  <PDFExportButton
+                    title={`${selectedCategory} Payment Sheet`}
+                    subtitle={`Month: ${selectedMonth}`}
+                    siteName={projects.find(p => p.id === selectedProject)?.name}
+                    headers={['Sr No', 'ID No', 'Worker Name', 'Tower / Block', 'Work Area', 'Gross Wages', 'Total Deductions', 'Net Payable', 'Status']}
+                    data={searchFilteredPayments.map(p => {
+                      const w = getWorkerDetails(p.workerId);
+                      const totalDed = (Number(p.messDeduction) || 0) + (Number(p.kharchiDeduction) || 0) + (Number(p.advanceDeduction) || 0) + (Number(p.recoveryAmount) || 0) + (Number(p.otherDeduction) || 0);
+                      return [
+                        w.srNo,
+                        w.idNo,
+                        w.name,
+                        p.towerName || '-',
+                        p.level ? p.level : (p.floorAbstractsJson ? Array.from(new Set(JSON.parse(p.floorAbstractsJson).map((x: any) => x.level))).join(', ') : '-'),
+                        `Rs. ${(Number(p.workAmount) || 0).toLocaleString('en-IN')}`,
+                        `Rs. ${(totalDed || 0).toLocaleString('en-IN')}`,
+                        `Rs. ${(Number(p.netPayment) || 0).toLocaleString('en-IN')}`,
+                        p.paymentStatus || 'Pending'
+                      ];
+                    })}
+                    totals={[
+                      '', '', '', '', 'Totals:', 
+                      `Rs. ${(totals.gross || 0).toLocaleString('en-IN')}`, 
+                      `Rs. ${(((totals.mess || 0) + (totals.kharchi || 0) + (totals.advance || 0) + (totals.recovery || 0) + (totals.otherDeduction || 0)) || 0).toLocaleString('en-IN')}`, 
+                      `Rs. ${(totals.net || 0).toLocaleString('en-IN')}`, 
+                      ''
+                    ]}
+                  />
+                  <button
+                    onClick={exportToExcel}
+                    disabled={searchFilteredPayments.length === 0}
+                    className="sap-btn disabled:opacity-50"
+                    title="Export this wage ledger sheet to Excel"
+                  >
+                    <FileSpreadsheet size={11} className="text-emerald-700" />
+                    <span>Export Excel</span>
+                  </button>
+                  {searchFilteredPayments.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => setShowPaymentSheetReport(true)}
+                        className="sap-btn"
+                        title="Print Monthly Sheet"
+                      >
+                        Print Sheet
                       </button>
-                      <button type="button" onClick={() => setIsSubmittingSheet(false)} className="sap-btn py-0.5 text-red-600">
-                        Cancel
+                      <button
+                        onClick={() => setShowSupplyReport(true)}
+                        className="sap-btn"
+                        title="Supply Work Report"
+                      >
+                        Supply Work
                       </button>
-                    </form>
+                    </>
+                  )}
+
+                  {!isLocked && searchFilteredPayments.length > 0 && (
+                    <div>
+                      {!isSubmittingSheet ? (
+                        <button
+                          onClick={() => setIsSubmittingSheet(true)}
+                          className="sap-btn sap-btn-save"
+                        >
+                          <Send size={11} />
+                          <span>Submit Sheet to Owner</span>
+                        </button>
+                      ) : (
+                        <form onSubmit={handleSendToApproval} className="flex items-center space-x-1.5 bg-white border border-[#bcc8d0] p-1">
+                          <input
+                            type="text"
+                            className="sap-input w-48 text-[11px]"
+                            placeholder="Remarks for owner..."
+                            value={submitRemarks}
+                            onChange={e => setSubmitRemarks(e.target.value)}
+                          />
+                          <button type="submit" className="sap-btn sap-btn-save">
+                            Confirm
+                          </button>
+                          <button type="button" onClick={() => setIsSubmittingSheet(false)} className="sap-btn text-red-600">
+                            Cancel
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <table className="w-full border-collapse border border-[#8c9ba8] bg-white text-[11px]">
-            <thead className="sap-header bg-[#eef2f6]">
-              <tr>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-12">Sr No</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-16">ID No</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal">Worker Name</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-24">Tower/Block</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-28">Work Area / Location</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-left font-normal w-16">Month</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-gray-50 w-24">Gross wages</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal bg-gray-50 w-20">Supply Amt</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Mess Ded.</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Kharchi Ded.</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-600 bg-gray-50 w-20">Advance Ded.</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-amber-800 bg-amber-50 w-24">Recovery (Adv)</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-normal text-red-700 bg-red-50 w-20">Other Ded.</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-700 bg-green-50 w-28">Net Payable</th>
-                <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16 bg-gray-50">Status</th>
-                {!isLocked && <th className="border border-[#8c9ba8] px-2 py-1 text-center font-normal w-16">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {searchFilteredPayments.map((payment, idx) => {
-                const worker = getWorkerDetails(payment.workerId);
-                const isPending = currentApproval?.status === 'Pending';
-                return (
-                  <motion.tr 
-                    initial={{ opacity: 0, y: 10 }} 
-                    animate={isPending ? { opacity: 1, y: 0, backgroundColor: ['#ffffff', '#fff8e1', '#ffffff'] } : { opacity: 1, y: 0, backgroundColor: '#ffffff' }} 
-                    transition={isPending ? { backgroundColor: { repeat: Infinity, duration: 2.5, ease: "easeInOut" }, default: { duration: 0.2 } } : { duration: 0.2 }} 
-                    key={payment.id} 
-                    className="hover:bg-[#e6f2ff] cursor-default font-mono"
-                    title={payment.otherDeductionDetails ? `Other Ded: ${payment.otherDeductionDetails}` : undefined}
-                  >
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.srNo || '-'}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-gray-500 font-bold">{worker.idNo}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans font-semibold text-gray-800">{worker.name}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-indigo-900 font-semibold bg-indigo-50/10">{payment.towerName || <span className="text-gray-400 italic font-normal font-sans font-mono">-</span>}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-sans text-gray-700">
-                      {payment.level ? payment.level : (payment.floorAbstractsJson ? Array.from(new Set(JSON.parse(payment.floorAbstractsJson).map((x: any) => x.level))).join(', ') : <span className="text-gray-400 italic">None</span>)}
-                    </td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 font-mono">{payment.month}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-medium">₹{(Number(payment.workAmount) || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700 font-semibold bg-green-50/25">₹{(Number(payment.supplyAmount) || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-600">₹{(Number(payment.messDeduction) || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{(Number(payment.kharchiDeduction) || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">₹{(Number(payment.advanceDeduction) || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/15">₹{(Number(payment.recoveryAmount) || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-700 bg-red-50/30">₹{(Number(payment.otherDeduction) || 0).toLocaleString('en-IN')}</td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-right font-bold text-green-750 bg-green-50/50">
-                      ₹{(Number(payment.netPayment) || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td className="border border-[#8c9ba8] px-2 py-1 text-center">
-                      <span className={`px-1.5 py-0.5 rounded-sm font-sans font-bold text-[9px] uppercase tracking-wider ${
-                        payment.paymentStatus === 'Paid' 
-                          ? 'bg-green-100 text-green-800 border border-green-200' 
-                          : 'bg-amber-100 text-amber-800 border border-amber-200'
-                      }`}>
-                        {payment.paymentStatus || 'Pending'}
-                      </span>
-                    </td>
-                    {!isLocked && (
-                      <td className="border border-[#8c9ba8] px-2 py-1 text-center font-sans">
-                        <div className="flex items-center justify-center space-x-2">
-                          <button 
-                            onClick={() => {
-                              if ((window as any).openWorkspaceTab) {
-                                (window as any).openWorkspaceTab(
-                                  'worker-payment', 
-                                  `Payment: ${worker.name}`, 
-                                  { initialWorkerId: payment.workerId, tabId: `payment:${payment.id}` }
-                                );
-                              }
-                            }} 
-                            className="text-emerald-650 hover:text-emerald-800" 
-                            title="Open in Separate Tab"
-                          >
-                            <FolderOpen size={12} />
-                          </button>
-                          <button onClick={() => handleEdit(payment)} className="text-blue-600 hover:text-blue-800" title="Edit">
-                            <Edit size={12} />
-                          </button>
-                          <button onClick={() => setDeleteId(payment.id)} className="text-red-500 hover:text-red-700" title="Delete">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </td>
+              {/* Full Classic SAP ALV Table */}
+              <div className="overflow-x-auto border border-[#bcc8d0]">
+                <table className="sap-alv-table w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="px-2 py-1 text-left w-10">Sr</th>
+                      <th className="px-2 py-1 text-left w-16">ID No</th>
+                      <th className="px-2 py-1 text-left">Worker Name</th>
+                      <th className="px-2 py-1 text-left w-20">Tower</th>
+                      <th className="px-2 py-1 text-left w-24">Work Area</th>
+                      <th className="px-2 py-1 text-left w-16">Month</th>
+                      <th className="px-2 py-1 text-right w-20">Gross wages</th>
+                      <th className="px-2 py-1 text-right w-18">Supply</th>
+                      <th className="px-2 py-1 text-right w-16">Mess Ded.</th>
+                      <th className="px-2 py-1 text-right w-18">Kharchi</th>
+                      <th className="px-2 py-1 text-right w-18">Advance</th>
+                      <th className="px-2 py-1 text-right w-18">Recovery</th>
+                      <th className="px-2 py-1 text-right w-16">Other</th>
+                      <th className="px-2 py-1 text-right w-24 font-bold text-[#2d6f91]">Net Payable</th>
+                      <th className="px-2 py-1 text-center w-16">Status</th>
+                      {!isLocked && <th className="px-2 py-1 text-center w-20">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {searchFilteredPayments.map(payment => {
+                      const worker = getWorkerDetails(payment.workerId);
+                      const isCurrentEdit = editingId === payment.id;
+                      return (
+                        <tr 
+                          key={payment.id} 
+                          onClick={() => {
+                            handleEdit(payment);
+                            setActiveTab('details');
+                          }}
+                          className={`cursor-pointer transition-colors ${
+                            isCurrentEdit ? 'bg-[#dcecf6] font-semibold text-[#2d6f91]' : 'hover:bg-[#eef6fb]'
+                          }`}
+                        >
+                          <td className="px-2 py-1 font-mono text-gray-500">{worker.srNo || '-'}</td>
+                          <td className="px-2 py-1 font-mono text-[#2d6f91]">{worker.idNo}</td>
+                          <td className="px-2 py-1 font-medium text-[#303b44]">{worker.name}</td>
+                          <td className="px-2 py-1 text-gray-600">{payment.towerName || '-'}</td>
+                          <td className="px-2 py-1 text-gray-600">
+                            {payment.level ? payment.level : (payment.floorAbstractsJson ? Array.from(new Set(JSON.parse(payment.floorAbstractsJson).map((x: any) => x.level))).join(', ') : '-')}
+                          </td>
+                          <td className="px-2 py-1 font-mono">{payment.month}</td>
+                          <td className="px-2 py-1 text-right font-mono">₹{(Number(payment.workAmount) || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-right font-mono text-green-700">₹{(Number(payment.supplyAmount) || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-right font-mono text-red-650">₹{(Number(payment.messDeduction) || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-right font-mono text-red-650">₹{(Number(payment.kharchiDeduction) || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-right font-mono text-red-650">₹{(Number(payment.advanceDeduction) || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-right font-mono text-amber-800">₹{(Number(payment.recoveryAmount) || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-right font-mono text-red-700">₹{(Number(payment.otherDeduction) || 0).toLocaleString('en-IN')}</td>
+                          <td className="px-2 py-1 text-right font-mono font-bold text-[#2d6f91]">
+                            ₹{(Number(payment.netPayment) || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-2 py-1 text-center">
+                            <span className={`px-1 py-0.2 text-[9px] uppercase font-mono ${
+                              payment.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {payment.paymentStatus || 'Pending'}
+                            </span>
+                          </td>
+                          {!isLocked && (
+                            <td className="px-2 py-1 text-center" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-center space-x-1.5">
+                                <button 
+                                  onClick={() => {
+                                    handleEdit(payment);
+                                    setActiveTab('details');
+                                  }} 
+                                  className="text-[#2d6f91] hover:text-[#1a496b]" 
+                                  title="Edit"
+                                >
+                                  <Edit size={11} />
+                                </button>
+                                <button 
+                                  onClick={() => setDeleteId(payment.id)} 
+                                  className="text-red-600 hover:text-red-800" 
+                                  title="Delete"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                    
+                    {/* ALV Summary Row */}
+                    {searchFilteredPayments.length > 0 && (
+                      <tr className="bg-[#edf3f7] font-bold text-[#303b44] border-t-2 border-[#bcc8d0]">
+                        <td colSpan={6} className="px-2 py-1.5 text-right uppercase text-[10px]">
+                          Total Month Summary:
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono">
+                          ₹{(totals.gross || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-green-700">
+                          ₹{(totals.supply || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-red-650">
+                          ₹{(totals.mess || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-red-650">
+                          ₹{(totals.kharchi || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-red-650">
+                          ₹{(totals.advance || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-amber-800">
+                          ₹{(totals.recovery || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono text-red-700">
+                          ₹{(totals.otherDeduction || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono font-bold text-[#2d6f91] text-[12.5px]">
+                          ₹{(totals.net || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-2 py-1.5"></td>
+                        {!isLocked && <td className="px-2 py-1.5"></td>}
+                      </tr>
                     )}
-                  </motion.tr>
-                );
-              })}
-              
-              {/* Total Aggregate Sum Row (Excel structure matching) */}
-              {searchFilteredPayments.length > 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="bg-gray-100 font-mono font-bold text-gray-900 border-t-2 border-[#8c9ba8]">
-                  <td colSpan={6} className="border border-[#8c9ba8] px-2 py-1 text-right font-sans uppercase text-[10px]">
-                    Total Month Summary:
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right">
-                    ₹{(totals.gross || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-green-700">
-                    ₹{(totals.supply || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
-                    ₹{(totals.mess || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
-                    ₹{(totals.kharchi || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-650">
-                    ₹{(totals.advance || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-amber-800 bg-amber-50/20 font-bold">
-                    ₹{(totals.recovery || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right text-red-700 font-bold">
-                    ₹{(totals.otherDeduction || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1 text-right font-black text-green-800 bg-green-100/70 text-[11px]">
-                    ₹{(totals.net || 0).toLocaleString('en-IN')}
-                  </td>
-                  <td className="border border-[#8c9ba8] px-2 py-1"></td>
-                  {!isLocked && <td className="border border-[#8c9ba8] px-2 py-1"></td>}
-                </motion.tr>
-              )}
 
-              {searchFilteredPayments.length === 0 && (
-                <motion.tr initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                  <td colSpan={isLocked ? 14 : 15} className="border border-[#8c9ba8] px-2 py-4 text-center text-gray-400 font-sans">
-                    No payment records found for {selectedMonth} in this project. Use controls above to record new wage ledgers.
-                  </td>
-                </motion.tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    {searchFilteredPayments.length === 0 && (
+                      <tr>
+                        <td colSpan={isLocked ? 15 : 16} className="px-2 py-6 text-center text-[#63717b] italic">
+                          No payment records found for {selectedMonth} in this project. Use "Payment Details" tab to record worker settlements.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Confirmation modal */}
@@ -1986,9 +2275,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1 font-semibold">{work.workerName}</td>
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1">{work.description}</td>
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1 text-right font-mono">{work.hours}</td>
-                      <td className="border border-gray-300 print:border-gray-800 px-2 py-1 text-right font-mono">₹{work.rate.toLocaleString('en-IN')}</td>
+                      <td className="border border-gray-300 print:border-gray-800 px-2 py-1 text-right font-mono">₹{(Number(work.rate) || 0).toLocaleString('en-IN')}</td>
                       <td className="border border-gray-300 print:border-gray-800 px-2 py-1 text-right font-bold text-gray-900">
-                        ₹{work.total.toLocaleString('en-IN')}
+                        ₹{(Number(work.total) || 0).toLocaleString('en-IN')}
                       </td>
                     </motion.tr>
                   ))}
@@ -2007,7 +2296,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right font-mono text-[11px]">{allSupplyWorksInfo.reduce((a, b) => a + b.hours, 0)} hr</td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right bg-gray-200"></td>
                       <td className="border border-gray-400 print:border-gray-800 px-2 py-1.5 text-right font-black text-[13px] text-green-800 print:text-black">
-                        ₹{allSupplyWorksInfo.reduce((a, b) => a + b.total, 0).toLocaleString('en-IN')}
+                        ₹{allSupplyWorksInfo.reduce((a, b) => a + (Number(b.total) || 0), 0).toLocaleString('en-IN')}
                       </td>
                     </tr>
                   </tfoot>
@@ -2172,7 +2461,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                             <td className="p-2 border-r border-gray-200">{workerDetail?.name}</td>
                             <td className="p-2 border-r border-gray-200 font-mono text-gray-500">{workerDetail?.workerId}</td>
                             <td className="p-2 border-r border-gray-200 text-right font-mono font-semibold">{hajiraVal}</td>
-                            <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-blue-900">₹{payAmount.toLocaleString('en-IN')}</td>
+                            <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-blue-900">₹{(Number(payAmount) || 0).toLocaleString('en-IN')}</td>
                             <td className="p-2 text-gray-500 italic max-w-xs truncate" title={fa.remarks}>{fa.remarks || '-'}</td>
                           </tr>
                         );
@@ -2196,7 +2485,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 </div>
                 <div>
                   <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Amount:</span>
-                  <span className="font-black font-mono text-[#0056b3]">₹{popupSummary.totalAmount.toLocaleString('en-IN')}</span>
+                  <span className="font-black font-mono text-[#0056b3]">₹{(Number(popupSummary.totalAmount) || 0).toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
@@ -2216,7 +2505,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   disabled={tempFloorSelections.length === 0}
                   className="sap-btn sap-btn-blue text-[10px] font-bold py-1.5 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Import Selected (₹{popupSummary.totalAmount.toLocaleString('en-IN')})
+                  Import Selected (₹{(Number(popupSummary.totalAmount) || 0).toLocaleString('en-IN')})
                 </button>
                 <button
                   type="button"
@@ -2384,7 +2673,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                               </span>
                             </td>
                             <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-red-650 text-xs">
-                              ₹{k.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ₹{(Number(k.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td className="p-2 text-center">
                               {isChecked ? (
@@ -2418,7 +2707,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 <div>
                   <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Kharchi Deducted:</span>
                   <span className="font-black font-mono text-red-650 text-xs">
-                    ₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + k.amount, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + (Number(k.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -2431,7 +2720,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 >
                   <CheckCircle2 size={13} />
                   <span>
-                    Apply Kharchi Deduction (₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + k.amount, 0).toLocaleString('en-IN')})
+                    Apply Kharchi Deduction (₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + (Number(k.amount) || 0), 0).toLocaleString('en-IN')})
                   </span>
                 </button>
                 <button

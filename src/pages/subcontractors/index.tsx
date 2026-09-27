@@ -83,7 +83,7 @@ export const Subcontractors: React.FC<SubcontractorsProps> = ({ initialTab }) =>
         </div>
         <div>
           <h2 className="text-sm font-bold tracking-widest uppercase flex items-center space-x-1.5 text-amber-500">
-            <span>SN Enterprises Construction ERP</span>
+            <span>SN Enterprise Construction ERP</span>
           </h2>
           <h1 className="text-lg font-extrabold tracking-tight mt-1 text-white">
             SUBCONTRACTOR DISBURSEMENT & CONTRACT MANAGEMENT

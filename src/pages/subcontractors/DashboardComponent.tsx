@@ -27,14 +27,14 @@ export const DashboardComponent: React.FC<DashboardComponentProps> = ({
 
     bills.forEach(b => {
       // Billed gross & additions
-      totalBilled += b.grossAmount + b.gstAmount;
-      totalRetention += b.retentionAmount;
-      totalTds += b.tdsAmount;
-      totalRecovery += b.recoveryAmount;
+      totalBilled += (Number(b.grossAmount) || 0) + (Number(b.gstAmount) || 0);
+      totalRetention += (Number(b.retentionAmount) || 0);
+      totalTds += (Number(b.tdsAmount) || 0);
+      totalRecovery += (Number(b.recoveryAmount) || 0);
     });
 
     payments.forEach(p => {
-      totalPaid += p.amount;
+      totalPaid += (Number(p.amount) || 0);
     });
 
     const netOwings = totalBilled - (totalRetention + totalTds + totalRecovery + totalPaid);
@@ -89,7 +89,7 @@ export const DashboardComponent: React.FC<DashboardComponentProps> = ({
             <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Gross Work Billed (with GST)</span>
             <FileText size={16} className="text-amber-500" />
           </div>
-          <div className="text-xl font-bold text-gray-800 mt-1">₹{stats.totalBilled.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-800 mt-1">₹{(Number(stats.totalBilled) || 0).toLocaleString()}</div>
           <span className="text-[9px] text-gray-500">From {stats.totalBillsCount} records posted</span>
         </div>
 
@@ -98,7 +98,7 @@ export const DashboardComponent: React.FC<DashboardComponentProps> = ({
             <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Disbursed Cash Outflow</span>
             <CreditCard size={16} className="text-emerald-500" />
           </div>
-          <div className="text-xl font-bold text-gray-800 mt-1">₹{stats.totalPaid.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-800 mt-1">₹{(Number(stats.totalPaid) || 0).toLocaleString()}</div>
           <span className="text-[9px] text-emerald-500">Released via Cash / Bank</span>
         </div>
 
@@ -107,7 +107,7 @@ export const DashboardComponent: React.FC<DashboardComponentProps> = ({
             <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500">Net Outstanding Balance</span>
             <AlertCircle size={16} className="text-rose-500" />
           </div>
-          <div className="text-xl font-bold text-gray-800 mt-1">₹{stats.outstanding.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-800 mt-1">₹{(Number(stats.outstanding) || 0).toLocaleString()}</div>
           <span className="text-[9px] text-rose-500">Net Liability to Creditors</span>
         </div>
       </div>
@@ -117,7 +117,7 @@ export const DashboardComponent: React.FC<DashboardComponentProps> = ({
         <div className="bg-[#eff6ff] p-2.5 rounded flex justify-between items-center border border-blue-200">
           <div>
             <div className="text-gray-600 text-[10px] font-bold">Total Retention Held (5%)</div>
-            <div className="text-md font-bold text-blue-900 mt-0.5">₹{stats.totalRetention.toLocaleString()}</div>
+            <div className="text-md font-bold text-blue-900 mt-0.5">₹{(Number(stats.totalRetention) || 0).toLocaleString()}</div>
           </div>
           <span className="text-xs text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded font-bold">Asset Reserves</span>
         </div>
@@ -125,7 +125,7 @@ export const DashboardComponent: React.FC<DashboardComponentProps> = ({
         <div className="bg-[#f0fdf4] p-2.5 rounded flex justify-between items-center border border-green-200">
           <div>
             <div className="text-gray-650 text-[10px] font-bold">Total TDS Provisioned (1%)</div>
-            <div className="text-md font-bold text-green-900 mt-0.5">₹{stats.totalTds.toLocaleString()}</div>
+            <div className="text-md font-bold text-green-900 mt-0.5">₹{(Number(stats.totalTds) || 0).toLocaleString()}</div>
           </div>
           <span className="text-xs text-green-700 bg-green-100 px-1.5 py-0.5 rounded font-bold">Tax Asset</span>
         </div>
@@ -133,7 +133,7 @@ export const DashboardComponent: React.FC<DashboardComponentProps> = ({
         <div className="bg-[#fdf2f8] p-2.5 rounded flex justify-between items-center border border-pink-200">
           <div>
             <div className="text-gray-650 text-[10px] font-bold">Materials Backcharges / Deductions</div>
-            <div className="text-md font-bold text-pink-900 mt-0.5">₹{stats.totalRecovery.toLocaleString()}</div>
+            <div className="text-md font-bold text-pink-900 mt-0.5">₹{(Number(stats.totalRecovery) || 0).toLocaleString()}</div>
           </div>
           <span className="text-xs text-pink-700 bg-pink-100 px-1.5 py-0.5 rounded font-bold">Debit Recoupments</span>
         </div>

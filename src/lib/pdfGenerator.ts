@@ -1,5 +1,5 @@
 /**
- * SN ENTERPRISES ERP - PDF GENERATOR WRAPPER
+ * SN ENTERPRISE ERP - PDF GENERATOR WRAPPER
  * Standardized across the ERP using the centralized /src/lib/exportEngine.ts
  */
 
@@ -67,7 +67,7 @@ export const exportToPDF = ({
  */
 export const downloadPDF = (
   blobUrl: URL | string | Blob | MediaSource,
-  filename: string = 'SN_ENTERPRISES_Report.pdf'
+  filename: string = 'SN_ENTERPRISE_Report.pdf'
 ) => {
   const url = typeof blobUrl === 'string' ? blobUrl : (blobUrl as any).toString();
   const link = document.createElement('a');

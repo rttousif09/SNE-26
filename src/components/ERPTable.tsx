@@ -725,7 +725,7 @@ export function ERPTable<T extends Record<string, any>>({
                     <div>
                       <h3 className="font-extrabold text-slate-800 text-[12px] uppercase tracking-wide">No Records Found</h3>
                       <p className="text-[10px] text-gray-400 mt-1">
-                        There are no rows matches your current filters or query params inside SN Enterprises ERP.
+                        There are no rows matches your current filters or query params inside SN Enterprise ERP.
                       </p>
                     </div>
                     {onAddNew && (

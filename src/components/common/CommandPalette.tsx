@@ -426,7 +426,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </span>
           </div>
           <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono text-[10px]">
-            SN ENTERPRISES ERP
+            SN ENTERPRISE ERP
           </span>
         </div>
       </div>

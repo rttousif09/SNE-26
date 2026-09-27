@@ -10,6 +10,8 @@ import { PDFExportButton } from '../components/PDFExportButton';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { Upload } from 'lucide-react';
 import { ERPTable, ERPColumn, ERPRowAction } from '../components/ERPTable';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
+import { SAPTabs } from '../components/common/SAPTabs';
 
 export interface WorkersProps {
   initialWorkerId?: string;
@@ -639,49 +641,37 @@ export const Workers: React.FC<WorkersProps> = ({ initialWorkerId, initialView, 
         </div>
       )}
 
-      {/* SAP / Excel style main navigation tabs */}
-      <div className="flex items-center space-x-1 border-b border-[#8c9ba8] bg-[#eef2f6] p-1 pb-0 select-none print:hidden">
-        <button
-          onClick={() => setActiveView('directory')}
-          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'directory' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
-          id="tab-workers-directory"
-        >
-          <span>📊 Workers Directory Directory</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveView('ledger');
-            if (workers.length > 0 && !selectedWorkerId) {
-              setSelectedWorkerId(workers[0].id);
-            }
-          }}
-          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'ledger' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
-          id="tab-workers-ledger"
-        >
-          <span>🔍 Worker deep Inquiry Ledger (Live Excel Account)</span>
-        </button>
-        <button
-          onClick={() => setActiveView('planning')}
-          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'planning' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
-          id="tab-workers-planning"
-        >
-          <span>📋 Labour Planning</span>
-        </button>
-        <button
-          onClick={() => setActiveView('transfers')}
-          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'transfers' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
-          id="tab-workers-transfers"
-        >
-          <span>🔄 Transfer History</span>
-        </button>
-        <button
-          onClick={() => setActiveView('attendance')}
-          className={`px-4 py-1 text-xs font-bold rounded-t-sm border border-b-transparent transition-all flex items-center space-x-1.5 ${activeView === 'attendance' ? 'bg-white border-[#8c9ba8] text-[#0056b3]' : 'bg-[#d9e4f1] text-gray-600 hover:bg-white border-transparent cursor-pointer'}`}
-          id="tab-workers-attendance"
-        >
-          <span>📅 Worker Attendance Log</span>
-        </button>
-      </div>
+      {/* SAP Screen Header: WRK01 */}
+      <SAPTransactionHeader
+        tcode="WRK01"
+        title="Worker Master Directory"
+        subtitle="Workforce Registration, Deep Inquiry Ledger & Labour Allocations"
+        onNew={!isReadOnly ? handleAddNewWorkerClick : undefined}
+        onRefresh={() => window.location.reload()}
+        onPrint={handlePrint}
+        canSave={false}
+        canEdit={false}
+        canDelete={false}
+      />
+
+      {/* SAP Horizontal Navigation Tabs */}
+      <SAPTabs
+        tabs={[
+          { id: 'directory', label: 'Workers Directory', count: workers.length },
+          { id: 'ledger', label: 'Worker Inquiry Ledger' },
+          { id: 'planning', label: 'Labour Planning' },
+          { id: 'transfers', label: 'Transfer History' },
+          { id: 'attendance', label: 'Attendance Log' }
+        ]}
+        activeTab={activeView}
+        onChange={(tab) => {
+          setActiveView(tab as any);
+          if (tab === 'ledger' && workers.length > 0 && !selectedWorkerId) {
+            setSelectedWorkerId(workers[0].id);
+          }
+        }}
+        className="mb-2 print:hidden"
+      />
 
       {activeView === 'directory' ? (
         <div className="flex-1 overflow-y-auto pt-2 print:hidden">

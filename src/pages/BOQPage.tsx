@@ -12,6 +12,8 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
 import { BOQItemFloorManager } from '../components/BOQItemFloorManager';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
+import { SAPTabs } from '../components/common/SAPTabs';
 
 export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: boolean) => void }) {
   const { 
@@ -440,7 +442,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
   const handleExportPDF = (boq: BOQ) => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text(`SN ENTERPRISES Construction ERP`, 14, 15);
+    doc.text(`SN ENTERPRISE Construction ERP`, 14, 15);
     doc.setFontSize(12);
     doc.text(`Bill of Quantities (BOQ) - ${boq.boqNo}`, 14, 22);
     const pObj = projects.find(p => p.id === boq.projectId);
@@ -551,82 +553,47 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
   }, [boqs, selectedProjectId]);
 
   return (
-    <div className="flex-1 p-4 overflow-y-auto bg-slate-50 min-h-screen">
-      
-      {/* Header and Project Filter Ribbon */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded shadow-sm border border-slate-200 mb-4 gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-            📊 Bill of Quantities (BOQ) Module
-          </h1>
-          <p className="text-xs text-slate-500">
-            Enterprise Quantity Control, Revisions Tracking, Variations register, Profitability analysis & Approvals workflow.
-          </p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-slate-600">Active Project:</span>
-            <SAPSelect
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="bg-slate-100 border border-slate-300 rounded text-xs px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
-            >
-              <option value="">-- All Active Projects --</option>
-              {activeProjects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </SAPSelect>
-          </div>
-
-          <button
-            onClick={handleOpenCreateForm}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+    <div className="flex-1 overflow-y-auto bg-[#F4F6F7] min-h-screen text-[12px] pb-8">
+      {/* SAP Screen Header: BOQ01 */}
+      <SAPTransactionHeader
+        tcode="BOQ01"
+        title="BOQ Master & Quantity Schedule"
+        subtitle="Enterprise Quantity Control, Revisions Tracking, Variations & Floor Abstract Allocations"
+        onNew={handleOpenCreateForm}
+        onRefresh={() => window.location.reload()}
+        canSave={false}
+        canEdit={false}
+        canDelete={false}
+      >
+        <div className="flex items-center space-x-1.5">
+          <span className="text-[11px] font-semibold text-[#5F6B75]">Project:</span>
+          <SAPSelect
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="bg-white border border-[#B8C3CC] rounded-[2px] text-[11px] px-2 py-0.5 text-[#2F3B45]"
           >
-            <Plus size={14} /> New BOQ Master
-          </button>
+            <option value="">-- All Active Projects --</option>
+            {activeProjects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </SAPSelect>
         </div>
-      </div>
+      </SAPTransactionHeader>
 
       {/* SAP-Style Tabs Navigation Bar */}
-      <div className="flex border-b border-slate-200 mb-4 bg-white rounded shadow-sm p-1 gap-1 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded transition-colors cursor-pointer shrink-0 ${activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}
-        >
-          <BarChart3 size={14} /> Profitability & Stats Dashboard
-        </button>
-        <button
-          onClick={() => setActiveTab('master')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded transition-colors cursor-pointer shrink-0 ${activeTab === 'master' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}
-        >
-          <FileText size={14} /> BOQ Masters Directory ({filteredBOQs.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('executed')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded transition-colors cursor-pointer shrink-0 ${activeTab === 'executed' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}
-        >
-          <ArrowLeftRight size={14} /> BOQ vs Executed Comparison
-        </button>
-        <button
-          onClick={() => setActiveTab('billing')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded transition-colors cursor-pointer shrink-0 ${activeTab === 'billing' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}
-        >
-          <CheckCircle size={14} /> BOQ vs Billed Tracking
-        </button>
-        <button
-          onClick={() => setActiveTab('extra')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded transition-colors cursor-pointer shrink-0 ${activeTab === 'extra' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}
-        >
-          <TrendingUp size={14} /> Extra Item / Variations Register
-        </button>
-        <button
-          onClick={() => setActiveTab('audit')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded transition-colors cursor-pointer shrink-0 ${activeTab === 'audit' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}
-        >
-          <Clock size={14} /> Audit & Revisions Trail
-        </button>
-      </div>
+      <SAPTabs
+        tabs={[
+          { id: 'dashboard', label: 'Profitability & Stats' },
+          { id: 'master', label: 'BOQ Masters Directory', count: filteredBOQs.length },
+          { id: 'executed', label: 'BOQ vs Executed' },
+          { id: 'billing', label: 'BOQ vs Billed Tracking' },
+          { id: 'extra', label: 'Variations Register' },
+          { id: 'audit', label: 'Audit & Revisions Trail' }
+        ]}
+        activeTab={activeTab}
+        onChange={(tab) => setActiveTab(tab as any)}
+        className="mb-2"
+      />
 
       {/* Tab 1: Dashboard */}
       {activeTab === 'dashboard' && (

@@ -212,7 +212,7 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
                 </p>
               </div>
               <span className="bg-[#1e293b] text-amber-400 px-3 py-1 text-xs font-mono font-bold border rounded border-gray-800">
-                Ledger Out Balance: ₹{ledgerData.summary?.outstandingBalance.toLocaleString('en-IN')}
+                Ledger Out Balance: ₹{Number(ledgerData.summary?.outstandingBalance || 0).toLocaleString('en-IN')}
               </span>
             </div>
 
@@ -246,17 +246,17 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
                         <td className="p-2 text-gray-800">{entry.particulars}</td>
                         <td className="p-2 font-semibold text-gray-600">{entry.projectName}</td>
                         <td className="p-2 font-mono text-right text-emerald-600 font-bold">
-                          {entry.debit > 0 ? `₹${entry.debit.toLocaleString('en-IN')}` : '-'}
+                          {(Number(entry.debit) || 0) > 0 ? `₹${(Number(entry.debit) || 0).toLocaleString('en-IN')}` : '-'}
                         </td>
                         <td className="p-2 font-mono text-right text-blue-600 font-bold">
-                          {entry.credit > 0 ? `₹${entry.credit.toLocaleString('en-IN')}` : '-'}
+                          {(Number(entry.credit) || 0) > 0 ? `₹${(Number(entry.credit) || 0).toLocaleString('en-IN')}` : '-'}
                         </td>
                         <td
                           className={`p-2 font-mono text-right font-black ${
-                            entry.balance > 0 ? 'text-amber-700' : 'text-emerald-700'
+                            (Number(entry.balance) || 0) > 0 ? 'text-amber-700' : 'text-emerald-700'
                           }`}
                         >
-                          ₹{entry.balance.toLocaleString('en-IN')}
+                          ₹{(Number(entry.balance) || 0).toLocaleString('en-IN')}
                         </td>
                       </tr>
                     ))
@@ -273,31 +273,31 @@ export const LedgerComponent: React.FC<LedgerComponentProps> = ({
               <div className="flex justify-between">
                 <span className="text-gray-500">Gross Work Certified:</span>
                 <span className="font-bold text-blue-600">
-                  ₹{ledgerData.summary.totalBills.toLocaleString('en-IN')}
+                  ₹{Number(ledgerData.summary?.totalBills || 0).toLocaleString('en-IN')}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Payments Disbursed:</span>
                 <span className="font-bold text-emerald-600">
-                  ₹{ledgerData.summary.totalPayments.toLocaleString('en-IN')}
+                  ₹{Number(ledgerData.summary?.totalPayments || 0).toLocaleString('en-IN')}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Retention Retained:</span>
                 <span className="font-bold text-amber-600">
-                  ₹{ledgerData.summary.totalRetention.toLocaleString('en-IN')}
+                  ₹{Number(ledgerData.summary?.totalRetention || 0).toLocaleString('en-IN')}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">TDS Withheld:</span>
                 <span className="font-bold text-rose-600">
-                  ₹{ledgerData.summary.totalTds.toLocaleString('en-IN')}
+                  ₹{Number(ledgerData.summary?.totalTds || 0).toLocaleString('en-IN')}
                 </span>
               </div>
               <div className="border-t pt-2 flex justify-between font-bold text-sm">
                 <span>Net Outstanding:</span>
                 <span className="text-amber-600">
-                  ₹{ledgerData.summary.outstandingBalance.toLocaleString('en-IN')}
+                  ₹{Number(ledgerData.summary?.outstandingBalance || 0).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>

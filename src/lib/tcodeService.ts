@@ -1,4 +1,4 @@
-// SAP Transaction Code Service for SN ENTERPRISES ERP
+// SAP Transaction Code Service for SN ENTERPRISE ERP
 
 export interface TCode {
   code: string;
@@ -37,7 +37,9 @@ export const DEFAULT_TCODES: TCode[] = [
   { code: "PRJ06", name: "Archive Project", description: "Transfer historical projects to financial archives", module: "Project", tab: "financial-year-archive", isActive: true, requiredRoles: ["admin"] },
 
   // Worker
-  { code: "WRK01", name: "Add Worker", description: "Onboard new worker details, personal records, and daily rates", module: "Worker", tab: "workers", props: { initialView: "add" }, isActive: true },
+  { code: "WFT01", name: "Worker Financial Transactions", description: "Worker financial transactions, advances, deductions and ledgers", module: "Worker", tab: "advance", isActive: true },
+  { code: "PAY01", name: "Worker Payment", description: "Worker wage payouts and monthly settlements", module: "Worker", tab: "worker-payment", isActive: true },
+  { code: "WRK01", name: "Worker Master", description: "Onboard new worker details, personal records, and daily rates", module: "Worker", tab: "workers", props: { initialView: "add" }, isActive: true },
   { code: "WRK02", name: "Edit Worker", description: "Modify active worker profiles, designations, or wage configuration", module: "Worker", tab: "workers", props: { initialView: "list", action: "edit" }, isActive: true, requiredRoles: ["admin", "staff"] },
   { code: "WRK03", name: "Worker Ledger", description: "Check advance recoveries, outstanding dues, and payment registers", module: "Worker", tab: "worker-ledger", isActive: true },
   { code: "WRK04", name: "Worker Attendance", description: "Log daily site attendance via the Daily Labour Report (DLR)", module: "Worker", tab: "dlr", isActive: true },
@@ -56,6 +58,7 @@ export const DEFAULT_TCODES: TCode[] = [
   { code: "FAB05", name: "Export Floor Abstract", description: "Download spreadsheet data or certified documents", module: "Floor Abstract", tab: "floor-abstracts", props: { initialAction: "export" }, isActive: true },
 
   // Billing
+  { code: "BIL01", name: "RA Billing", description: "Generate project bills, RA bills, and certify measurements", module: "Billing", tab: "billing", props: { initialAction: "create" }, isActive: true },
   { code: "BILL01", name: "Create Bill", description: "Generate project bills, RA bills, and certify measurements", module: "Billing", tab: "billing", props: { initialAction: "create" }, isActive: true },
   { code: "BILL02", name: "Edit Bill", description: "Update calculations, tax rates, TDS, and retentions on drafted bills", module: "Billing", tab: "billing", props: { initialAction: "edit" }, isActive: true, requiredRoles: ["admin"] },
   { code: "BILL03", name: "Bill Register", description: "Consolidated directory of all submitted invoices and progress bills", module: "Billing", tab: "billing", props: { initialAction: "list" }, isActive: true },

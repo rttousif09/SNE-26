@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * SN ENTERPRISES ERP - CENTRALIZED PROFESSIONAL EXPORT & PRINT ENGINE
+ * SN ENTERPRISE ERP - CENTRALIZED PROFESSIONAL EXPORT & PRINT ENGINE
  * ============================================================================
  * Single, robust, mathematically precise export engine for:
  *  - PDF (Vector Logo, Indian Number/Currency, Dynamic Layout, Autotable, Multi-page)
@@ -233,7 +233,7 @@ export const formatReportDate = (dateVal: any): string => {
 
 /**
  * Standardize File Naming
- * Pattern: SN_ENTERPRISES_<ReportTitle>_<Project>_<Date>.<ext>
+ * Pattern: SN_ENTERPRISE_<ReportTitle>_<Project>_<Date>.<ext>
  */
 export const generateReportFilename = (
   title: string,
@@ -248,7 +248,7 @@ export const generateReportFilename = (
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   
-  return `SN_ENTERPRISES_${cleanTitle}${cleanProject}_${dateStr}.${extension}`;
+  return `SN_ENTERPRISE_${cleanTitle}${cleanProject}_${dateStr}.${extension}`;
 };
 
 // ----------------------------------------------------------------------------
@@ -628,12 +628,12 @@ export const exportToPDFEnterprise = (options: EnterpriseReportDefinition): stri
   });
 
   const company = {
-    name: options.companyDetails?.name || 'SN ENTERPRISES',
+    name: options.companyDetails?.name || 'SN ENTERPRISE',
     tagline: options.companyDetails?.tagline || 'Construction Billing & Site Management ERP',
     gstin: options.companyDetails?.gstin || '07AAAAA1111A1Z1',
     address: options.companyDetails?.address || '123, Industrial Area, Phase-1, New Delhi - 110020',
     phone: options.companyDetails?.phone || '+91-9876543210',
-    email: options.companyDetails?.email || 'accounts@snenterprises.co.in',
+    email: options.companyDetails?.email || 'accounts@snenterprise.co.in',
   };
 
   // 4. Header & Footer Drawing Function (Overlay on each page)
@@ -716,7 +716,7 @@ export const exportToPDFEnterprise = (options: EnterpriseReportDefinition): stri
     if (options.watermark) {
       const watermarkText = typeof options.watermark === 'string'
         ? options.watermark
-        : 'SN ENTERPRISES CONFIDENTIAL';
+        : 'SN ENTERPRISE CONFIDENTIAL';
       
       doc.saveGraphicsState();
       doc.setTextColor(225, 230, 238);
@@ -980,9 +980,9 @@ export const exportToExcelEnterprise = (
   const sheetRows: any[][] = [];
 
   // 1. Company Header
-  const compName = options.companyDetails?.name || 'SN ENTERPRISES';
+  const compName = options.companyDetails?.name || 'SN ENTERPRISE';
   const gstin = options.companyDetails?.gstin || '07AAAAA1111A1Z1';
-  const email = options.companyDetails?.email || 'accounts@snenterprises.co.in';
+  const email = options.companyDetails?.email || 'accounts@snenterprise.co.in';
   const phone = options.companyDetails?.phone || '+91-9876543210';
   const addr = options.companyDetails?.address || '123, Industrial Area, Phase-1, New Delhi - 110020';
 
@@ -1132,7 +1132,7 @@ export const exportToExcelEnterprise = (
   // --------------------------------------------------------------------------
   if (options.summaryBlocks && options.summaryBlocks.length > 0) {
     const summarySheetRows: any[][] = [
-      ['SN ENTERPRISES - EXECUTIVE SUMMARY STATEMENT'],
+      ['SN ENTERPRISE - EXECUTIVE SUMMARY STATEMENT'],
       ['Report Name', options.title],
       ['Project', options.projectName || 'All'],
       ['Client', options.clientName || 'All'],

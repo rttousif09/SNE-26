@@ -35,6 +35,7 @@ import {
   GitFork
 } from 'lucide-react';
 import { BulkUploadModal } from '../components/BulkUploadModal';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
 import * as XLSX from 'xlsx';
 
 export const ClientPayment = () => {
@@ -412,8 +413,19 @@ export const ClientPayment = () => {
   };
 
   return (
-    <div className="text-[11px] space-y-3 font-sans antialiased">
-      
+    <div className="text-[11px] space-y-2 font-sans antialiased">
+      {/* SAP Screen Header: CPAY01 */}
+      <SAPTransactionHeader
+        tcode="CPAY01"
+        title="Client Payments & Receipts"
+        subtitle="Collections Ledger, Certified Bill Allocation & Accounts Receivable"
+        onRefresh={() => window.location.reload()}
+        onPrint={() => window.print()}
+        canSave={false}
+        canEdit={false}
+        canDelete={false}
+      />
+
       {/* -----------------------------------------------------------------
           A. Unified Tab Selectors (Matching Billing.tsx and other modules)
          ----------------------------------------------------------------- */}

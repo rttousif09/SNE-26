@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { PDFExportButton } from '../components/PDFExportButton';
 import { ERPTable, ERPColumn, ERPRowAction, ERPBulkAction } from '../components/ERPTable';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
 
 export const Projects: React.FC = () => {
   const { user, projects, addProject, updateProject, deleteProject, billings, clientPayments, workerPayments, advances, expensesLedger } = useAppContext();
@@ -349,7 +350,19 @@ export const Projects: React.FC = () => {
   ] : [];
 
   return (
-    <div className="text-[11px]">
+    <div className="text-[11px] space-y-2">
+      {/* SAP Screen Header: PRJ01 */}
+      <SAPTransactionHeader
+        tcode="PRJ01"
+        title="Project Management Master"
+        subtitle="Site Work Order Registrations, Scope of Work, Towers & Budget Tracking"
+        onNew={!isReadOnly ? (isAdding ? handleCancel : () => setIsAdding(true)) : undefined}
+        onRefresh={() => window.location.reload()}
+        canSave={false}
+        canEdit={false}
+        canDelete={false}
+      />
+
       <div className="flex items-center justify-between mb-2 bg-[#eef2f6] border border-[#8c9ba8] p-1">
         <div className="flex items-center space-x-2">
           {!isReadOnly ? (

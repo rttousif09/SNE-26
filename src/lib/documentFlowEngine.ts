@@ -1374,7 +1374,7 @@ export function exportDocumentFlowToPDF(
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text('SN ENTERPRISES - SAP BUSINESS DOCUMENT FLOW AUDIT REPORT', 30, 30);
+  doc.text('SN ENTERPRISE - SAP BUSINESS DOCUMENT FLOW AUDIT REPORT', 30, 30);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
@@ -1404,7 +1404,7 @@ export function exportDocumentFlowToPDF(
     n.title,
     n.projectName || 'N/A',
     n.date,
-    n.amount ? `₹${n.amount.toLocaleString('en-IN')}` : (n.quantity ? `${n.quantity} ${n.unit || ''}` : '-'),
+    n.amount !== undefined && n.amount !== null ? `₹${(Number(n.amount) || 0).toLocaleString('en-IN')}` : (n.quantity ? `${n.quantity} ${n.unit || ''}` : '-'),
     n.status,
     n.audit.createdBy || 'System',
     n.audit.approvedBy || '-'
@@ -1436,7 +1436,7 @@ export function exportDocumentFlowToPDF(
     doc.setPage(i);
     doc.setFontSize(7.5);
     doc.setTextColor(130, 130, 130);
-    doc.text(`SN ENTERPRISES SAP DOCUMENT FLOW ENGINE | Page ${i} of ${pageCount} | Confidential ERP Audit Record`, 30, 580);
+    doc.text(`SN ENTERPRISE SAP DOCUMENT FLOW ENGINE | Page ${i} of ${pageCount} | Confidential ERP Audit Record`, 30, 580);
   }
 
   doc.save(`SAP_Doc_Flow_${flowName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);

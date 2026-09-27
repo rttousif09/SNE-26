@@ -4311,7 +4311,7 @@ async function startServer() {
       
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: `You are an AI ERP Manager for SN ENTERPRISES. Analyze the following site activity data for the day and generate a concise management site summary. Be professional and objective. Focus on metrics. Calculate the cash outflows. For health status, use 'Green', 'Yellow', or 'Red'. Data:\n\n${rawData}`,
+        contents: `You are an AI ERP Manager for SN ENTERPRISE. Analyze the following site activity data for the day and generate a concise management site summary. Be professional and objective. Focus on metrics. Calculate the cash outflows. For health status, use 'Green', 'Yellow', or 'Red'. Data:\n\n${rawData}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {

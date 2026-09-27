@@ -868,7 +868,7 @@ export const DMSPage: React.FC = () => {
               <tbody>
                 <tr className="border-b border-gray-200 hover:bg-emerald-50/20">
                   <td className="p-1 border-r border-gray-300 bg-gray-50 text-center text-[10px] font-bold text-gray-400">1</td>
-                  <td className="p-1.5 border-r border-gray-200 font-bold text-teal-800 bg-teal-50/10">SN Enterprises Construction ERP</td>
+                  <td className="p-1.5 border-r border-gray-200 font-bold text-teal-800 bg-teal-50/10">SN Enterprise Construction ERP</td>
                   <td className="p-1.5 border-r border-gray-200">Document Log Code</td>
                   <td className="p-1.5 border-r border-gray-200 font-medium text-blue-800">{doc.id}</td>
                   <td className="p-1.5 border-r border-gray-200 text-gray-500">Auto-Generated UUID</td>
@@ -928,7 +928,7 @@ export const DMSPage: React.FC = () => {
               <strong>To Whomsoever It May Concern,</strong>
             </p>
             <p className="mb-4 text-justify">
-              This simulated document serves as the visual mock representation of the Microsoft Word or rich text file uploaded as <strong>{doc.attachmentName}</strong>. This record is linked to <strong>{doc.category} ({doc.docType})</strong> in the SN ENTERPRISES Enterprise Resource Planning (ERP) database system.
+              This simulated document serves as the visual mock representation of the Microsoft Word or rich text file uploaded as <strong>{doc.attachmentName}</strong>. This record is linked to <strong>{doc.category} ({doc.docType})</strong> in the SN ENTERPRISE Enterprise Resource Planning (ERP) database system.
             </p>
             <p className="mb-4 text-justify">
               <strong>Classification Details:</strong><br/>

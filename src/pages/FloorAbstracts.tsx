@@ -281,7 +281,7 @@ export function FloorAbstracts() {
 
     const project = projects.find(p => p.id === projectId);
     const projectName = project ? project.name.toUpperCase() : 'UNKNOWN PROJECT';
-    const clientName = project ? (project.clientName || 'SN ENTERPRISES').toUpperCase() : 'SN ENTERPRISES';
+    const clientName = project ? (project.clientName || 'SN ENTERPRISE').toUpperCase() : 'SN ENTERPRISE';
     const dateStr = new Date().toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
@@ -364,7 +364,7 @@ export function FloorAbstracts() {
       pdfDoc.setFont("helvetica", "bold");
       pdfDoc.setFontSize(22);
       pdfDoc.setTextColor(0, 47, 108); // deep blue
-      pdfDoc.text("SN ENTERPRISES", 16, 22);
+      pdfDoc.text("SN ENTERPRISE", 16, 22);
       
       pdfDoc.setFont("helvetica", "normal");
       pdfDoc.setFontSize(8);
@@ -409,7 +409,7 @@ export function FloorAbstracts() {
       pdfDoc.setFontSize(8);
       pdfDoc.setTextColor(120, 120, 120);
       pdfDoc.text(`Page ${pageNum}`, pdfWidth - 25, 196);
-      pdfDoc.text("SN ENTERPRISES - SITE ABSTRACTS REPORT REGISTER", 14, 196);
+      pdfDoc.text("SN ENTERPRISE - SITE ABSTRACTS REPORT REGISTER", 14, 196);
     };
 
     // Draw separate tables for each level
@@ -682,7 +682,7 @@ export function FloorAbstracts() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(120, 120, 120);
-      doc.text("Director, SN enterprises", 228, sigY + 9);
+      doc.text("Director, SN Enterprise", 228, sigY + 9);
     }
 
     doc.save(`Floor_Abstract_${projectName}_${new Date().toISOString().split('T')[0]}.pdf`);

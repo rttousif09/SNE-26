@@ -1,5 +1,5 @@
 /**
- * SN ENTERPRISES ERP - REPORT ENGINE COMPATIBILITY WRAPPER
+ * SN ENTERPRISE ERP - REPORT ENGINE COMPATIBILITY WRAPPER
  * All operations are powered by the centralized /src/lib/exportEngine.ts
  */
 

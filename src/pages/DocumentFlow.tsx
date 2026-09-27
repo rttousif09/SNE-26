@@ -140,7 +140,7 @@ export const DocumentFlowPage: React.FC<DocumentFlowPageProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="font-bold text-[13px] tracking-wide uppercase">
-                SN ENTERPRISES — SAP Document Flow & Business Flow Workbench
+                SN ENTERPRISE — SAP Document Flow & Business Flow Workbench
               </h1>
               <span className="font-mono text-[9px] bg-amber-400 text-slate-900 font-extrabold px-1.5 py-0.2 rounded-[2px] shadow-2xs">
                 T-Code: DF01 / DOCFLOW
@@ -283,7 +283,7 @@ export const DocumentFlowPage: React.FC<DocumentFlowPageProps> = ({
             <div>
               <span className="font-bold text-slate-800 uppercase tracking-tight">Document Directory</span>
               <span className="text-slate-500 block text-[8px] font-mono">
-                {summaryStats.count} records | Total: ₹{summaryStats.totalAmount.toLocaleString('en-IN')}
+                {summaryStats.count} records | Total: ₹{(Number(summaryStats.totalAmount) || 0).toLocaleString('en-IN')}
               </span>
             </div>
             <span className="bg-blue-100 text-[#0056b3] text-[9px] font-mono font-bold px-1.5 py-0.5 rounded">
@@ -326,7 +326,7 @@ export const DocumentFlowPage: React.FC<DocumentFlowPageProps> = ({
                     <div className="flex items-center justify-between mt-1 text-[8px] text-slate-500">
                       <span className="truncate max-w-[120px]">{node.projectName || node.category}</span>
                       <span className="font-mono font-bold text-slate-700">
-                        {node.amount ? `₹${node.amount.toLocaleString('en-IN')}` : (node.quantity ? `${node.quantity} ${node.unit || ''}` : node.date)}
+                        {node.amount !== undefined && node.amount !== null ? `₹${(Number(node.amount) || 0).toLocaleString('en-IN')}` : (node.quantity ? `${node.quantity} ${node.unit || ''}` : node.date)}
                       </span>
                     </div>
                   </div>

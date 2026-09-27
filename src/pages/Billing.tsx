@@ -14,6 +14,8 @@ import { MeasurementItem, Billing as BillingType } from '../types';
 import { RelatedDocumentsSection } from '../components/RelatedDocumentsSection';
 import { GitFork } from 'lucide-react';
 import { BOQAllocationSelector } from '../components/BOQAllocationSelector';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
+import { SAPTabs } from '../components/common/SAPTabs';
 import {
   ResponsiveContainer,
   LineChart,
@@ -1355,7 +1357,19 @@ export const Billing: React.FC = () => {
   };
 
   return (
-    <div className="text-[11px]">
+    <div className="text-[11px] space-y-2">
+      {/* SAP Screen Header: BIL01 */}
+      <SAPTransactionHeader
+        tcode="BIL01"
+        title="RA Billing & Deductions Management"
+        subtitle="Certified Measurement Sheets, Retention, TDS, GST & Tax Invoices"
+        onRefresh={() => window.location.reload()}
+        onPrint={() => window.print()}
+        canSave={false}
+        canEdit={false}
+        canDelete={false}
+      />
+
       {/* Tab Selectors */}
       <div className="flex flex-wrap border-b border-[#8c9ba8] gap-1 mb-3 print:hidden bg-[#eef2f6]/50 p-1 rounded-t">
         <button

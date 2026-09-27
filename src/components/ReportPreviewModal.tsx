@@ -105,7 +105,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
   const [showFooter, setShowFooter] = useState<boolean>(true);
   const [showPageNumbers, setShowPageNumbers] = useState<boolean>(true);
   const [useWatermark, setUseWatermark] = useState<boolean>(false);
-  const [watermarkText, setWatermarkText] = useState<string>('SN ENTERPRISES CONFIDENTIAL');
+  const [watermarkText, setWatermarkText] = useState<string>('SN ENTERPRISE CONFIDENTIAL');
 
   // Preview Blob State
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -253,7 +253,7 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-black text-slate-100 text-xs tracking-wider uppercase">
-                  SN ENTERPRISES &bull; REPORT EXPORT ENGINE
+                  SN ENTERPRISE &bull; REPORT EXPORT ENGINE
                 </h3>
                 {tcode && (
                   <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded">

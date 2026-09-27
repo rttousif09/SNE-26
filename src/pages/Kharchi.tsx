@@ -29,6 +29,7 @@ import {
 import { ConfirmModal } from '../components/ConfirmModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { exportToExcelEnterprise } from '../lib/exportEngine';
+import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
 
 export const Kharchi: React.FC = () => {
   const { user, kharchis, projects, workers, kharchiApprovals, addKharchi, updateKharchi, deleteKharchi, addKharchiApproval } = useAppContext();
@@ -234,7 +235,7 @@ export const Kharchi: React.FC = () => {
       alert("Amount is 0. Cannot send to approval.");
       return;
     }
-    if (confirm(`Send Weekly Kharchi ₹ ${grandTotal.toLocaleString('en-IN')} for ${formatMonthName(selectedMonth)} to Director for approval?`)) {
+    if (confirm(`Send Weekly Kharchi ₹ ${(Number(grandTotal) || 0).toLocaleString('en-IN')} for ${formatMonthName(selectedMonth)} to Director for approval?`)) {
       addKharchiApproval({
         projectId: selectedProject,
         month: selectedMonth,
@@ -309,7 +310,7 @@ export const Kharchi: React.FC = () => {
             {/* Enterprise Letterhead */}
             <tr>
               <th colSpan={uniqueDates.length + 4} className="text-center text-2xl font-black bg-white border-none py-3 pb-1 uppercase tracking-wider text-slate-800">
-                SN ENTERPRISES
+                SN ENTERPRISE
               </th>
             </tr>
             <tr>
@@ -327,7 +328,7 @@ export const Kharchi: React.FC = () => {
                 Month: {formatMonthName(selectedMonth)}
               </th>
               <th colSpan={Math.max(1, uniqueDates.length)} className="text-right font-bold py-2 px-3 border border-[#8c9ba8] text-[12px] text-emerald-700">
-                Total Disbursed: ₹ {grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Total Disbursed: ₹ {(Number(grandTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </th>
             </tr>
 
@@ -369,13 +370,13 @@ export const Kharchi: React.FC = () => {
                 </td>
                 {row.amountsByDate.map((amt, dateIdx) => (
                   <td key={dateIdx} className="border border-[#8c9ba8] px-3 py-1.5 text-right font-mono text-slate-700">
-                    {amt > 0 ? amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (
+                    {(Number(amt) || 0) > 0 ? (Number(amt) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (
                       <span className="text-gray-300">-</span>
                     )}
                   </td>
                 ))}
                 <td className="border border-[#8c9ba8] px-3 py-1.5 text-right font-bold font-mono text-[#0056b3] bg-blue-50/40">
-                  {row.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {(Number(row.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             ))}
@@ -405,11 +406,11 @@ export const Kharchi: React.FC = () => {
                 </td>
                 {dateTotals.map((tot, idx) => (
                   <td key={idx} className="border border-[#8c9ba8] px-3 py-2 text-right font-mono font-bold text-slate-800">
-                    {tot > 0 ? tot.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                    {(Number(tot) || 0) > 0 ? (Number(tot) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                   </td>
                 ))}
                 <td className="border border-[#8c9ba8] px-3 py-2 text-right font-black font-mono text-[var(--color-sap-blue-val)] bg-[#c5d7ea] text-[13px]">
-                  ₹ {grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₹ {(Number(grandTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             )}
@@ -420,7 +421,7 @@ export const Kharchi: React.FC = () => {
         <div className="print-signature-section mt-8 flex justify-between items-end px-4">
           <div className="text-left text-[10px] text-gray-500">
             <div>Printed on: {new Date().toLocaleString('en-IN')}</div>
-            <div>SN Enterprises ERP System - Module: PR04 Weekly Kharchi</div>
+            <div>SN Enterprise ERP System - Module: PR04 Weekly Kharchi</div>
           </div>
           <div className="print-signature-box border-t-2 border-slate-700 pt-2 text-center min-w-[200px]">
             <div className="print-signature-title font-bold text-slate-800 text-[11px]">Approved by Director / Site Incharge</div>
@@ -432,7 +433,19 @@ export const Kharchi: React.FC = () => {
   );
 
   return (
-    <div className="text-[11px] h-full flex flex-col overflow-hidden pb-1 print:bg-white print:overflow-visible">
+    <div className="text-[11px] h-full flex flex-col overflow-hidden pb-1 print:bg-white print:overflow-visible space-y-2">
+      {/* SAP Screen Header: KHAR01 */}
+      <SAPTransactionHeader
+        tcode="KHAR01"
+        title="Weekly Kharchi Management"
+        subtitle="Worker Pocket Money, Daily Disbursals & Bi-Weekly Payroll Settlements"
+        onRefresh={() => window.location.reload()}
+        onPrint={() => window.print()}
+        canSave={false}
+        canEdit={false}
+        canDelete={false}
+      />
+
       {/* Top Filter and Command Bar */}
       <div className="sap-panel p-2 mb-2 flex flex-wrap items-center justify-between gap-2 print:hidden shrink-0 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
@@ -613,7 +626,7 @@ export const Kharchi: React.FC = () => {
             <div>
               <div className="text-[10px] text-gray-500 uppercase font-bold">Total Kharchi</div>
               <div className="text-[14px] font-black text-[#0056b3]">
-                ₹ {grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹ {(Number(grandTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           </div>
@@ -649,7 +662,7 @@ export const Kharchi: React.FC = () => {
             <div>
               <div className="text-[10px] text-gray-500 uppercase font-bold">Avg / Worker</div>
               <div className="text-[14px] font-black text-amber-700">
-                ₹ {pivotRows.length > 0 ? Math.round(grandTotal / pivotRows.length).toLocaleString('en-IN') : '0'}
+                ₹ {pivotRows.length > 0 ? Math.round((Number(grandTotal) || 0) / pivotRows.length).toLocaleString('en-IN') : '0'}
               </div>
             </div>
           </div>
@@ -802,7 +815,7 @@ export const Kharchi: React.FC = () => {
                           </span>
                         </td>
                         <td className="border border-[#8c9ba8] px-3 py-1.5 text-right font-mono font-bold text-[#0056b3]">
-                          ₹ {kharchi.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₹ {(Number(kharchi.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         {!isReadOnly && (
                           <td className="border border-[#8c9ba8] px-2 py-1.5 text-center">
@@ -843,7 +856,7 @@ export const Kharchi: React.FC = () => {
                         Total Amount ({filteredCurrentMonthKharchis.length} Records):
                       </td>
                       <td className="border border-[#8c9ba8] px-3 py-2 text-right font-black font-mono text-[#0056b3] text-[12px]">
-                        ₹ {filteredCurrentMonthKharchis.reduce((s, k) => s + k.amount, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹ {filteredCurrentMonthKharchis.reduce((s, k) => s + (Number(k.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       {!isReadOnly && <td className="border border-[#8c9ba8]"></td>}
                     </tr>
@@ -870,7 +883,7 @@ export const Kharchi: React.FC = () => {
               <div className="flex items-center space-x-4">
                 <div>
                   <div className="font-extrabold text-[14px] text-[#0056b3] tracking-wide flex items-center space-x-2">
-                    <span>SN ENTERPRISES — WEEKLY KHARCHI FULL SCREEN REPORT</span>
+                    <span>SN ENTERPRISE — WEEKLY KHARCHI FULL SCREEN REPORT</span>
                     <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded">
                       FULL SCREEN
                     </span>
