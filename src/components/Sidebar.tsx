@@ -110,10 +110,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       key: 'billing',
-      label: 'Billing',
+      label: 'Billing & Tax',
       icon: <Receipt size={14} className="text-[#5F6B75]" />,
       items: [
-        { id: 'billing', label: 'RA Billing Management', tcode: 'BIL01' }
+        { id: 'billing', label: 'RA Billing Management', tcode: 'BIL01' },
+        { id: 'gst-register', label: 'GST Payment & Filing Register', tcode: 'GST01' }
       ]
     },
     {

@@ -38,6 +38,7 @@ import { DMSPage } from './pages/DMSPage';
 import { TCodeMaster } from './pages/TCodeMaster';
 import { AnalyticsReports } from './pages/analytics';
 import { DocumentFlowPage } from './pages/DocumentFlow';
+import { GSTRegister } from './pages/GSTRegister';
 import { DocumentFlowModal } from './components/DocumentFlowModal';
 import { CommandPalette } from './components/common/CommandPalette';
 import { AlertCenterModal } from './components/common/AlertCenterModal';
@@ -178,6 +179,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'dms': return 'DMS Document Center';
       case 'boqs': return 'BOQ Management';
       case 'billing': return 'Billing Management';
+      case 'gst-register': return 'GST Payment & Filing Register';
       case 'client-payment': return 'Client Payment';
       case 'kharchi': return 'Kharchi';
       case 'advance': return 'Advance';
@@ -448,6 +450,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'workers': return <Workers key={key} initialWorkerId={props.initialWorkerId} initialView={props.initialView} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
       case 'boqs': return <BOQPage key={key} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
       case 'billing': return <Billing key={key} />;
+      case 'gst-register': return <GSTRegister key={key} />;
       case 'client-payment': return <ClientPayment key={key} />;
       case 'kharchi': return <Kharchi key={key} />;
       case 'advance': return <Advance key={key} />;
@@ -524,6 +527,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         return ['Document System', 'SAP Document Flow & Traceability (DF01)'];
       case 'billing':
         return ['Billing & Collections', 'Billing Management'];
+      case 'gst-register':
+        return ['Billing & Collections', 'GST Payment & Filing Register'];
       case 'client-payment':
         return ['Billing & Collections', 'Client Payment'];
       case 'kharchi':

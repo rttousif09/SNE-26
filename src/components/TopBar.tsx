@@ -46,6 +46,7 @@ const TCODE_MAPPING: Record<string, string> = {
   'ADV01': 'advance',
   'BIL01': 'billing',
   'BILL01': 'billing',
+  'GST01': 'gst-register',
   'CPAY01': 'client-payment',
   'BOQ01': 'boqs',
   'PRJ01': 'projects',
@@ -93,6 +94,7 @@ export function getTabTCodeDisplay(tab: string): { tcode: string; title: string 
     case 'worker-ledger': return { tcode: 'WKL01', title: 'Worker Ledger & Recovery' };
     case 'kharchi': return { tcode: 'KHAR01', title: 'Weekly Kharchi (Pocket Money)' };
     case 'billing': return { tcode: 'BIL01', title: 'RA Billing' };
+    case 'gst-register': return { tcode: 'GST01', title: 'GST Payment & Filing' };
     case 'client-payment': return { tcode: 'CPAY01', title: 'Client Payments & Receipts' };
     case 'boqs': return { tcode: 'BOQ01', title: 'BOQ Master' };
     case 'projects': return { tcode: 'PRJ01', title: 'Project Management' };

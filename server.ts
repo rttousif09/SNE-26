@@ -1182,6 +1182,137 @@ function initDbSchema() {
   } catch (err) {
     console.error("Failed to seed subcontractor numbering settings:", err);
   }
+
+  // ============================================================================
+  // GST LIABILITY & PAYMENT TRACKING TABLES (Idempotent Migration)
+  // ============================================================================
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS gst_liabilities (
+        id TEXT PRIMARY KEY,
+        billingId TEXT,
+        projectId TEXT NOT NULL,
+        clientName TEXT,
+        billNo TEXT,
+        period TEXT NOT NULL,
+        financialYear TEXT NOT NULL,
+        taxableAmount REAL DEFAULT 0,
+        gstAmount REAL NOT NULL DEFAULT 0,
+        dueDate TEXT,
+        filingStatus TEXT DEFAULT 'Not Filed',
+        returnType TEXT DEFAULT 'GSTR-3B',
+        filingDate TEXT,
+        filingArn TEXT,
+        filingChallanDoc TEXT,
+        notes TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS gst_payments (
+        id TEXT PRIMARY KEY,
+        gstLiabilityId TEXT NOT NULL,
+        paymentAmount REAL NOT NULL,
+        paymentDate TEXT NOT NULL,
+        paidBy TEXT NOT NULL DEFAULT 'SN ENTERPRISE',
+        paymentMode TEXT NOT NULL DEFAULT 'Net Banking',
+        challanNumber TEXT,
+        referenceNumber TEXT,
+        remarks TEXT,
+        attachmentUrl TEXT,
+        attachmentName TEXT,
+        createdBy TEXT DEFAULT 'Admin',
+        status TEXT DEFAULT 'Active',
+        createdAt TEXT,
+        updatedAt TEXT,
+        FOREIGN KEY (gstLiabilityId) REFERENCES gst_liabilities(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS gst_audit_trails (
+        id TEXT PRIMARY KEY,
+        gstLiabilityId TEXT NOT NULL,
+        gstPaymentId TEXT,
+        action TEXT NOT NULL,
+        previousValue TEXT,
+        newValue TEXT,
+        user TEXT NOT NULL DEFAULT 'Admin',
+        timestamp TEXT NOT NULL,
+        remarks TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_gst_liab_proj ON gst_liabilities(projectId);
+      CREATE INDEX IF NOT EXISTS idx_gst_liab_bill ON gst_liabilities(billingId);
+      CREATE INDEX IF NOT EXISTS idx_gst_pay_liab ON gst_payments(gstLiabilityId);
+    `);
+
+    // Auto-migrate existing bills into gst_liabilities
+    const existingBills = db.prepare("SELECT * FROM billings WHERE gst > 0").all() as any[];
+    const insertLiab = db.prepare(`
+      INSERT INTO gst_liabilities (id, billingId, projectId, clientName, billNo, period, financialYear, taxableAmount, gstAmount, dueDate, filingStatus, returnType, notes, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const b of existingBills) {
+      const existing = db.prepare("SELECT id FROM gst_liabilities WHERE billingId = ? OR (billNo = ? AND projectId = ?)").get(b.id, b.billNo, b.projectId);
+      if (!existing) {
+        const proj = db.prepare("SELECT name, clientName FROM projects WHERE id = ?").get(b.projectId) as any;
+        const client = proj?.clientName || 'Client';
+        const period = b.month || '2026-03';
+        const year = parseInt(period.split('-')[0]) || 2026;
+        const monthNum = parseInt(period.split('-')[1]) || 3;
+        const fy = monthNum >= 4 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+        const dueMonth = monthNum === 12 ? 1 : monthNum + 1;
+        const dueYear = monthNum === 12 ? year + 1 : year;
+        const dueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-20`;
+        const isFiled = (b.gstr3bFile || b.gstStatus === 'Deposited' || b.gstStatus === 'Filed') ? 'Filed' : 'Not Filed';
+        const liabilityId = `GST-${b.id || ('L' + Math.random().toString(36).substring(2, 9))}`;
+        const now = new Date().toISOString();
+
+        insertLiab.run(
+          liabilityId,
+          b.id,
+          b.projectId,
+          client,
+          b.billNo,
+          period,
+          fy,
+          b.amount || 0,
+          b.gst || 0,
+          dueDate,
+          isFiled,
+          'GSTR-3B',
+          'Synchronized from certified RA Bill ' + (b.billNo || ''),
+          now,
+          now
+        );
+
+        if (b.gstStatus === 'Paid' || b.gstStatus === 'Deposited') {
+          const payId = 'GPAY-INIT-' + Math.random().toString(36).substring(2, 9);
+          db.prepare(`
+            INSERT INTO gst_payments (id, gstLiabilityId, paymentAmount, paymentDate, paidBy, paymentMode, challanNumber, referenceNumber, remarks, createdBy, status, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            payId,
+            liabilityId,
+            b.gst,
+            b.certifyDate || now.substring(0, 10),
+            'SN ENTERPRISE',
+            'Challan',
+            'LEGACY-CHAL-' + (b.billNo || '001'),
+            'INITIAL-MIGRATION',
+            'Initial settlement recorded from existing billing register',
+            'System Migration',
+            'Active',
+            now,
+            now
+          );
+        }
+      }
+    }
+  } catch (gstMigErr) {
+    console.error("Failed to migrate GST liability tables:", gstMigErr);
+  }
 }
 
 initDbSchema();
@@ -1595,6 +1726,35 @@ async function startServer() {
         gstStatus || null
       );
       res.status(201).json(req.body);
+
+      // Auto-sync GST Liability if bill has GST
+      if (parseFloat(gst || 0) > 0) {
+        try {
+          const proj = db.prepare("SELECT name, clientName FROM projects WHERE id = ?").get(projectId) as any;
+          const client = proj?.clientName || 'Client';
+          const pMonth = month || new Date().toISOString().substring(0, 7);
+          const year = parseInt(pMonth.split('-')[0]) || 2026;
+          const monthNum = parseInt(pMonth.split('-')[1]) || 3;
+          const fy = monthNum >= 4 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+          const dueMonth = monthNum === 12 ? 1 : monthNum + 1;
+          const dueYear = monthNum === 12 ? year + 1 : year;
+          const dueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-20`;
+          const now = new Date().toISOString();
+          const liabId = `GST-${id}`;
+
+          const existingLiab = db.prepare("SELECT id FROM gst_liabilities WHERE billingId = ?").get(id);
+          if (!existingLiab) {
+            db.prepare(`
+              INSERT INTO gst_liabilities (id, billingId, projectId, clientName, billNo, period, financialYear, taxableAmount, gstAmount, dueDate, filingStatus, returnType, notes, createdAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              liabId, id, projectId, client, billNo, pMonth, fy, parseFloat(amount || 0), parseFloat(gst || 0), dueDate, 'Not Filed', 'GSTR-3B', 'Linked to RA Bill ' + billNo, now, now
+            );
+          }
+        } catch (gstSyncErr) {
+          console.error("GST sync warning on bill create:", gstSyncErr);
+        }
+      }
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1636,6 +1796,39 @@ async function startServer() {
         id
       );
       res.json(req.body);
+
+      // Auto-sync GST Liability on update without modifying existing payments
+      if (parseFloat(gst || 0) > 0) {
+        try {
+          const proj = db.prepare("SELECT name, clientName FROM projects WHERE id = ?").get(projectId) as any;
+          const client = proj?.clientName || 'Client';
+          const pMonth = month || new Date().toISOString().substring(0, 7);
+          const year = parseInt(pMonth.split('-')[0]) || 2026;
+          const monthNum = parseInt(pMonth.split('-')[1]) || 3;
+          const fy = monthNum >= 4 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+          const dueMonth = monthNum === 12 ? 1 : monthNum + 1;
+          const dueYear = monthNum === 12 ? year + 1 : year;
+          const dueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-20`;
+          const now = new Date().toISOString();
+
+          const existingLiab = db.prepare("SELECT id FROM gst_liabilities WHERE billingId = ?").get(id) as any;
+          if (existingLiab) {
+            db.prepare(`
+              UPDATE gst_liabilities
+              SET projectId = ?, clientName = ?, billNo = ?, period = ?, financialYear = ?, taxableAmount = ?, gstAmount = ?, dueDate = ?, updatedAt = ?
+              WHERE id = ?
+            `).run(projectId, client, billNo, pMonth, fy, parseFloat(amount || 0), parseFloat(gst || 0), dueDate, now, existingLiab.id);
+          } else {
+            const liabId = `GST-${id}`;
+            db.prepare(`
+              INSERT INTO gst_liabilities (id, billingId, projectId, clientName, billNo, period, financialYear, taxableAmount, gstAmount, dueDate, filingStatus, returnType, notes, createdAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(liabId, id, projectId, client, billNo, pMonth, fy, parseFloat(amount || 0), parseFloat(gst || 0), dueDate, 'Not Filed', 'GSTR-3B', 'Linked to RA Bill ' + billNo, now, now);
+          }
+        } catch (gstSyncErr) {
+          console.error("GST sync warning on bill update:", gstSyncErr);
+        }
+      }
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1827,6 +2020,635 @@ async function startServer() {
       );
 
       res.json({ success: true, count, deletedIds: ids });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================================================
+  // GST MANAGEMENT API (Liabilities, Payments, Audit Trail, Summary)
+  // ============================================================================
+
+  function calculateGstStatus(gstAmount: number, paidAmount: number): 'Unpaid' | 'Partially Paid' | 'Paid' {
+    if (!paidAmount || paidAmount <= 0) return 'Unpaid';
+    if (paidAmount < gstAmount) return 'Partially Paid';
+    return 'Paid';
+  }
+
+  // 1. Get all GST Liabilities with calculated paid, balance, status & payments
+  app.get("/api/gst-liabilities", (req, res) => {
+    try {
+      const { projectId, financialYear, period, paymentStatus, filingStatus } = req.query;
+      
+      let query = `
+        SELECT l.*, p.name as projectName, p.clientName as projectClient
+        FROM gst_liabilities l
+        LEFT JOIN projects p ON l.projectId = p.id
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+
+      if (projectId && projectId !== 'all') {
+        query += " AND l.projectId = ?";
+        params.push(projectId);
+      }
+      if (financialYear && financialYear !== 'all') {
+        query += " AND l.financialYear = ?";
+        params.push(financialYear);
+      }
+      if (period && period !== 'all') {
+        query += " AND l.period = ?";
+        params.push(period);
+      }
+      if (filingStatus && filingStatus !== 'all') {
+        query += " AND l.filingStatus = ?";
+        params.push(filingStatus);
+      }
+
+      query += " ORDER BY l.period DESC, l.createdAt DESC";
+
+      const rows = db.prepare(query).all(...params) as any[];
+      const payStmt = db.prepare("SELECT * FROM gst_payments WHERE gstLiabilityId = ? AND status != 'Cancelled' ORDER BY paymentDate DESC, createdAt DESC");
+
+      const results = rows.map(row => {
+        const payments = payStmt.all(row.id) as any[];
+        const totalPaid = payments.reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
+        const gstAmount = Number(row.gstAmount) || 0;
+        const balanceAmount = Math.max(0, gstAmount - totalPaid);
+        const computedStatus = calculateGstStatus(gstAmount, totalPaid);
+
+        return {
+          id: row.id,
+          billingId: row.billingId,
+          projectId: row.projectId,
+          projectName: row.projectName || 'Unknown Project',
+          clientName: row.clientName || row.projectClient || 'Client',
+          billNo: row.billNo || 'N/A',
+          period: row.period,
+          financialYear: row.financialYear,
+          taxableAmount: Number(row.taxableAmount) || 0,
+          gstAmount: gstAmount,
+          gstPaid: totalPaid,
+          gstBalance: balanceAmount,
+          paymentStatus: computedStatus,
+          filingStatus: row.filingStatus || 'Not Filed',
+          returnType: row.returnType || 'GSTR-3B',
+          dueDate: row.dueDate,
+          filingDate: row.filingDate,
+          filingArn: row.filingArn,
+          filingChallanDoc: row.filingChallanDoc,
+          notes: row.notes,
+          payments: payments,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt
+        };
+      });
+
+      const filtered = (paymentStatus && paymentStatus !== 'all')
+        ? results.filter(r => r.paymentStatus === paymentStatus)
+        : results;
+
+      res.json(filtered);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 2. Get Single GST Liability
+  app.get("/api/gst-liabilities/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const row = db.prepare(`
+        SELECT l.*, p.name as projectName, p.clientName as projectClient
+        FROM gst_liabilities l
+        LEFT JOIN projects p ON l.projectId = p.id
+        WHERE l.id = ?
+      `).get(id) as any;
+
+      if (!row) {
+        return res.status(404).json({ error: "GST liability record not found" });
+      }
+
+      const payments = db.prepare("SELECT * FROM gst_payments WHERE gstLiabilityId = ? AND status != 'Cancelled' ORDER BY paymentDate DESC, createdAt DESC").all(id) as any[];
+      const totalPaid = payments.reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
+      const gstAmount = Number(row.gstAmount) || 0;
+      const balanceAmount = Math.max(0, gstAmount - totalPaid);
+      const computedStatus = calculateGstStatus(gstAmount, totalPaid);
+
+      const auditTrails = db.prepare("SELECT * FROM gst_audit_trails WHERE gstLiabilityId = ? ORDER BY timestamp DESC").all(id);
+
+      res.json({
+        ...row,
+        projectName: row.projectName || 'Unknown Project',
+        clientName: row.clientName || row.projectClient || 'Client',
+        gstPaid: totalPaid,
+        gstBalance: balanceAmount,
+        paymentStatus: computedStatus,
+        payments,
+        auditTrails
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. Create GST Liability
+  app.post("/api/gst-liabilities", (req, res) => {
+    try {
+      const { id, billingId, projectId, clientName, billNo, period, financialYear, taxableAmount, gstAmount, dueDate, filingStatus, returnType, notes } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const recordId = id || `GST-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const now = new Date().toISOString();
+
+      let fy = financialYear;
+      if (!fy && period) {
+        const parts = period.split('-');
+        const y = parseInt(parts[0]) || 2026;
+        const m = parseInt(parts[1]) || 4;
+        fy = m >= 4 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+      }
+
+      db.prepare(`
+        INSERT INTO gst_liabilities (id, billingId, projectId, clientName, billNo, period, financialYear, taxableAmount, gstAmount, dueDate, filingStatus, returnType, notes, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        recordId,
+        billingId || null,
+        projectId,
+        clientName || 'Client',
+        billNo || null,
+        period,
+        fy || '2025-2026',
+        parseFloat(taxableAmount || 0),
+        parseFloat(gstAmount || 0),
+        dueDate || null,
+        filingStatus || 'Not Filed',
+        returnType || 'GSTR-3B',
+        notes || null,
+        now,
+        now
+      );
+
+      const auditId = 'AUD-GST-' + Math.random().toString(36).substring(2, 9);
+      db.prepare(`
+        INSERT INTO gst_audit_trails (id, gstLiabilityId, gstPaymentId, action, previousValue, newValue, user, timestamp, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        auditId,
+        recordId,
+        null,
+        'LIABILITY_CREATED',
+        null,
+        `Created GST liability for period ${period}, Bill ${billNo || 'N/A'}, GST ₹${gstAmount}`,
+        authUser,
+        now,
+        notes || 'GST Liability initialized'
+      );
+
+      logActivity(authUser, "CREATE", "gst", recordId, `Created GST liability of ₹${gstAmount} for bill ${billNo || 'N/A'}`);
+
+      res.status(201).json({ id: recordId, success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 4. Update GST Liability
+  app.put("/api/gst-liabilities/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { projectId, clientName, billNo, period, financialYear, taxableAmount, gstAmount, dueDate, returnType, notes } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const now = new Date().toISOString();
+
+      const old = db.prepare("SELECT * FROM gst_liabilities WHERE id = ?").get(id) as any;
+      if (!old) {
+        return res.status(404).json({ error: "Record not found" });
+      }
+
+      db.prepare(`
+        UPDATE gst_liabilities
+        SET projectId = ?, clientName = ?, billNo = ?, period = ?, financialYear = ?, taxableAmount = ?, gstAmount = ?, dueDate = ?, returnType = ?, notes = ?, updatedAt = ?
+        WHERE id = ?
+      `).run(
+        projectId || old.projectId,
+        clientName || old.clientName,
+        billNo || old.billNo,
+        period || old.period,
+        financialYear || old.financialYear,
+        parseFloat(taxableAmount !== undefined ? taxableAmount : old.taxableAmount),
+        parseFloat(gstAmount !== undefined ? gstAmount : old.gstAmount),
+        dueDate || old.dueDate,
+        returnType || old.returnType,
+        notes !== undefined ? notes : old.notes,
+        now,
+        id
+      );
+
+      const auditId = 'AUD-GST-' + Math.random().toString(36).substring(2, 9);
+      db.prepare(`
+        INSERT INTO gst_audit_trails (id, gstLiabilityId, gstPaymentId, action, previousValue, newValue, user, timestamp, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        auditId,
+        id,
+        null,
+        'LIABILITY_EDITED',
+        `GST: ₹${old.gstAmount}, Period: ${old.period}`,
+        `GST: ₹${gstAmount !== undefined ? gstAmount : old.gstAmount}, Period: ${period || old.period}`,
+        authUser,
+        now,
+        notes || 'GST Liability updated'
+      );
+
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 5. Update Filing Status
+  app.put("/api/gst-liabilities/:id/filing", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { filingStatus, returnType, filingDate, filingArn, filingChallanDoc, notes } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const now = new Date().toISOString();
+
+      const old = db.prepare("SELECT * FROM gst_liabilities WHERE id = ?").get(id) as any;
+      if (!old) {
+        return res.status(404).json({ error: "Record not found" });
+      }
+
+      db.prepare(`
+        UPDATE gst_liabilities
+        SET filingStatus = ?, returnType = ?, filingDate = ?, filingArn = ?, filingChallanDoc = ?, updatedAt = ?
+        WHERE id = ?
+      `).run(
+        filingStatus,
+        returnType || old.returnType || 'GSTR-3B',
+        filingDate || (filingStatus === 'Filed' ? now.substring(0, 10) : null),
+        filingArn || null,
+        filingChallanDoc || old.filingChallanDoc || null,
+        now,
+        id
+      );
+
+      const auditId = 'AUD-GST-' + Math.random().toString(36).substring(2, 9);
+      db.prepare(`
+        INSERT INTO gst_audit_trails (id, gstLiabilityId, gstPaymentId, action, previousValue, newValue, user, timestamp, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        auditId,
+        id,
+        null,
+        'FILING_STATUS_CHANGED',
+        `Filing Status: ${old.filingStatus || 'Not Filed'}, ARN: ${old.filingArn || 'None'}`,
+        `Filing Status: ${filingStatus}, Return Type: ${returnType || 'GSTR-3B'}, ARN: ${filingArn || 'None'}`,
+        authUser,
+        now,
+        notes || `Filing status updated to ${filingStatus}`
+      );
+
+      logActivity(authUser, "UPDATE", "gst", id, `GST Filing Status changed to ${filingStatus} (${returnType || 'GSTR-3B'})`);
+
+      res.json({ success: true, id, filingStatus });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 6. Delete GST Liability
+  app.delete("/api/gst-liabilities/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const old = db.prepare("SELECT * FROM gst_liabilities WHERE id = ?").get(id) as any;
+      if (old) {
+        db.prepare("DELETE FROM gst_payments WHERE gstLiabilityId = ?").run(id);
+        db.prepare("DELETE FROM gst_audit_trails WHERE gstLiabilityId = ?").run(id);
+        db.prepare("DELETE FROM gst_liabilities WHERE id = ?").run(id);
+        logActivity(authUser, "DELETE", "gst", id, `Deleted GST liability #${old.billNo || id} of ₹${old.gstAmount}`);
+      }
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 7. Get Payments
+  app.get("/api/gst-payments", (req, res) => {
+    try {
+      const { gstLiabilityId } = req.query;
+      let query = "SELECT * FROM gst_payments WHERE status != 'Cancelled'";
+      const params: any[] = [];
+      if (gstLiabilityId) {
+        query += " AND gstLiabilityId = ?";
+        params.push(gstLiabilityId);
+      }
+      query += " ORDER BY paymentDate DESC, createdAt DESC";
+      const rows = db.prepare(query).all(...params);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 8. Record GST Payment
+  app.post("/api/gst-payments", (req, res) => {
+    try {
+      const {
+        gstLiabilityId,
+        paymentAmount,
+        paymentDate,
+        paidBy,
+        paymentMode,
+        challanNumber,
+        referenceNumber,
+        remarks,
+        attachmentUrl,
+        attachmentName,
+        createdBy
+      } = req.body;
+
+      if (!gstLiabilityId) {
+        return res.status(400).json({ error: "gstLiabilityId is required" });
+      }
+      const payAmount = parseFloat(paymentAmount);
+      if (isNaN(payAmount) || payAmount <= 0) {
+        return res.status(400).json({ error: "Payment amount must be greater than 0" });
+      }
+
+      const liab = db.prepare("SELECT * FROM gst_liabilities WHERE id = ?").get(gstLiabilityId) as any;
+      if (!liab) {
+        return res.status(404).json({ error: "GST liability not found" });
+      }
+
+      const authUser = createdBy || (req.headers["x-user-username"] as string) || "Admin";
+      const now = new Date().toISOString();
+      const payId = 'GPAY-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+
+      const existingPayments = db.prepare("SELECT * FROM gst_payments WHERE gstLiabilityId = ? AND status != 'Cancelled'").all(gstLiabilityId) as any[];
+      const prevPaid = existingPayments.reduce((s, p) => s + (Number(p.paymentAmount) || 0), 0);
+      const prevStatus = calculateGstStatus(Number(liab.gstAmount), prevPaid);
+
+      db.prepare(`
+        INSERT INTO gst_payments (id, gstLiabilityId, paymentAmount, paymentDate, paidBy, paymentMode, challanNumber, referenceNumber, remarks, attachmentUrl, attachmentName, createdBy, status, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        payId,
+        gstLiabilityId,
+        payAmount,
+        paymentDate || now.substring(0, 10),
+        paidBy || 'SN ENTERPRISE',
+        paymentMode || 'Net Banking',
+        challanNumber || null,
+        referenceNumber || null,
+        remarks || null,
+        attachmentUrl || null,
+        attachmentName || null,
+        authUser,
+        'Active',
+        now,
+        now
+      );
+
+      const newPaid = prevPaid + payAmount;
+      const newStatus = calculateGstStatus(Number(liab.gstAmount), newPaid);
+
+      const audId1 = 'AUD-GPAY-' + Math.random().toString(36).substring(2, 9);
+      db.prepare(`
+        INSERT INTO gst_audit_trails (id, gstLiabilityId, gstPaymentId, action, previousValue, newValue, user, timestamp, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        audId1,
+        gstLiabilityId,
+        payId,
+        'PAYMENT_CREATED',
+        `Previous Paid: ₹${prevPaid}, Outstanding: ₹${Math.max(0, liab.gstAmount - prevPaid)}`,
+        `Payment Added: ₹${payAmount} via ${paymentMode || 'Net Banking'}, Challan/Ref: ${challanNumber || referenceNumber || 'N/A'}. New Paid: ₹${newPaid}`,
+        authUser,
+        now,
+        remarks || 'GST Payment recorded'
+      );
+
+      if (prevStatus !== newStatus) {
+        const audId2 = 'AUD-GPAY-STAT-' + Math.random().toString(36).substring(2, 9);
+        db.prepare(`
+          INSERT INTO gst_audit_trails (id, gstLiabilityId, gstPaymentId, action, previousValue, newValue, user, timestamp, remarks)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          audId2,
+          gstLiabilityId,
+          payId,
+          'PAYMENT_STATUS_CHANGED',
+          `Payment Status: ${prevStatus}`,
+          `Payment Status: ${newStatus}`,
+          authUser,
+          now,
+          `Status updated following payment of ₹${payAmount}`
+        );
+      }
+
+      if (liab.billingId) {
+        db.prepare("UPDATE billings SET gstStatus = ? WHERE id = ?").run(newStatus, liab.billingId);
+      }
+
+      logActivity(authUser, "PAYMENT", "gst", gstLiabilityId, `Recorded GST payment ₹${payAmount} (${paidBy || 'SN ENTERPRISE'}) for ${liab.billNo || gstLiabilityId}`);
+
+      res.status(201).json({
+        success: true,
+        paymentId: payId,
+        totalPaid: newPaid,
+        balance: Math.max(0, liab.gstAmount - newPaid),
+        paymentStatus: newStatus
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 9. Edit GST Payment
+  app.put("/api/gst-payments/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { paymentAmount, paymentDate, paidBy, paymentMode, challanNumber, referenceNumber, remarks, attachmentUrl, attachmentName } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const now = new Date().toISOString();
+
+      const oldPay = db.prepare("SELECT * FROM gst_payments WHERE id = ?").get(id) as any;
+      if (!oldPay) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+
+      const newAmt = paymentAmount !== undefined ? parseFloat(paymentAmount) : oldPay.paymentAmount;
+
+      db.prepare(`
+        UPDATE gst_payments
+        SET paymentAmount = ?, paymentDate = ?, paidBy = ?, paymentMode = ?, challanNumber = ?, referenceNumber = ?, remarks = ?, attachmentUrl = ?, attachmentName = ?, updatedAt = ?
+        WHERE id = ?
+      `).run(
+        newAmt,
+        paymentDate || oldPay.paymentDate,
+        paidBy || oldPay.paidBy,
+        paymentMode || oldPay.paymentMode,
+        challanNumber !== undefined ? challanNumber : oldPay.challanNumber,
+        referenceNumber !== undefined ? referenceNumber : oldPay.referenceNumber,
+        remarks !== undefined ? remarks : oldPay.remarks,
+        attachmentUrl !== undefined ? attachmentUrl : oldPay.attachmentUrl,
+        attachmentName !== undefined ? attachmentName : oldPay.attachmentName,
+        now,
+        id
+      );
+
+      const audId = 'AUD-GPAY-' + Math.random().toString(36).substring(2, 9);
+      db.prepare(`
+        INSERT INTO gst_audit_trails (id, gstLiabilityId, gstPaymentId, action, previousValue, newValue, user, timestamp, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        audId,
+        oldPay.gstLiabilityId,
+        id,
+        'PAYMENT_EDITED',
+        `Amount: ₹${oldPay.paymentAmount}, Date: ${oldPay.paymentDate}, PaidBy: ${oldPay.paidBy}`,
+        `Amount: ₹${newAmt}, Date: ${paymentDate || oldPay.paymentDate}, PaidBy: ${paidBy || oldPay.paidBy}`,
+        authUser,
+        now,
+        remarks || 'Payment edited'
+      );
+
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 10. Cancel GST Payment
+  app.post("/api/gst-payments/:id/cancel", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { cancelReason } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      const now = new Date().toISOString();
+
+      const oldPay = db.prepare("SELECT * FROM gst_payments WHERE id = ?").get(id) as any;
+      if (!oldPay) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+
+      db.prepare("UPDATE gst_payments SET status = 'Cancelled', updatedAt = ? WHERE id = ?").run(now, id);
+
+      const audId = 'AUD-GPAY-' + Math.random().toString(36).substring(2, 9);
+      db.prepare(`
+        INSERT INTO gst_audit_trails (id, gstLiabilityId, gstPaymentId, action, previousValue, newValue, user, timestamp, remarks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        audId,
+        oldPay.gstLiabilityId,
+        id,
+        'PAYMENT_CANCELLED',
+        `Payment ₹${oldPay.paymentAmount} (${oldPay.paidBy}, Challan: ${oldPay.challanNumber || 'N/A'})`,
+        'Status: Cancelled',
+        authUser,
+        now,
+        cancelReason || 'GST Payment cancelled by user'
+      );
+
+      res.json({ success: true, id, status: 'Cancelled' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 11. Get Audit Trails
+  app.get("/api/gst-audit-trails", (req, res) => {
+    try {
+      const { gstLiabilityId } = req.query;
+      let query = "SELECT * FROM gst_audit_trails WHERE 1=1";
+      const params: any[] = [];
+      if (gstLiabilityId) {
+        query += " AND gstLiabilityId = ?";
+        params.push(gstLiabilityId);
+      }
+      query += " ORDER BY timestamp DESC";
+      const rows = db.prepare(query).all(...params);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 12. GST Dashboard Summary
+  app.get("/api/gst-summary", (req, res) => {
+    try {
+      const { projectId, financialYear } = req.query;
+      let query = "SELECT * FROM gst_liabilities WHERE 1=1";
+      const params: any[] = [];
+      if (projectId && projectId !== 'all') {
+        query += " AND projectId = ?";
+        params.push(projectId);
+      }
+      if (financialYear && financialYear !== 'all') {
+        query += " AND financialYear = ?";
+        params.push(financialYear);
+      }
+
+      const liabilities = db.prepare(query).all(...params) as any[];
+      const payStmt = db.prepare("SELECT * FROM gst_payments WHERE gstLiabilityId = ? AND status != 'Cancelled'");
+
+      let totalLiability = 0;
+      let totalPaid = 0;
+      let totalOutstanding = 0;
+      let unpaidAmount = 0;
+      let partiallyPaidAmount = 0;
+      let paidAmount = 0;
+      let unpaidCount = 0;
+      let partiallyPaidCount = 0;
+      let paidCount = 0;
+      let dueThisMonth = 0;
+
+      const currentYm = new Date().toISOString().substring(0, 7);
+
+      for (const liab of liabilities) {
+        const gstAmt = Number(liab.gstAmount) || 0;
+        const payments = payStmt.all(liab.id) as any[];
+        const paid = payments.reduce((sum, p) => sum + (Number(p.paymentAmount) || 0), 0);
+        const bal = Math.max(0, gstAmt - paid);
+
+        totalLiability += gstAmt;
+        totalPaid += paid;
+        totalOutstanding += bal;
+
+        const status = calculateGstStatus(gstAmt, paid);
+        if (status === 'Unpaid') {
+          unpaidCount++;
+          unpaidAmount += gstAmt;
+        } else if (status === 'Partially Paid') {
+          partiallyPaidCount++;
+          partiallyPaidAmount += bal;
+        } else {
+          paidCount++;
+          paidAmount += gstAmt;
+        }
+
+        if (liab.dueDate && liab.dueDate.startsWith(currentYm) && bal > 0) {
+          dueThisMonth += bal;
+        }
+      }
+
+      res.json({
+        totalLiability,
+        totalPaid,
+        totalOutstanding,
+        unpaidCount,
+        unpaidAmount,
+        partiallyPaidCount,
+        partiallyPaidAmount,
+        paidCount,
+        paidAmount,
+        dueThisMonth,
+        totalRecords: liabilities.length
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

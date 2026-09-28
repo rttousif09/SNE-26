@@ -92,6 +92,67 @@ export interface Billing {
   holdStatus?: 'Pending' | 'Partially Cleared' | 'Fully Resolved';
 }
 
+export type GSTPaymentStatus = 'Unpaid' | 'Partially Paid' | 'Paid';
+export type GSTFilingStatus = 'Not Filed' | 'Filed';
+export type GSTReturnType = 'GSTR-1' | 'GSTR-3B' | 'Both';
+export type GSTPaidBy = 'SN ENTERPRISE' | 'Client';
+
+export interface GSTPayment {
+  id: string;
+  gstLiabilityId: string;
+  paymentAmount: number;
+  paymentDate: string;
+  paidBy: GSTPaidBy;
+  paymentMode: string;
+  challanNumber?: string;
+  referenceNumber?: string;
+  remarks?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  createdBy?: string;
+  status: 'Active' | 'Cancelled';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface GSTLiability {
+  id: string;
+  billingId?: string;
+  projectId: string;
+  projectName?: string;
+  clientName: string;
+  billNo?: string;
+  period: string; // YYYY-MM
+  financialYear: string;
+  taxableAmount: number;
+  gstAmount: number; // GST Liability Amount
+  gstPaid: number; // Total GST Paid
+  gstBalance: number; // Outstanding GST
+  paymentStatus: GSTPaymentStatus;
+  dueDate: string;
+  filingStatus: GSTFilingStatus;
+  returnType: GSTReturnType;
+  filingDate?: string;
+  filingArn?: string;
+  filingChallanDoc?: string;
+  notes?: string;
+  payments?: GSTPayment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GSTAuditTrail {
+  id: string;
+  gstLiabilityId: string;
+  gstPaymentId?: string;
+  action: 'payment_created' | 'payment_edited' | 'payment_cancelled' | 'payment_status_changed' | 'filing_status_changed';
+  previousValue?: string;
+  newValue?: string;
+  user: string;
+  timestamp: string;
+  remarks?: string;
+}
+
 export interface ClientPayment {
   id: string;
   projectId: string;

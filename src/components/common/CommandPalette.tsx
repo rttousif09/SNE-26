@@ -83,6 +83,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       action: () => { onNavigate('client-payment'); onClose(); }
     },
     {
+      id: 'qa-gst',
+      title: 'GST Payment & Filing Register',
+      subtitle: 'Statutory GST Payments, Challans & Return Tracking (GST01)',
+      category: 'Quick Actions',
+      tcode: 'GST01',
+      icon: <Receipt size={14} className="text-teal-600" />,
+      action: () => { onNavigate('gst-register'); onClose(); }
+    },
+    {
       id: 'qa-worker',
       title: 'Register New Worker / Labour',
       subtitle: 'Add KYC, skill trade, daily rate (WRK01)',
