@@ -2667,10 +2667,39 @@ async function startServer() {
   app.post("/api/kharchis", (req, res) => {
     try {
       const { id, projectId, workerId, date, amount } = req.body;
+      const numAmount = parseFloat(amount || 0);
       db.prepare(`
         INSERT INTO kharchis (id, projectId, workerId, date, amount)
         VALUES (?, ?, ?, ?, ?)
-      `).run(id, projectId, workerId, date, parseFloat(amount));
+      `).run(id, projectId, workerId, date, numAmount);
+
+      // Automatically sync into worker_ledger
+      try {
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, sourceModule, sourceTransactionId,
+            sourceVoucherNo, remarks, createdBy, createdDate, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            workerId = excluded.workerId,
+            projectId = excluded.projectId,
+            date = excluded.date,
+            debit = excluded.debit,
+            description = excluded.description,
+            particulars = excluded.particulars,
+            status = excluded.status
+        `).run(
+          `wl-kha-${id}`, workerId, projectId, date, `KHA-${id.toUpperCase()}`,
+          'Weekly Kharchi (Pocket Money)', 'Weekly Kharchi', 'Kharchi',
+          numAmount, 0, 0, 'KHA01', id,
+          `KHA-${id.toUpperCase()}`, 'Weekly pocket money disbursement',
+          'System', new Date().toISOString(), 'Posted'
+        );
+      } catch (lErr) {
+        console.error("Failed to sync kharchi to ledger:", lErr);
+      }
+
       res.status(201).json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2681,11 +2710,24 @@ async function startServer() {
     try {
       const { id } = req.params;
       const { projectId, workerId, date, amount } = req.body;
+      const numAmount = parseFloat(amount || 0);
       db.prepare(`
         UPDATE kharchis
         SET projectId = ?, workerId = ?, date = ?, amount = ?
         WHERE id = ?
-      `).run(projectId, workerId, date, parseFloat(amount), id);
+      `).run(projectId, workerId, date, numAmount, id);
+
+      // Update linked ledger entry
+      try {
+        db.prepare(`
+          UPDATE worker_ledger
+          SET projectId = ?, workerId = ?, date = ?, debit = ?, modifiedDate = ?
+          WHERE id = ? OR (sourceModule = 'KHA01' AND sourceTransactionId = ?)
+        `).run(projectId, workerId, date, numAmount, new Date().toISOString(), `wl-kha-${id}`, id);
+      } catch (lErr) {
+        console.error("Failed to update kharchi ledger:", lErr);
+      }
+
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2696,6 +2738,7 @@ async function startServer() {
     try {
       const { id } = req.params;
       db.prepare("DELETE FROM kharchis WHERE id = ?").run(id);
+      db.prepare("DELETE FROM worker_ledger WHERE id = ? OR (sourceModule = 'KHA01' AND sourceTransactionId = ?)").run(`wl-kha-${id}`, id);
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -3374,10 +3417,702 @@ async function startServer() {
   });
 
   // 7.5 Worker Ledger, Holds, and Audit Trails
+
+  function syncAllWorkerLedgerEntries() {
+    try {
+      const upsertStmt = db.prepare(`
+        INSERT INTO worker_ledger (
+          id, workerId, projectId, date, voucherNo, description, particulars,
+          entryType, debit, credit, runningBalance, paymentId, advanceId,
+          sourceModule, sourceTransactionId, sourceVoucherNo, remarks, createdBy, createdDate, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          workerId = excluded.workerId,
+          projectId = excluded.projectId,
+          date = excluded.date,
+          voucherNo = excluded.voucherNo,
+          description = excluded.description,
+          particulars = excluded.particulars,
+          entryType = excluded.entryType,
+          debit = excluded.debit,
+          credit = excluded.credit,
+          sourceModule = excluded.sourceModule,
+          sourceTransactionId = excluded.sourceTransactionId,
+          sourceVoucherNo = excluded.sourceVoucherNo,
+          status = excluded.status
+      `);
+
+      // 1. Advances (WFT01)
+      const advances = db.prepare("SELECT * FROM advances").all() as any[];
+      for (const a of advances) {
+        upsertStmt.run(
+          `wl-adv-${a.id}`,
+          a.workerId,
+          a.projectId,
+          a.date,
+          a.transactionNo || `ADV-${a.id.toUpperCase()}`,
+          `${a.paymentType || 'Site Advance'}${a.remarks ? ': ' + a.remarks : ''}`,
+          a.paymentType || 'Site Advance',
+          'Advance',
+          parseFloat(a.amount || 0),
+          0,
+          0,
+          null,
+          a.id,
+          'WFT01',
+          a.id,
+          a.transactionNo || `ADV-${a.id.toUpperCase()}`,
+          a.remarks || 'Advance disbursement',
+          a.createdBy || 'System',
+          a.createdDate || new Date().toISOString(),
+          'Posted'
+        );
+      }
+
+      // 2. Kharchis (KHA01)
+      const kharchis = db.prepare("SELECT * FROM kharchis").all() as any[];
+      for (const k of kharchis) {
+        upsertStmt.run(
+          `wl-kha-${k.id}`,
+          k.workerId,
+          k.projectId,
+          k.date,
+          `KHA-${k.id.toUpperCase()}`,
+          'Weekly Kharchi (Pocket Money)',
+          'Weekly Kharchi',
+          'Kharchi',
+          parseFloat(k.amount || 0),
+          0,
+          0,
+          null,
+          null,
+          'KHA01',
+          k.id,
+          `KHA-${k.id.toUpperCase()}`,
+          'Weekly pocket money disbursement',
+          'System',
+          new Date().toISOString(),
+          'Posted'
+        );
+      }
+
+      // 3. Worker Payments (PAY01)
+      const payments = db.prepare("SELECT * FROM worker_payments").all() as any[];
+      for (const p of payments) {
+        const gross = parseFloat(p.grossPayable || p.totalEarnings || 0);
+        const net = parseFloat(p.netPayment || 0);
+        const settlement = {
+          month: p.month,
+          workEarnings: gross,
+          weeklyKharchi: parseFloat(p.totalKharchi || 0),
+          messDeduction: parseFloat(p.messDeduction || 0),
+          outstandingAdvance: parseFloat(p.advanceDeduction || 0),
+          previousOverBalance: parseFloat(p.previousOverBalance || 0),
+          recovery: parseFloat(p.recoveryDeduction || 0),
+          otherDeduction: parseFloat(p.otherDeduction || 0),
+          netPayment: net
+        };
+        const settlementJson = JSON.stringify(settlement);
+
+        if (gross > 0) {
+          upsertStmt.run(
+            `wl-pay-wage-${p.id}`,
+            p.workerId,
+            p.projectId,
+            p.date || `${p.month}-28`,
+            p.voucherNo || `PAY-${p.month}`,
+            `Gross Wages Certified (${p.month})`,
+            `Gross Wages (${p.month})`,
+            'Earnings',
+            0,
+            gross,
+            0,
+            p.id,
+            null,
+            'PAY01',
+            p.id,
+            p.voucherNo || `PAY-${p.month}`,
+            `Gross earnings certified for ${p.month}`,
+            'System',
+            new Date().toISOString(),
+            'Posted'
+          );
+          db.prepare("UPDATE worker_ledger SET breakdownJson = ? WHERE id = ?").run(settlementJson, `wl-pay-wage-${p.id}`);
+        }
+
+        if (net > 0) {
+          upsertStmt.run(
+            `wl-pay-net-${p.id}`,
+            p.workerId,
+            p.projectId,
+            p.date || `${p.month}-28`,
+            p.voucherNo || `PAY-${p.month}`,
+            `Net Paycheck Disbursed (${p.month})`,
+            `Net Payment Disbursed (${p.month})`,
+            'Payment',
+            net,
+            0,
+            0,
+            p.id,
+            null,
+            'PAY01',
+            p.id,
+            p.voucherNo || `PAY-${p.month}`,
+            `Net wage payment disbursed for ${p.month}`,
+            'System',
+            new Date().toISOString(),
+            'Posted'
+          );
+          db.prepare("UPDATE worker_ledger SET breakdownJson = ? WHERE id = ?").run(settlementJson, `wl-pay-net-${p.id}`);
+        }
+      }
+
+      // 4. Worker Opening Advances
+      const workers = db.prepare("SELECT * FROM workers WHERE openingAdvance > 0").all() as any[];
+      for (const w of workers) {
+        const existingOpn = db.prepare("SELECT id FROM worker_ledger WHERE workerId = ? AND sourceModule = 'OPN01'").get(w.id);
+        if (!existingOpn) {
+          upsertStmt.run(
+            `wl-opn-adv-${w.id}`,
+            w.id,
+            w.projectId || 'p1',
+            w.joiningDate || '2026-01-01',
+            `OPN-${(w.workerId || w.id).toUpperCase()}`,
+            'Opening Advance Balance on joining',
+            'Opening Balance',
+            'Opening Balance',
+            parseFloat(w.openingAdvance || 0),
+            0,
+            0,
+            null,
+            null,
+            'OPN01',
+            w.id,
+            `OPN-${w.workerId || w.id}`,
+            'Registered opening advance balance',
+            'System',
+            new Date().toISOString(),
+            'Posted'
+          );
+        }
+      }
+
+      // 5. Worker Holds Released
+      const holds = db.prepare("SELECT * FROM worker_holds WHERE releasedAmount > 0").all() as any[];
+      for (const h of holds) {
+        upsertStmt.run(
+          `wl-hold-rel-${h.id}`,
+          h.workerId,
+          h.projectId,
+          h.releaseDate || h.holdDate || new Date().toISOString().substring(0, 10),
+          `REL-${h.id.substring(0, 6).toUpperCase()}`,
+          `Release Wage Hold: ${h.remarks || 'Wage hold released'}`,
+          'Wage Hold Released',
+          'Hold Release',
+          0,
+          parseFloat(h.releasedAmount || 0),
+          0,
+          null,
+          null,
+          'HOL01',
+          h.id,
+          `HOLD-${h.id.substring(0, 6)}`,
+          `Released ₹${h.releasedAmount} from hold #${h.id}`,
+          'System',
+          new Date().toISOString(),
+          'Posted'
+        );
+      }
+    } catch (err) {
+      console.error("Worker ledger sync warning:", err);
+    }
+  }
+
+  // Get Worker Ledger with chronological dynamic balance calculation
   app.get("/api/worker-ledger", (req, res) => {
     try {
-      const rows = db.prepare("SELECT * FROM worker_ledger ORDER BY date ASC, id ASC").all();
-      res.json(rows);
+      const { workerId, projectId, dateStart, dateEnd, entryType, sourceModule } = req.query;
+      let query = "SELECT * FROM worker_ledger WHERE 1=1";
+      const params: any[] = [];
+
+      if (workerId && workerId !== 'all' && workerId !== 'All') {
+        query += " AND workerId = ?";
+        params.push(workerId);
+      }
+      if (projectId && projectId !== 'all' && projectId !== 'All') {
+        query += " AND projectId = ?";
+        params.push(projectId);
+      }
+      if (dateStart) {
+        query += " AND date >= ?";
+        params.push(dateStart);
+      }
+      if (dateEnd) {
+        query += " AND date <= ?";
+        params.push(dateEnd);
+      }
+      if (entryType && entryType !== 'All') {
+        query += " AND entryType = ?";
+        params.push(entryType);
+      }
+      if (sourceModule && sourceModule !== 'All') {
+        query += " AND sourceModule = ?";
+        params.push(sourceModule);
+      }
+
+      query += " ORDER BY date ASC, id ASC";
+      const rows = db.prepare(query).all(...params) as any[];
+
+      let currentBal = 0;
+      const formatted = rows.map(r => {
+        const debit = parseFloat(r.debit || 0);
+        const credit = parseFloat(r.credit || 0);
+        if (r.status !== 'Reversed' && r.status !== 'Draft') {
+          currentBal = currentBal + credit - debit;
+        }
+
+        return {
+          ...r,
+          debit,
+          credit,
+          runningBalance: currentBal,
+          balanceType: currentBal >= 0 ? 'Cr' : 'Dr',
+          formattedBalance: currentBal >= 0
+            ? `₹${Math.abs(currentBal).toLocaleString('en-IN')} Cr`
+            : `₹${Math.abs(currentBal).toLocaleString('en-IN')} Dr`
+        };
+      });
+
+      res.json(formatted);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Sync endpoint
+  app.post("/api/worker-ledger/sync", (req, res) => {
+    try {
+      syncAllWorkerLedgerEntries();
+      const count = db.prepare("SELECT count(*) as count FROM worker_ledger").get() as any;
+      res.json({ success: true, count: count?.count || 0 });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Worker Account Summary Endpoint
+  app.get("/api/worker-ledger/summary/:workerId", (req, res) => {
+    try {
+      const { workerId } = req.params;
+      const { projectId } = req.query;
+
+      const worker = db.prepare("SELECT * FROM workers WHERE id = ?").get(workerId) as any;
+      if (!worker) {
+        return res.status(404).json({ error: "Worker not found" });
+      }
+
+      let ledgerQuery = "SELECT * FROM worker_ledger WHERE workerId = ? AND (status = 'Posted' OR status IS NULL)";
+      const params: any[] = [workerId];
+      if (projectId && projectId !== 'All' && projectId !== 'all') {
+        ledgerQuery += " AND projectId = ?";
+        params.push(projectId);
+      }
+      ledgerQuery += " ORDER BY date ASC, id ASC";
+
+      const entries = db.prepare(ledgerQuery).all(...params) as any[];
+
+      let totalEarnings = 0;
+      let totalAdvances = 0;
+      let totalKharchi = 0;
+      let totalMess = 0;
+      let totalRecovery = 0;
+      let totalPayments = 0;
+      let totalCredits = 0;
+      let totalDebits = 0;
+
+      for (const e of entries) {
+        const d = parseFloat(e.debit || 0);
+        const c = parseFloat(e.credit || 0);
+        totalDebits += d;
+        totalCredits += c;
+
+        const eType = (e.entryType || '').toLowerCase();
+        const sMod = (e.sourceModule || '').toUpperCase();
+
+        if (c > 0 || eType.includes('earning') || eType.includes('wage') || eType.includes('abstract')) {
+          totalEarnings += c;
+        }
+
+        if (sMod === 'WFT01' || eType.includes('advance')) {
+          totalAdvances += d;
+        } else if (sMod === 'KHA01' || eType.includes('kharchi')) {
+          totalKharchi += d;
+        } else if (sMod === 'MESS01' || eType.includes('mess')) {
+          totalMess += d;
+        } else if (eType.includes('recovery')) {
+          totalRecovery += d;
+        } else if (sMod === 'PAY01' || eType.includes('payment')) {
+          totalPayments += d;
+        }
+      }
+
+      let holdQuery = "SELECT sum(remainingHold) as totalHolds FROM worker_holds WHERE workerId = ? AND status = 'Held'";
+      const holdParams: any[] = [workerId];
+      if (projectId && projectId !== 'All' && projectId !== 'all') {
+        holdQuery += " AND projectId = ?";
+        holdParams.push(projectId);
+      }
+      const holdRow = db.prepare(holdQuery).get(...holdParams) as any;
+      const totalHolds = parseFloat(holdRow?.totalHolds || 0);
+
+      const currentBalance = totalCredits - totalDebits;
+      const balanceType = currentBalance >= 0 ? 'Cr' : 'Dr';
+      const formattedBalance = currentBalance >= 0
+        ? `₹${Math.abs(currentBalance).toLocaleString('en-IN')} Cr`
+        : `₹${Math.abs(currentBalance).toLocaleString('en-IN')} Dr`;
+
+      const proj = worker.projectId ? db.prepare("SELECT name FROM projects WHERE id = ?").get(worker.projectId) as any : null;
+
+      res.json({
+        workerId: worker.workerId || worker.id,
+        id: worker.id,
+        workerName: worker.name,
+        designation: worker.designation || 'Worker',
+        currentProject: proj?.name || 'Unassigned',
+        currentProjectId: worker.projectId,
+        workerStatus: worker.status || 'Active',
+        joiningDate: worker.joiningDate || '—',
+        totalEarnings,
+        totalAdvances,
+        totalKharchi,
+        totalMess,
+        totalRecovery,
+        totalHolds,
+        totalPayments,
+        totalDebits,
+        totalCredits,
+        currentBalance,
+        balanceType,
+        formattedBalance,
+        transactionCount: entries.length
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Reversal Entry API
+  app.post("/api/worker-ledger/reversal", (req, res) => {
+    try {
+      const { ledgerId, reason } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+
+      if (!ledgerId) {
+        return res.status(400).json({ error: "ledgerId is required" });
+      }
+
+      const orig = db.prepare("SELECT * FROM worker_ledger WHERE id = ?").get(ledgerId) as any;
+      if (!orig) {
+        return res.status(404).json({ error: "Original ledger entry not found" });
+      }
+      if (orig.status === 'Reversed') {
+        return res.status(400).json({ error: "This transaction is already reversed" });
+      }
+
+      const now = new Date().toISOString();
+      const revId = `wl-rev-${orig.id}-${Date.now().toString(36)}`;
+      const revDebit = parseFloat(orig.credit || 0);
+      const revCredit = parseFloat(orig.debit || 0);
+
+      db.prepare(`
+        INSERT INTO worker_ledger (
+          id, workerId, projectId, date, voucherNo, description, particulars,
+          entryType, debit, credit, runningBalance, sourceModule, sourceTransactionId,
+          sourceVoucherNo, reversalOfId, remarks, createdBy, createdDate, status, postedBy, postedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        revId,
+        orig.workerId,
+        orig.projectId,
+        now.substring(0, 10),
+        `REV-${orig.voucherNo || orig.id}`,
+        `Reversal – ${orig.description}`,
+        `Reversal – ${orig.particulars || orig.description}`,
+        'Reversal',
+        revDebit,
+        revCredit,
+        0,
+        orig.sourceModule || 'MAN01',
+        orig.id,
+        orig.voucherNo,
+        orig.id,
+        reason || `Reversal of ${orig.voucherNo || orig.id}`,
+        authUser,
+        now,
+        'Posted',
+        authUser,
+        now
+      );
+
+      db.prepare(`
+        UPDATE worker_ledger
+        SET status = 'Reversed', reversedBy = ?, reversedDate = ?
+        WHERE id = ?
+      `).run(authUser, now, orig.id);
+
+      logActivity(authUser, "REVERSE", "worker_ledger", orig.id, `Reversed transaction ${orig.voucherNo || orig.id}: ₹${orig.debit || orig.credit}`);
+
+      res.json({ success: true, reversalId: revId, originalId: orig.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Manual Adjustment API
+  app.post("/api/worker-ledger/adjustment", (req, res) => {
+    try {
+      const {
+        workerId, projectId, date, type, amount, reason, remarks,
+        attachmentUrl, attachmentName
+      } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+
+      const numAmt = parseFloat(amount || 0);
+      if (isNaN(numAmt) || numAmt <= 0) {
+        return res.status(400).json({ error: "Amount must be greater than 0" });
+      }
+
+      const now = new Date().toISOString();
+      const adjId = `wl-adj-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const isDebit = type === 'Debit';
+
+      db.prepare(`
+        INSERT INTO worker_ledger (
+          id, workerId, projectId, date, voucherNo, description, particulars,
+          entryType, debit, credit, runningBalance, sourceModule, sourceTransactionId,
+          sourceVoucherNo, remarks, attachmentUrl, attachmentName, createdBy, createdDate,
+          status, postedBy, postedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        adjId,
+        workerId,
+        projectId,
+        date || now.substring(0, 10),
+        `ADJ-${now.substring(2, 4)}${now.substring(5, 7)}-${Math.floor(1000 + Math.random() * 9000)}`,
+        `Authorized Adjustment: ${reason || 'Financial Correction'}`,
+        reason || 'Authorized Adjustment',
+        'Adjustment',
+        isDebit ? numAmt : 0,
+        isDebit ? 0 : numAmt,
+        0,
+        'ADJ01',
+        adjId,
+        `ADJ-${Date.now()}`,
+        remarks || null,
+        attachmentUrl || null,
+        attachmentName || null,
+        authUser,
+        now,
+        'Posted',
+        authUser,
+        now
+      );
+
+      logActivity(authUser, "ADJUSTMENT", "worker_ledger", adjId, `Posted manual adjustment ${type} ₹${numAmt} for worker ${workerId}: ${reason}`);
+
+      res.status(201).json({ success: true, id: adjId });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Opening Balance API
+  app.post("/api/worker-ledger/opening-balance", (req, res) => {
+    try {
+      const { workerId, projectId, date, type, amount, remarks } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+
+      const numAmt = parseFloat(amount || 0);
+      const isCredit = type === 'Credit';
+      const now = new Date().toISOString();
+      const opnId = `wl-opn-${workerId}`;
+
+      db.prepare(`
+        INSERT INTO worker_ledger (
+          id, workerId, projectId, date, voucherNo, description, particulars,
+          entryType, debit, credit, runningBalance, sourceModule, sourceTransactionId,
+          sourceVoucherNo, remarks, createdBy, createdDate, status, postedBy, postedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          projectId = excluded.projectId,
+          date = excluded.date,
+          debit = excluded.debit,
+          credit = excluded.credit,
+          remarks = excluded.remarks,
+          modifiedBy = ?,
+          modifiedDate = ?
+      `).run(
+        opnId,
+        workerId,
+        projectId,
+        date || '2026-01-01',
+        `OPN-${workerId.toUpperCase()}`,
+        `Authorized Opening Balance (${isCredit ? 'Credit - Company owes Worker' : 'Debit - Worker owes Company'})`,
+        'Opening Balance',
+        'Opening Balance',
+        isCredit ? 0 : numAmt,
+        isCredit ? numAmt : 0,
+        0,
+        'OPN01',
+        opnId,
+        `OPN-${workerId}`,
+        remarks || 'Initial balance migration',
+        authUser,
+        now,
+        'Posted',
+        authUser,
+        now,
+        authUser,
+        now
+      );
+
+      logActivity(authUser, "OPENING_BALANCE", "worker_ledger", opnId, `Set opening balance for worker ${workerId}: ₹${numAmt} (${type})`);
+
+      res.json({ success: true, id: opnId });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Monthly Reconciliation Endpoint
+  app.get("/api/worker-ledger/reconciliation", (req, res) => {
+    try {
+      const { workerId, month, projectId } = req.query;
+      if (!workerId) {
+        return res.status(400).json({ error: "workerId is required" });
+      }
+
+      const pMonth = (month as string) || new Date().toISOString().substring(0, 7);
+
+      let query = "SELECT * FROM worker_ledger WHERE workerId = ? AND (status = 'Posted' OR status IS NULL)";
+      const params: any[] = [workerId];
+      if (projectId && projectId !== 'All' && projectId !== 'all') {
+        query += " AND projectId = ?";
+        params.push(projectId);
+      }
+      query += " ORDER BY date ASC, id ASC";
+
+      const allRows = db.prepare(query).all(...params) as any[];
+
+      let openingBalance = 0;
+      let monthEarnings = 0;
+      let monthAdvances = 0;
+      let monthKharchi = 0;
+      let monthMess = 0;
+      let monthRecovery = 0;
+      let monthPayments = 0;
+      let monthAdjustments = 0;
+      let monthOtherDebits = 0;
+      let ledgerClosingBalance = 0;
+
+      for (const r of allRows) {
+        const d = parseFloat(r.debit || 0);
+        const c = parseFloat(r.credit || 0);
+        const rDate = r.date || '';
+
+        if (rDate < `${pMonth}-01`) {
+          openingBalance = openingBalance + c - d;
+        } else if (rDate.startsWith(pMonth) || (rDate >= `${pMonth}-01` && rDate <= `${pMonth}-31`)) {
+          const sMod = (r.sourceModule || '').toUpperCase();
+          const eType = (r.entryType || '').toLowerCase();
+
+          if (c > 0 || eType.includes('earning') || eType.includes('wage')) {
+            monthEarnings += c;
+          }
+          if (sMod === 'WFT01' || eType.includes('advance')) {
+            monthAdvances += d;
+          } else if (sMod === 'KHA01' || eType.includes('kharchi')) {
+            monthKharchi += d;
+          } else if (sMod === 'MESS01' || eType.includes('mess')) {
+            monthMess += d;
+          } else if (eType.includes('recovery')) {
+            monthRecovery += d;
+          } else if (sMod === 'PAY01' || eType.includes('payment')) {
+            monthPayments += d;
+          } else if (eType.includes('adjustment')) {
+            monthAdjustments = monthAdjustments + c - d;
+          } else {
+            monthOtherDebits += d;
+          }
+        }
+
+        if (rDate <= `${pMonth}-31`) {
+          ledgerClosingBalance = ledgerClosingBalance + c - d;
+        }
+      }
+
+      const expectedClosing = openingBalance + monthEarnings - monthAdvances - monthKharchi - monthMess - monthRecovery - monthPayments + monthAdjustments - monthOtherDebits;
+      const difference = Math.round((ledgerClosingBalance - expectedClosing) * 100) / 100;
+      const isReconciled = Math.abs(difference) < 0.01;
+
+      res.json({
+        workerId,
+        month: pMonth,
+        openingBalance,
+        monthEarnings,
+        monthAdvances,
+        monthKharchi,
+        monthMess,
+        monthRecovery,
+        monthPayments,
+        monthAdjustments,
+        monthOtherDebits,
+        expectedClosingBalance: expectedClosing,
+        ledgerClosingBalance,
+        difference,
+        status: isReconciled ? 'Reconciled' : 'Attention Required'
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 12. Get Worker Ledger Audit Trails
+  app.get("/api/worker-ledger/audit-trails", (req, res) => {
+    try {
+      const { workerId } = req.query;
+      let logsQuery = "SELECT * FROM activity_logs WHERE module IN ('worker_ledger', 'workers', 'worker_holds', 'advances', 'payments')";
+      const params: any[] = [];
+      if (workerId) {
+        logsQuery += " AND (recordId = ? OR details LIKE ?)";
+        params.push(workerId, `%${workerId}%`);
+      }
+      logsQuery += " ORDER BY timestamp DESC LIMIT 100";
+      const activityLogs = db.prepare(logsQuery).all(...params) as any[];
+
+      let recQuery = "SELECT * FROM worker_recovery_audit_trail";
+      const recParams: any[] = [];
+      if (workerId) {
+        recQuery += " WHERE workerId = ?";
+        recParams.push(workerId);
+      }
+      recQuery += " ORDER BY modifiedDate DESC LIMIT 100";
+      const recoveryAudits = db.prepare(recQuery).all(...recParams) as any[];
+
+      let specialQuery = "SELECT * FROM worker_ledger WHERE (status = 'Reversed' OR entryType IN ('Adjustment', 'Reversal', 'Opening Balance', 'Hold Release'))";
+      const specialParams: any[] = [];
+      if (workerId) {
+        specialQuery += " AND workerId = ?";
+        specialParams.push(workerId);
+      }
+      specialQuery += " ORDER BY createdDate DESC LIMIT 100";
+      const specialEntries = db.prepare(specialQuery).all(...specialParams) as any[];
+
+      res.json({
+        activityLogs,
+        recoveryAudits,
+        specialEntries
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -3394,9 +4129,9 @@ async function startServer() {
         INSERT INTO worker_ledger (
           id, workerId, projectId, date, voucherNo, description, particulars,
           entryType, debit, credit, runningBalance, paymentId, advanceId,
-          sourceModule, sourceTransactionId, remarks, createdBy, createdDate
+          sourceModule, sourceTransactionId, remarks, createdBy, createdDate, status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Posted')
       `).run(
         id,
         workerId,
@@ -3429,14 +4164,14 @@ async function startServer() {
       const {
         workerId, projectId, date, voucherNo, description, particulars,
         entryType, debit, credit, runningBalance, paymentId, advanceId,
-        sourceModule, sourceTransactionId, remarks, modifiedBy, modifiedDate
+        sourceModule, sourceTransactionId, remarks, modifiedBy, modifiedDate, status
       } = req.body;
       db.prepare(`
         UPDATE worker_ledger
         SET workerId = ?, projectId = ?, date = ?, voucherNo = ?, description = ?,
             particulars = ?, entryType = ?, debit = ?, credit = ?, runningBalance = ?,
             paymentId = ?, advanceId = ?, sourceModule = ?, sourceTransactionId = ?,
-            remarks = ?, modifiedBy = ?, modifiedDate = ?
+            remarks = ?, modifiedBy = ?, modifiedDate = ?, status = ?
         WHERE id = ?
       `).run(
         workerId,
@@ -3456,6 +4191,7 @@ async function startServer() {
         remarks || null,
         modifiedBy || 'Admin',
         modifiedDate || new Date().toISOString(),
+        status || 'Posted',
         id
       );
       res.json(req.body);
