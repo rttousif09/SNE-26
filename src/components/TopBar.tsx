@@ -82,6 +82,7 @@ const TCODE_MAPPING: Record<string, string> = {
   'FB03': 'document-flow',
   'DMS01': 'dms',
   'DOC01': 'dms',
+  'DPR01': 'dpr',
   'DASH01': 'dashboard',
   'MESS01': 'mess'
 };
@@ -92,12 +93,13 @@ export function getTabTCodeDisplay(tab: string): { tcode: string; title: string 
     case 'workers': return { tcode: 'WRK01', title: 'Worker Master' };
     case 'worker-payment': return { tcode: 'PAY01', title: 'Worker Payment' };
     case 'worker-ledger': return { tcode: 'WKL01', title: 'Worker Ledger & Recovery' };
-    case 'kharchi': return { tcode: 'KHAR01', title: 'Weekly Kharchi (Pocket Money)' };
+    case 'kharchi': return { tcode: 'KHAR01', title: 'Worker Kharchi Ledger' };
     case 'billing': return { tcode: 'BIL01', title: 'RA Billing' };
     case 'gst-register': return { tcode: 'GST01', title: 'GST Payment & Filing' };
     case 'client-payment': return { tcode: 'CPAY01', title: 'Client Payments & Receipts' };
     case 'boqs': return { tcode: 'BOQ01', title: 'BOQ Master' };
     case 'projects': return { tcode: 'PRJ01', title: 'Project Management' };
+    case 'dpr': return { tcode: 'DPR01', title: 'Daily Progress Report' };
     case 'dlr': return { tcode: 'DLR01', title: 'Daily Attendance (DLR)' };
     case 'materials': return { tcode: 'MAT01', title: 'Materials & Inventory Store' };
     case 'assets': return { tcode: 'EQP01', title: 'Equipment & Asset Register' };

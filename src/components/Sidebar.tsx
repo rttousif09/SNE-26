@@ -84,9 +84,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       key: 'attendance',
-      label: 'Attendance',
+      label: 'Site Reports & Attendance',
       icon: <HardHat size={14} className="text-[#5F6B75]" />,
       items: [
+        { id: 'dpr', label: 'Daily Progress Report', tcode: 'DPR01' },
         { id: 'dlr', label: 'Daily Attendance (DLR)', tcode: 'DLR01' }
       ]
     },
@@ -96,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <Wallet size={14} className="text-[#0A6ED1]" />,
       items: [
         { id: 'advance', label: 'Worker Transactions (WFT01)', tcode: 'WFT01' },
-        { id: 'kharchi', label: 'Weekly Kharchi', tcode: 'KHAR01' },
+        { id: 'kharchi', label: 'Worker Kharchi Ledger', tcode: 'KHAR01' },
         { id: 'worker-ledger', label: 'Worker Ledger & Recovery', tcode: 'WKL01' }
       ]
     },

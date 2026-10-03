@@ -23,6 +23,7 @@ import { ExpensesSummary } from './pages/ExpensesSummary';
 import { SiteMonthlySummary } from './pages/SiteMonthlySummary';
 import { Mess } from './pages/Mess';
 import { DLR } from './pages/DLR';
+import { DPR } from './pages/DPR';
 import { Materials } from './pages/Materials';
 import { EquipmentAssetManagement } from './pages/EquipmentAssetManagement';
 import { WorkerLedger } from './pages/WorkerLedger';
@@ -181,13 +182,14 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'billing': return 'Billing Management';
       case 'gst-register': return 'GST Payment & Filing Register';
       case 'client-payment': return 'Client Payment';
-      case 'kharchi': return 'Kharchi';
+      case 'kharchi': return 'KHAR01 – Worker Kharchi Ledger';
       case 'advance': return 'Advance';
       case 'worker-payment': return 'Workers Payment';
       case 'worker-ledger': return 'Worker Ledger & Advance Recovery';
       case 'approvals': return 'Approvals Workflow';
       case 'expenses': return 'Expenses Ledger';
       case 'mess': return 'Mess Management';
+      case 'dpr': return 'DPR01 – Daily Progress Report';
       case 'dlr': return 'Daily Labour Report (DLR)';
       case 'materials': return 'Material & Inventory Management';
       case 'assets': return 'Equipment & Asset Register';
@@ -459,6 +461,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'approvals': return <Approvals key={key} />;
       case 'expenses': return <Expenses key={key} />;
       case 'mess': return <Mess key={key} />;
+      case 'dpr': return <DPR key={key} />;
       case 'dlr': return <DLR key={key} />;
       case 'materials': return <Materials key={key} />;
       case 'assets': return <EquipmentAssetManagement key={key} />;
@@ -497,6 +500,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         return ['Masters', 'Projects'];
       case 'workers':
         return ['Masters', 'Workers'];
+      case 'dpr':
+        return ['Field & Site Operations', 'DPR01 – Daily Progress Report'];
       case 'dlr':
         return ['Labour Management', 'Attendance (DLR)'];
       case 'advance':
@@ -532,7 +537,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'client-payment':
         return ['Billing & Collections', 'Client Payment'];
       case 'kharchi':
-        return ['Labour Management', 'Kharchi (Pocket Money)'];
+        return ['Labour Management', 'KHAR01 – Worker Kharchi Ledger'];
       case 'materials':
         return ['Inventory & Store', 'Materials & Inventory'];
       case 'assets':

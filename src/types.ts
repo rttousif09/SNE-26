@@ -247,6 +247,7 @@ export interface WorkerPayment {
   floorAbstractsJson?: string;
   towerName?: string;
   kharchiDetailsJson?: string;
+  kharchiAllocations?: any[] | string;
   advanceDetailsJson?: string;
   voucherNo?: string;
 }

@@ -660,6 +660,84 @@ function initDbSchema() {
     console.error("Worker ledger backfill error:", e);
   }
 
+  // Worker Kharchi Ledger (KHAR01) Tables and Migrations
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS worker_kharchi_transactions (
+        id TEXT PRIMARY KEY,
+        voucherNo TEXT UNIQUE,
+        projectId TEXT NOT NULL,
+        workerId TEXT NOT NULL,
+        date TEXT NOT NULL,
+        kharchiType TEXT NOT NULL DEFAULT 'Weekly Kharchi',
+        specifyOtherKharchi TEXT,
+        amount REAL NOT NULL,
+        paymentMode TEXT DEFAULT 'Cash',
+        paidBy TEXT DEFAULT 'Site Supervisor',
+        recoveredAmount REAL DEFAULT 0,
+        outstandingAmount REAL NOT NULL,
+        status TEXT DEFAULT 'Posted',
+        remarks TEXT,
+        cancellationReason TEXT,
+        createdBy TEXT,
+        createdDate TEXT,
+        postedBy TEXT,
+        postedDate TEXT,
+        modifiedBy TEXT,
+        modifiedDate TEXT,
+        cancelledBy TEXT,
+        cancelledDate TEXT,
+        reversalOfId TEXT,
+        FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (workerId) REFERENCES workers(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS worker_kharchi_recoveries (
+        id TEXT PRIMARY KEY,
+        kharchiId TEXT NOT NULL,
+        paymentId TEXT NOT NULL,
+        workerId TEXT NOT NULL,
+        projectId TEXT NOT NULL,
+        recoveryDate TEXT NOT NULL,
+        amount REAL NOT NULL,
+        voucherNo TEXT,
+        remarks TEXT,
+        createdBy TEXT,
+        createdDate TEXT,
+        FOREIGN KEY (kharchiId) REFERENCES worker_kharchi_transactions(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_wkt_worker ON worker_kharchi_transactions(workerId);
+      CREATE INDEX IF NOT EXISTS idx_wkt_project ON worker_kharchi_transactions(projectId);
+      CREATE INDEX IF NOT EXISTS idx_wkt_status ON worker_kharchi_transactions(status);
+      CREATE INDEX IF NOT EXISTS idx_wkr_kharchi ON worker_kharchi_recoveries(kharchiId);
+      CREATE INDEX IF NOT EXISTS idx_wkr_payment ON worker_kharchi_recoveries(paymentId);
+    `);
+
+    // Migrate from existing kharchis table if any
+    const legacyKharchis = db.prepare("SELECT * FROM kharchis").all() as any[];
+    for (const k of legacyKharchis) {
+      const existing = db.prepare("SELECT id FROM worker_kharchi_transactions WHERE id = ?").get(k.id);
+      if (!existing) {
+        const vNo = `KHAR/2026-27/${String(k.id).replace(/\D/g, '').padStart(4, '0') || '0001'}`;
+        const numAmt = parseFloat(k.amount || 0);
+        db.prepare(`
+          INSERT INTO worker_kharchi_transactions (
+            id, voucherNo, projectId, workerId, date, kharchiType, amount,
+            paymentMode, paidBy, recoveredAmount, outstandingAmount, status,
+            remarks, createdBy, createdDate, postedBy, postedDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          k.id, vNo, k.projectId, k.workerId, k.date, 'Weekly Kharchi', numAmt,
+          'Cash', 'Site Supervisor', 0, numAmt, 'Posted',
+          'Migrated from legacy kharchi table', 'System', new Date().toISOString(), 'System', new Date().toISOString()
+        );
+      }
+    }
+  } catch (kErr) {
+    console.error("Kharchi table migration error:", kErr);
+  }
+
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeduction REAL DEFAULT 0"); } catch (e) {}
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN otherDeductionDetails TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE worker_payments ADD COLUMN floorAbstractsJson TEXT"); } catch (e) {}
@@ -1139,6 +1217,50 @@ function initDbSchema() {
       actionType TEXT NOT NULL,
       recordId TEXT NOT NULL,
       details TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS dpr_reports (
+      id TEXT PRIMARY KEY,
+      reportNo TEXT UNIQUE NOT NULL,
+      projectId TEXT NOT NULL,
+      projectCode TEXT,
+      projectName TEXT,
+      clientName TEXT,
+      contractorName TEXT DEFAULT 'SN ENTERPRISES',
+      date TEXT NOT NULL,
+      weather TEXT DEFAULT 'Sunny',
+      workingHours TEXT DEFAULT '08:00 AM - 06:00 PM (10 hrs)',
+      status TEXT NOT NULL DEFAULT 'Draft',
+      preparedBy TEXT,
+      reviewedBy TEXT,
+      approvedBy TEXT,
+      lockedBy TEXT,
+      lockedAt TEXT,
+      manpowerJson TEXT,
+      plantMachineryJson TEXT,
+      workExecutedJson TEXT,
+      materialReceivedJson TEXT,
+      concreteJson TEXT,
+      safetyJson TEXT,
+      hindrancesJson TEXT,
+      instructionsJson TEXT,
+      tomorrowPlanJson TEXT,
+      photosJson TEXT,
+      remarks TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS dpr_audit_logs (
+      id TEXT PRIMARY KEY,
+      dprId TEXT NOT NULL,
+      reportNo TEXT,
+      action TEXT NOT NULL,
+      performedBy TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      details TEXT
     );
   `);
 
@@ -2654,51 +2776,632 @@ async function startServer() {
     }
   });
 
-  // 5. Kharchis (Expenses)
+  // Helper to generate unique Kharchi Voucher Number: KHAR/YYYY-YY/XXXX
+  function getKharchiVoucherNumber(dateStr: string): string {
+    const d = new Date(dateStr || new Date().toISOString().substring(0, 10));
+    const year = isNaN(d.getFullYear()) ? new Date().getFullYear() : d.getFullYear();
+    const month = isNaN(d.getMonth()) ? new Date().getMonth() + 1 : d.getMonth() + 1;
+    const finYear = month >= 4 ? `${year}-${String(year + 1).slice(-2)}` : `${year - 1}-${String(year).slice(-2)}`;
+    const prefix = `KHAR/${finYear}/`;
+
+    const rows = db.prepare("SELECT voucherNo FROM worker_kharchi_transactions WHERE voucherNo LIKE ?").all(`${prefix}%`) as any[];
+    let maxNum = 0;
+    for (const r of rows) {
+      if (r.voucherNo) {
+        const parts = r.voucherNo.split('/');
+        if (parts.length === 3) {
+          const num = parseInt(parts[2], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    }
+    return `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+  }
+
+  // 5. Kharchis - KHAR01 Worker Kharchi Ledger
   app.get("/api/kharchis", (req, res) => {
     try {
-      const rows = db.prepare("SELECT * FROM kharchis").all();
+      const rows = db.prepare("SELECT * FROM worker_kharchi_transactions ORDER BY date DESC, id DESC").all();
+      res.json(rows);
+    } catch (err: any) {
+      try {
+        const legacy = db.prepare("SELECT * FROM kharchis ORDER BY date DESC").all();
+        res.json(legacy);
+      } catch (lErr: any) {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  });
+
+  // Comprehensive Worker Kharchi list
+  app.get("/api/worker-kharchi", (req, res) => {
+    try {
+      const { workerId, projectId, status, kharchiType, dateStart, dateEnd, search } = req.query;
+      let query = `
+        SELECT k.*, 
+               w.name as workerName, 
+               w.workerId as workerEmployeeId,
+               p.name as projectName
+        FROM worker_kharchi_transactions k
+        LEFT JOIN workers w ON k.workerId = w.id
+        LEFT JOIN projects p ON k.projectId = p.id
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+
+      if (workerId && workerId !== 'All') {
+        query += " AND (k.workerId = ? OR w.workerId = ?)";
+        params.push(workerId, workerId);
+      }
+      if (projectId && projectId !== 'All') {
+        query += " AND k.projectId = ?";
+        params.push(projectId);
+      }
+      if (status && status !== 'All') {
+        query += " AND k.status = ?";
+        params.push(status);
+      }
+      if (kharchiType && kharchiType !== 'All') {
+        query += " AND k.kharchiType = ?";
+        params.push(kharchiType);
+      }
+      if (dateStart) {
+        query += " AND k.date >= ?";
+        params.push(dateStart);
+      }
+      if (dateEnd) {
+        query += " AND k.date <= ?";
+        params.push(dateEnd);
+      }
+      if (search) {
+        query += " AND (k.voucherNo LIKE ? OR w.name LIKE ? OR w.workerId LIKE ? OR k.remarks LIKE ?)";
+        const term = `%${search}%`;
+        params.push(term, term, term, term);
+      }
+
+      query += " ORDER BY k.date DESC, k.voucherNo DESC";
+      const rows = db.prepare(query).all(...params) as any[];
+
       res.json(rows);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.post("/api/kharchis", (req, res) => {
+  // Summary and Reconciliation Endpoint
+  app.get("/api/worker-kharchi/summary", (req, res) => {
     try {
-      const { id, projectId, workerId, date, amount } = req.body;
-      const numAmount = parseFloat(amount || 0);
-      db.prepare(`
-        INSERT INTO kharchis (id, projectId, workerId, date, amount)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(id, projectId, workerId, date, numAmount);
+      const { projectId, month } = req.query;
+      const curMonth = (month as string) || new Date().toISOString().substring(0, 7);
 
-      // Automatically sync into worker_ledger
+      let baseQuery = "SELECT * FROM worker_kharchi_transactions WHERE 1=1";
+      const params: any[] = [];
+      if (projectId && projectId !== 'All') {
+        baseQuery += " AND projectId = ?";
+        params.push(projectId);
+      }
+      const allTx = db.prepare(baseQuery).all(...params) as any[];
+
+      let totalKharchi = 0;
+      let totalRecovered = 0;
+      let totalOutstanding = 0;
+      let currentMonthKharchi = 0;
+      let currentMonthRecovered = 0;
+
+      const workerMap: Record<string, {
+        workerId: string;
+        workerName: string;
+        workerEmployeeId: string;
+        currentProject: string;
+        totalKharchi: number;
+        totalRecovered: number;
+        totalOutstanding: number;
+        count: number;
+      }> = {};
+
+      const allWorkers = db.prepare("SELECT * FROM workers").all() as any[];
+      const workerLookup = new Map(allWorkers.map(w => [w.id, w]));
+      const allProjects = db.prepare("SELECT * FROM projects").all() as any[];
+      const projectLookup = new Map(allProjects.map(p => [p.id, p]));
+
+      for (const tx of allTx) {
+        if (tx.status === 'Cancelled') continue;
+
+        const amt = parseFloat(tx.amount || 0);
+        const rec = parseFloat(tx.recoveredAmount || 0);
+        const os = parseFloat(tx.outstandingAmount != null ? tx.outstandingAmount : (amt - rec));
+
+        totalKharchi += amt;
+        totalRecovered += rec;
+        totalOutstanding += os;
+
+        if (tx.date && tx.date.startsWith(curMonth)) {
+          currentMonthKharchi += amt;
+          currentMonthRecovered += rec;
+        }
+
+        const wObj = workerLookup.get(tx.workerId);
+        const pObj = projectLookup.get(tx.projectId);
+
+        if (!workerMap[tx.workerId]) {
+          workerMap[tx.workerId] = {
+            workerId: tx.workerId,
+            workerName: wObj?.name || 'Worker',
+            workerEmployeeId: wObj?.workerId || tx.workerId,
+            currentProject: pObj?.name || 'Unassigned',
+            totalKharchi: 0,
+            totalRecovered: 0,
+            totalOutstanding: 0,
+            count: 0
+          };
+        }
+
+        workerMap[tx.workerId].totalKharchi += amt;
+        workerMap[tx.workerId].totalRecovered += rec;
+        workerMap[tx.workerId].totalOutstanding += os;
+        workerMap[tx.workerId].count += 1;
+      }
+
+      const previousOutstanding = Math.max(0, totalOutstanding - (currentMonthKharchi - currentMonthRecovered));
+
+      // Reconciliation Calculation
+      const totalPosted = totalKharchi;
+      const totalRecov = totalRecovered;
+      const calculatedOutstanding = Math.round((totalPosted - totalRecov) * 100) / 100;
+      const sumIndividualOutstanding = Math.round(totalOutstanding * 100) / 100;
+      const difference = Math.abs(Math.round((calculatedOutstanding - sumIndividualOutstanding) * 100) / 100);
+      const isReconciled = difference < 0.01;
+
+      res.json({
+        totalKharchi,
+        totalRecovered,
+        totalOutstanding,
+        currentMonthKharchi,
+        previousOutstanding,
+        workerSummary: Object.values(workerMap).sort((a, b) => b.totalOutstanding - a.totalOutstanding),
+        reconciliation: {
+          totalPosted,
+          totalRecovered: totalRecov,
+          calculatedOutstanding,
+          sumIndividualOutstanding,
+          difference,
+          status: isReconciled ? 'Reconciled' : 'Reconciliation Error – Review Required'
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get outstanding kharchi transactions for a specific worker
+  app.get("/api/worker-kharchi/outstanding/:workerId", (req, res) => {
+    try {
+      const { workerId } = req.params;
+      const { currentMonth } = req.query;
+      const curMonth = (currentMonth as string) || new Date().toISOString().substring(0, 7);
+
+      const rows = db.prepare(`
+        SELECT k.*, p.name as projectName
+        FROM worker_kharchi_transactions k
+        LEFT JOIN projects p ON k.projectId = p.id
+        WHERE k.workerId = ?
+          AND k.status IN ('Posted', 'Partially Recovered')
+          AND k.outstandingAmount > 0
+        ORDER BY k.date ASC, k.voucherNo ASC
+      `).all(workerId) as any[];
+
+      let previousOutstanding = 0;
+      let currentMonthKharchi = 0;
+
+      const formatted = rows.map(r => {
+        const isPrevious = !r.date.startsWith(curMonth);
+        const os = parseFloat(r.outstandingAmount || 0);
+        if (isPrevious) {
+          previousOutstanding += os;
+        } else {
+          currentMonthKharchi += os;
+        }
+
+        return {
+          ...r,
+          isPrevious
+        };
+      });
+
+      res.json({
+        workerId,
+        transactions: formatted,
+        previousOutstanding,
+        currentMonthKharchi,
+        totalRecoverable: previousOutstanding + currentMonthKharchi
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Create Kharchi Transaction
+  app.post("/api/worker-kharchi", (req, res) => {
+    try {
+      const {
+        projectId, workerId, date, kharchiType, specifyOtherKharchi,
+        amount, paymentMode, paidBy, remarks
+      } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Supervisor";
+
+      const numAmount = parseFloat(amount || 0);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: "Amount must be positive and greater than zero" });
+      }
+      if (!workerId) return res.status(400).json({ error: "Worker is required" });
+      if (!projectId) return res.status(400).json({ error: "Project is required" });
+
+      const finalDate = date || new Date().toISOString().substring(0, 10);
+      const voucherNo = getKharchiVoucherNumber(finalDate);
+      const id = `khar-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const now = new Date().toISOString();
+      const finalType = kharchiType || 'Weekly Kharchi';
+
+      db.prepare(`
+        INSERT INTO worker_kharchi_transactions (
+          id, voucherNo, projectId, workerId, date, kharchiType, specifyOtherKharchi,
+          amount, paymentMode, paidBy, recoveredAmount, outstandingAmount, status,
+          remarks, createdBy, createdDate, postedBy, postedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, voucherNo, projectId, workerId, finalDate, finalType, specifyOtherKharchi || null,
+        numAmount, paymentMode || 'Cash', paidBy || 'Site Supervisor', 0, numAmount, 'Posted',
+        remarks || null, authUser, now, authUser, now
+      );
+
+      // Backwards compatibility with legacy kharchis table
+      try {
+        db.prepare(`
+          INSERT INTO kharchis (id, projectId, workerId, date, amount)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            projectId = excluded.projectId,
+            workerId = excluded.workerId,
+            date = excluded.date,
+            amount = excluded.amount
+        `).run(id, projectId, workerId, finalDate, numAmount);
+      } catch (kErr) {}
+
+      // Automatically post to WKL01 Worker Sub-Ledger
       try {
         db.prepare(`
           INSERT INTO worker_ledger (
             id, workerId, projectId, date, voucherNo, description, particulars,
             entryType, debit, credit, runningBalance, sourceModule, sourceTransactionId,
-            sourceVoucherNo, remarks, createdBy, createdDate, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            sourceVoucherNo, remarks, createdBy, createdDate, status, postedBy, postedDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             workerId = excluded.workerId,
             projectId = excluded.projectId,
             date = excluded.date,
-            debit = excluded.debit,
+            voucherNo = excluded.voucherNo,
             description = excluded.description,
             particulars = excluded.particulars,
+            debit = excluded.debit,
             status = excluded.status
         `).run(
-          `wl-kha-${id}`, workerId, projectId, date, `KHA-${id.toUpperCase()}`,
-          'Weekly Kharchi (Pocket Money)', 'Weekly Kharchi', 'Kharchi',
-          numAmount, 0, 0, 'KHA01', id,
-          `KHA-${id.toUpperCase()}`, 'Weekly pocket money disbursement',
-          'System', new Date().toISOString(), 'Posted'
+          `wl-khar-${id}`, workerId, projectId, finalDate, voucherNo,
+          `${finalType}${remarks ? ': ' + remarks : ''}`, finalType,
+          'Kharchi', numAmount, 0, 0, 'KHAR01', id, voucherNo,
+          remarks || 'Kharchi disbursement', authUser, now, 'Posted', authUser, now
         );
       } catch (lErr) {
-        console.error("Failed to sync kharchi to ledger:", lErr);
+        console.error("WKL01 sync warning for kharchi:", lErr);
       }
+
+      logActivity(authUser, "CREATE", "worker_kharchi_transactions", id, `Created kharchi ${voucherNo}: ₹${numAmount} for worker ${workerId}`);
+
+      res.status(201).json({
+        id,
+        voucherNo,
+        projectId,
+        workerId,
+        date: finalDate,
+        kharchiType: finalType,
+        amount: numAmount,
+        recoveredAmount: 0,
+        outstandingAmount: numAmount,
+        status: 'Posted'
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Edit Kharchi Transaction
+  app.put("/api/worker-kharchi/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        projectId, workerId, date, kharchiType, specifyOtherKharchi,
+        amount, paymentMode, paidBy, remarks
+      } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Supervisor";
+
+      const existing = db.prepare("SELECT * FROM worker_kharchi_transactions WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "Kharchi transaction not found" });
+      }
+      if (existing.status === 'Cancelled') {
+        return res.status(400).json({ error: "Cannot edit a cancelled transaction" });
+      }
+
+      const numAmount = parseFloat(amount || 0);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: "Amount must be positive and greater than zero" });
+      }
+      const rec = parseFloat(existing.recoveredAmount || 0);
+      if (numAmount < rec) {
+        return res.status(400).json({ error: `Amount cannot be less than already recovered amount ₹${rec}` });
+      }
+
+      const newOutstanding = numAmount - rec;
+      const newStatus = newOutstanding <= 0 ? 'Recovered' : (rec > 0 ? 'Partially Recovered' : 'Posted');
+      const now = new Date().toISOString();
+      const finalType = kharchiType || existing.kharchiType || 'Weekly Kharchi';
+
+      db.prepare(`
+        UPDATE worker_kharchi_transactions
+        SET projectId = ?, workerId = ?, date = ?, kharchiType = ?,
+            specifyOtherKharchi = ?, amount = ?, paymentMode = ?,
+            paidBy = ?, outstandingAmount = ?, status = ?, remarks = ?,
+            modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        projectId || existing.projectId,
+        workerId || existing.workerId,
+        date || existing.date,
+        finalType,
+        specifyOtherKharchi !== undefined ? specifyOtherKharchi : existing.specifyOtherKharchi,
+        numAmount,
+        paymentMode || existing.paymentMode,
+        paidBy || existing.paidBy,
+        newOutstanding,
+        newStatus,
+        remarks !== undefined ? remarks : existing.remarks,
+        authUser,
+        now,
+        id
+      );
+
+      // Sync legacy kharchis
+      try {
+        db.prepare("UPDATE kharchis SET projectId = ?, workerId = ?, date = ?, amount = ? WHERE id = ?").run(
+          projectId || existing.projectId, workerId || existing.workerId, date || existing.date, numAmount, id
+        );
+      } catch (kErr) {}
+
+      // Sync WKL01 sub-ledger
+      try {
+        db.prepare(`
+          UPDATE worker_ledger
+          SET projectId = ?, workerId = ?, date = ?, debit = ?,
+              description = ?, particulars = ?, remarks = ?,
+              modifiedBy = ?, modifiedDate = ?
+          WHERE id = ? OR (sourceModule = 'KHAR01' AND sourceTransactionId = ?)
+        `).run(
+          projectId || existing.projectId, workerId || existing.workerId, date || existing.date, numAmount,
+          `${finalType}${remarks ? ': ' + remarks : ''}`, finalType, remarks || null,
+          authUser, now, `wl-khar-${id}`, id
+        );
+      } catch (lErr) {}
+
+      logActivity(authUser, "UPDATE", "worker_kharchi_transactions", id, `Updated kharchi ${existing.voucherNo}: ₹${existing.amount} -> ₹${numAmount}`);
+
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Cancel Kharchi Transaction (with linked reversal in sub-ledger)
+  app.post("/api/worker-kharchi/:id/cancel", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Supervisor";
+
+      if (!reason || !reason.trim()) {
+        return res.status(400).json({ error: "Cancellation reason is required" });
+      }
+
+      const existing = db.prepare("SELECT * FROM worker_kharchi_transactions WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "Kharchi transaction not found" });
+      }
+      if (existing.status === 'Cancelled') {
+        return res.status(400).json({ error: "Transaction is already cancelled" });
+      }
+      if (existing.recoveredAmount > 0) {
+        return res.status(400).json({ error: `Cannot cancel a kharchi transaction that has already been partially or fully recovered (Recovered: ₹${existing.recoveredAmount})` });
+      }
+
+      const now = new Date().toISOString();
+      const amt = parseFloat(existing.amount || 0);
+
+      // 1. Mark cancelled in worker_kharchi_transactions
+      db.prepare(`
+        UPDATE worker_kharchi_transactions
+        SET status = 'Cancelled', cancellationReason = ?, cancelledBy = ?, cancelledDate = ?
+        WHERE id = ?
+      `).run(reason, authUser, now, id);
+
+      // 2. Mark legacy kharchis deleted or update
+      try {
+        db.prepare("DELETE FROM kharchis WHERE id = ?").run(id);
+      } catch (kErr) {}
+
+      // 3. In WKL01: mark original as Reversed and create reversal entry
+      try {
+        db.prepare(`
+          UPDATE worker_ledger
+          SET status = 'Reversed', reversedBy = ?, reversedDate = ?
+          WHERE id = ? OR (sourceModule = 'KHAR01' AND sourceTransactionId = ?)
+        `).run(authUser, now, `wl-khar-${id}`, id);
+
+        const revId = `wl-rev-khar-${id}`;
+        db.prepare(`
+          INSERT INTO worker_ledger (
+            id, workerId, projectId, date, voucherNo, description, particulars,
+            entryType, debit, credit, runningBalance, sourceModule, sourceTransactionId,
+            sourceVoucherNo, reversalOfId, remarks, createdBy, createdDate, status, postedBy, postedDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          revId, existing.workerId, existing.projectId, now.substring(0, 10),
+          `REV-${existing.voucherNo || id}`,
+          `Reversal – ${existing.kharchiType || 'Weekly Kharchi'} (${reason})`,
+          `Reversal – ${existing.kharchiType || 'Weekly Kharchi'}`,
+          'Reversal', 0, amt, 0, 'KHAR01', id, existing.voucherNo, `wl-khar-${id}`,
+          reason, authUser, now, 'Posted', authUser, now
+        );
+      } catch (lErr) {
+        console.error("WKL01 reversal warning:", lErr);
+      }
+
+      logActivity(authUser, "CANCEL", "worker_kharchi_transactions", id, `Cancelled kharchi ${existing.voucherNo}: reason: ${reason}`);
+
+      res.json({ success: true, id, status: 'Cancelled' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Record Recovery against one or more Kharchi transactions (PAY01 integration)
+  app.post("/api/worker-kharchi/recover", (req, res) => {
+    try {
+      const { paymentId, workerId, projectId, recoveryDate, allocations, remarks, voucherNo } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "PAY01";
+
+      if (!paymentId || !workerId || !Array.isArray(allocations)) {
+        return res.status(400).json({ error: "paymentId, workerId, and allocations array are required" });
+      }
+
+      const dateStr = recoveryDate || new Date().toISOString().substring(0, 10);
+      const results: any[] = [];
+
+      for (const item of allocations) {
+        const { kharchiId, amount } = item;
+        const numAmt = parseFloat(amount || 0);
+        if (numAmt <= 0) continue;
+
+        const khar = db.prepare("SELECT * FROM worker_kharchi_transactions WHERE id = ?").get(kharchiId) as any;
+        if (!khar) continue;
+
+        const currentOs = parseFloat(khar.outstandingAmount != null ? khar.outstandingAmount : (khar.amount - khar.recoveredAmount));
+        const recoveryAmount = Math.min(numAmt, currentOs);
+        const newRecovered = parseFloat(khar.recoveredAmount || 0) + recoveryAmount;
+        const newOutstanding = Math.max(0, currentOs - recoveryAmount);
+        const newStatus = newOutstanding <= 0 ? 'Recovered' : 'Partially Recovered';
+
+        // Update transaction
+        db.prepare(`
+          UPDATE worker_kharchi_transactions
+          SET recoveredAmount = ?, outstandingAmount = ?, status = ?, modifiedDate = ?
+          WHERE id = ?
+        `).run(newRecovered, newOutstanding, newStatus, new Date().toISOString(), kharchiId);
+
+        // Insert recovery record
+        const recId = `khrec-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        db.prepare(`
+          INSERT INTO worker_kharchi_recoveries (
+            id, kharchiId, paymentId, workerId, projectId, recoveryDate, amount, voucherNo, remarks, createdBy, createdDate
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          recId, kharchiId, paymentId, workerId, projectId || khar.projectId,
+          dateStr, recoveryAmount, voucherNo || `PAY-${paymentId}`,
+          remarks || `Recovered in paycheck payment settlement`, authUser, new Date().toISOString()
+        );
+
+        results.push({ kharchiId, recoveryAmount, newOutstanding, newStatus });
+      }
+
+      res.json({ success: true, count: results.length, details: results });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get Audit Trails for Worker Kharchi
+  app.get("/api/worker-kharchi/audit-trails", (req, res) => {
+    try {
+      const { workerId, kharchiId } = req.query;
+      let logsQuery = "SELECT * FROM activity_logs WHERE module IN ('worker_kharchi_transactions', 'kharchis')";
+      const params: any[] = [];
+      if (kharchiId) {
+        logsQuery += " AND recordId = ?";
+        params.push(kharchiId);
+      } else if (workerId) {
+        logsQuery += " AND details LIKE ?";
+        params.push(`%${workerId}%`);
+      }
+      logsQuery += " ORDER BY timestamp DESC LIMIT 100";
+      const activityLogs = db.prepare(logsQuery).all(...params) as any[];
+
+      let recQuery = `
+        SELECT r.*, k.voucherNo as kharchiVoucherNo, k.kharchiType
+        FROM worker_kharchi_recoveries r
+        LEFT JOIN worker_kharchi_transactions k ON r.kharchiId = k.id
+        WHERE 1=1
+      `;
+      const recParams: any[] = [];
+      if (kharchiId) {
+        recQuery += " AND r.kharchiId = ?";
+        recParams.push(kharchiId);
+      } else if (workerId) {
+        recQuery += " AND r.workerId = ?";
+        recParams.push(workerId);
+      }
+      recQuery += " ORDER BY r.recoveryDate DESC LIMIT 100";
+      const recoveryLogs = db.prepare(recQuery).all(...recParams) as any[];
+
+      res.json({ activityLogs, recoveryLogs });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Legacy kharchis endpoints for backward compatibility
+  app.post("/api/kharchis", (req, res) => {
+    try {
+      const { id, projectId, workerId, date, amount } = req.body;
+      const numAmount = parseFloat(amount || 0);
+      const voucherNo = getKharchiVoucherNumber(date);
+      const finalId = id || `khar-${Date.now()}`;
+
+      db.prepare(`
+        INSERT INTO worker_kharchi_transactions (
+          id, voucherNo, projectId, workerId, date, kharchiType, amount,
+          paymentMode, paidBy, recoveredAmount, outstandingAmount, status,
+          remarks, createdBy, createdDate, postedBy, postedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          projectId = excluded.projectId,
+          workerId = excluded.workerId,
+          date = excluded.date,
+          amount = excluded.amount,
+          outstandingAmount = excluded.amount - recoveredAmount
+      `).run(
+        finalId, voucherNo, projectId, workerId, date, 'Weekly Kharchi', numAmount,
+        'Cash', 'Site Supervisor', 0, numAmount, 'Posted',
+        'Weekly pocket money disbursement', 'System', new Date().toISOString(), 'System', new Date().toISOString()
+      );
+
+      db.prepare(`
+        INSERT INTO kharchis (id, projectId, workerId, date, amount)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          projectId = excluded.projectId,
+          workerId = excluded.workerId,
+          date = excluded.date,
+          amount = excluded.amount
+      `).run(finalId, projectId, workerId, date, numAmount);
 
       res.status(201).json(req.body);
     } catch (err: any) {
@@ -2711,23 +3414,12 @@ async function startServer() {
       const { id } = req.params;
       const { projectId, workerId, date, amount } = req.body;
       const numAmount = parseFloat(amount || 0);
-      db.prepare(`
-        UPDATE kharchis
-        SET projectId = ?, workerId = ?, date = ?, amount = ?
-        WHERE id = ?
-      `).run(projectId, workerId, date, numAmount, id);
-
-      // Update linked ledger entry
-      try {
-        db.prepare(`
-          UPDATE worker_ledger
-          SET projectId = ?, workerId = ?, date = ?, debit = ?, modifiedDate = ?
-          WHERE id = ? OR (sourceModule = 'KHA01' AND sourceTransactionId = ?)
-        `).run(projectId, workerId, date, numAmount, new Date().toISOString(), `wl-kha-${id}`, id);
-      } catch (lErr) {
-        console.error("Failed to update kharchi ledger:", lErr);
-      }
-
+      db.prepare("UPDATE kharchis SET projectId = ?, workerId = ?, date = ?, amount = ? WHERE id = ?").run(
+        projectId, workerId, date, numAmount, id
+      );
+      db.prepare("UPDATE worker_kharchi_transactions SET projectId = ?, workerId = ?, date = ?, amount = ?, outstandingAmount = amount - recoveredAmount WHERE id = ?").run(
+        projectId, workerId, date, numAmount, id
+      );
       res.json(req.body);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2738,7 +3430,8 @@ async function startServer() {
     try {
       const { id } = req.params;
       db.prepare("DELETE FROM kharchis WHERE id = ?").run(id);
-      db.prepare("DELETE FROM worker_ledger WHERE id = ? OR (sourceModule = 'KHA01' AND sourceTransactionId = ?)").run(`wl-kha-${id}`, id);
+      db.prepare("UPDATE worker_kharchi_transactions SET status = 'Cancelled', cancellationReason = 'Deleted via legacy interface' WHERE id = ?").run(id);
+      db.prepare("DELETE FROM worker_ledger WHERE id = ? OR (sourceModule = 'KHAR01' AND sourceTransactionId = ?)").run(`wl-kha-${id}`, id);
       res.json({ success: true, id });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -3065,6 +3758,70 @@ async function startServer() {
         `);
         for (const advId of advIdList) {
           updateAdv.run(id, new Date().toISOString(), advId);
+        }
+      }
+
+      // Settle / Link Consumed Kharchis (KHAR01)
+      const kharAmt = parseFloat(kharchiDeduction || 0);
+      let kharAllocations: any[] = [];
+      if (req.body.kharchiAllocations) {
+        kharAllocations = typeof req.body.kharchiAllocations === 'string' ? JSON.parse(req.body.kharchiAllocations) : req.body.kharchiAllocations;
+      }
+
+      // Revert any previous recoveries for this payment if re-saving
+      const prevRecs = db.prepare("SELECT * FROM worker_kharchi_recoveries WHERE paymentId = ?").all(id) as any[];
+      for (const pr of prevRecs) {
+        db.prepare(`
+          UPDATE worker_kharchi_transactions
+          SET recoveredAmount = MAX(0, recoveredAmount - ?),
+              outstandingAmount = outstandingAmount + ?,
+              status = CASE WHEN (outstandingAmount + ?) >= amount THEN 'Posted' ELSE 'Partially Recovered' END
+          WHERE id = ?
+        `).run(pr.amount, pr.amount, pr.amount, pr.kharchiId);
+      }
+      db.prepare("DELETE FROM worker_kharchi_recoveries WHERE paymentId = ?").run(id);
+
+      if (Array.isArray(kharAllocations) && kharAllocations.length > 0) {
+        for (const alloc of kharAllocations) {
+          const kharId = alloc.kharchiId || alloc.id;
+          const numA = parseFloat(alloc.amount || 0);
+          if (numA <= 0) continue;
+          const kTx = db.prepare("SELECT * FROM worker_kharchi_transactions WHERE id = ?").get(kharId) as any;
+          if (kTx) {
+            const currentOs = parseFloat(kTx.outstandingAmount != null ? kTx.outstandingAmount : (kTx.amount - kTx.recoveredAmount));
+            const recAmt = Math.min(numA, currentOs);
+            const newRec = parseFloat(kTx.recoveredAmount || 0) + recAmt;
+            const newOs = Math.max(0, currentOs - recAmt);
+            const newStat = newOs <= 0 ? 'Recovered' : 'Partially Recovered';
+            db.prepare("UPDATE worker_kharchi_transactions SET recoveredAmount = ?, outstandingAmount = ?, status = ? WHERE id = ?").run(newRec, newOs, newStat, kharId);
+            db.prepare(`
+              INSERT INTO worker_kharchi_recoveries (id, kharchiId, paymentId, workerId, projectId, recoveryDate, amount, voucherNo, remarks, createdBy, createdDate)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(`khrec-${Date.now()}-${Math.random().toString(36).substring(2,6)}`, kharId, id, workerId, projectId, date, recAmt, voucherNo || `PAY-${month}`, `Recovered in payment ${month}`, 'System', new Date().toISOString());
+          }
+        }
+      } else if (kharAmt > 0) {
+        // Default allocation: oldest outstanding kharchi transactions first
+        let remainingToDeduct = kharAmt;
+        const outstandingKharchis = db.prepare(`
+          SELECT * FROM worker_kharchi_transactions
+          WHERE workerId = ? AND status IN ('Posted', 'Partially Recovered') AND outstandingAmount > 0
+          ORDER BY date ASC, id ASC
+        `).all(workerId) as any[];
+
+        for (const kTx of outstandingKharchis) {
+          if (remainingToDeduct <= 0) break;
+          const currentOs = parseFloat(kTx.outstandingAmount != null ? kTx.outstandingAmount : (kTx.amount - kTx.recoveredAmount));
+          const recAmt = Math.min(remainingToDeduct, currentOs);
+          remainingToDeduct -= recAmt;
+          const newRec = parseFloat(kTx.recoveredAmount || 0) + recAmt;
+          const newOs = Math.max(0, currentOs - recAmt);
+          const newStat = newOs <= 0 ? 'Recovered' : 'Partially Recovered';
+          db.prepare("UPDATE worker_kharchi_transactions SET recoveredAmount = ?, outstandingAmount = ?, status = ? WHERE id = ?").run(newRec, newOs, newStat, kTx.id);
+          db.prepare(`
+            INSERT INTO worker_kharchi_recoveries (id, kharchiId, paymentId, workerId, projectId, recoveryDate, amount, voucherNo, remarks, createdBy, createdDate)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(`khrec-${Date.now()}-${Math.random().toString(36).substring(2,6)}`, kTx.id, id, workerId, projectId, date, recAmt, voucherNo || `PAY-${month}`, `Recovered in payment ${month}`, 'System', new Date().toISOString());
         }
       }
 
@@ -3406,6 +4163,23 @@ async function startServer() {
       db.prepare("DELETE FROM advances WHERE id = ?").run(obAdvId);
       db.prepare("DELETE FROM worker_ledger WHERE advanceId = ? OR sourceTransactionId = ? OR id = ?").run(obAdvId, obAdvId, `wl-adv-${obAdvId}`);
 
+      // Revert kharchi recoveries if payment is deleted
+      try {
+        const kharRecs = db.prepare("SELECT * FROM worker_kharchi_recoveries WHERE paymentId = ?").all(id) as any[];
+        for (const rec of kharRecs) {
+          db.prepare(`
+            UPDATE worker_kharchi_transactions
+            SET recoveredAmount = MAX(0, recoveredAmount - ?),
+                outstandingAmount = outstandingAmount + ?,
+                status = CASE WHEN (outstandingAmount + ?) >= amount THEN 'Posted' ELSE 'Partially Recovered' END
+            WHERE id = ?
+          `).run(rec.amount, rec.amount, rec.amount, rec.kharchiId);
+        }
+        db.prepare("DELETE FROM worker_kharchi_recoveries WHERE paymentId = ?").run(id);
+      } catch (kRecErr) {
+        console.error("Kharchi recovery rollback error:", kRecErr);
+      }
+
       // Delete worker payment ledger entries
       db.prepare("DELETE FROM worker_ledger WHERE paymentId = ?").run(id);
 
@@ -3469,29 +4243,41 @@ async function startServer() {
         );
       }
 
-      // 2. Kharchis (KHA01)
-      const kharchis = db.prepare("SELECT * FROM kharchis").all() as any[];
+      // 2. Kharchis (KHAR01)
+      let kharchis: any[] = [];
+      try {
+        kharchis = db.prepare("SELECT * FROM worker_kharchi_transactions").all() as any[];
+      } catch (e) {
+        kharchis = db.prepare("SELECT * FROM kharchis").all() as any[];
+      }
+
       for (const k of kharchis) {
+        if (k.status === 'Cancelled') {
+          db.prepare("UPDATE worker_ledger SET status = 'Reversed' WHERE id = ? OR (sourceModule = 'KHAR01' AND sourceTransactionId = ?)").run(`wl-khar-${k.id}`, k.id);
+          continue;
+        }
+
+        const particulars = k.kharchiType || 'Weekly Kharchi';
         upsertStmt.run(
-          `wl-kha-${k.id}`,
+          `wl-khar-${k.id}`,
           k.workerId,
           k.projectId,
           k.date,
-          `KHA-${k.id.toUpperCase()}`,
-          'Weekly Kharchi (Pocket Money)',
-          'Weekly Kharchi',
+          k.voucherNo || `KHA-${k.id.toUpperCase()}`,
+          `${particulars}${k.remarks ? ': ' + k.remarks : ''}`,
+          particulars,
           'Kharchi',
           parseFloat(k.amount || 0),
           0,
           0,
           null,
           null,
-          'KHA01',
+          'KHAR01',
           k.id,
-          `KHA-${k.id.toUpperCase()}`,
-          'Weekly pocket money disbursement',
-          'System',
-          new Date().toISOString(),
+          k.voucherNo || `KHA-${k.id.toUpperCase()}`,
+          k.remarks || 'Weekly pocket money disbursement',
+          k.createdBy || 'System',
+          k.createdDate || new Date().toISOString(),
           'Posted'
         );
       }
@@ -7161,6 +7947,459 @@ async function startServer() {
       );
 
       res.status(201).json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ==========================================
+  // DPR01 – DAILY PROGRESS REPORT API
+  // ==========================================
+
+  function generateDPRReportNumber(dateStr?: string): string {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const fyStart = month >= 4 ? year : year - 1;
+    const fyEnd = (fyStart + 1).toString().slice(-2);
+    const fy = `${fyStart}-${fyEnd}`;
+    const prefix = `DPR/${fy}/`;
+
+    const rows = db.prepare("SELECT reportNo FROM dpr_reports WHERE reportNo LIKE ?").all(`${prefix}%`) as { reportNo: string }[];
+    let maxNum = 0;
+    for (const r of rows) {
+      const parts = r.reportNo.split('/');
+      if (parts.length >= 3) {
+        const n = parseInt(parts[2], 10);
+        if (!isNaN(n) && n > maxNum) maxNum = n;
+      }
+    }
+    return `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+  }
+
+  // 1. List DPRs with filtering
+  app.get("/api/dpr", (req, res) => {
+    try {
+      const { projectId, dateStart, dateEnd, status, search } = req.query;
+      let query = "SELECT * FROM dpr_reports WHERE 1=1";
+      const params: any[] = [];
+
+      if (projectId && projectId !== 'All') {
+        query += " AND projectId = ?";
+        params.push(projectId);
+      }
+      if (dateStart) {
+        query += " AND date >= ?";
+        params.push(dateStart);
+      }
+      if (dateEnd) {
+        query += " AND date <= ?";
+        params.push(dateEnd);
+      }
+      if (status && status !== 'All') {
+        query += " AND status = ?";
+        params.push(status);
+      }
+      if (search) {
+        query += " AND (reportNo LIKE ? OR projectName LIKE ? OR clientName LIKE ? OR weather LIKE ?)";
+        const s = `%${search}%`;
+        params.push(s, s, s, s);
+      }
+
+      query += " ORDER BY date DESC, reportNo DESC";
+      const rows = db.prepare(query).all(...params);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 2. Autofill helpers from real ERP records
+  app.get("/api/dpr/autofill/:projectId", (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { date } = req.query;
+      const dateStr = (date as string) || new Date().toISOString().substring(0, 10);
+
+      const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as any;
+
+      // 1. Manpower: Attempt to aggregate from attendance/DLR for this project on dateStr
+      let manpower: any[] = [];
+      try {
+        const attRows = db.prepare(`
+          SELECT w.trade, w.category, COUNT(a.id) as count
+          FROM attendance a
+          JOIN workers w ON a.workerId = w.id
+          WHERE a.projectId = ? AND a.date = ? AND a.status = 'Present'
+          GROUP BY w.trade, w.category
+        `).all(projectId, dateStr) as any[];
+
+        if (attRows.length > 0) {
+          const tradeMap: Record<string, { skilled: number; semiSkilled: number; unskilled: number }> = {};
+          attRows.forEach(r => {
+            const tr = r.trade || 'General';
+            if (!tradeMap[tr]) tradeMap[tr] = { skilled: 0, semiSkilled: 0, unskilled: 0 };
+            const cat = (r.category || '').toLowerCase();
+            if (cat.includes('skilled') && !cat.includes('semi')) tradeMap[tr].skilled += r.count;
+            else if (cat.includes('semi')) tradeMap[tr].semiSkilled += r.count;
+            else tradeMap[tr].unskilled += r.count;
+          });
+
+          manpower = Object.entries(tradeMap).map(([trade, counts], idx) => ({
+            sNo: idx + 1,
+            trade,
+            skilled: counts.skilled,
+            semiSkilled: counts.semiSkilled,
+            unskilled: counts.unskilled,
+            total: counts.skilled + counts.semiSkilled + counts.unskilled,
+            agency: 'Direct Labour',
+            remarks: 'Auto-fetched from DLR Attendance'
+          }));
+        }
+      } catch (e) {
+        console.warn("DLR attendance fetch warning:", e);
+      }
+
+      // Default trade boilerplate if empty
+      if (manpower.length === 0) {
+        const standardTrades = [
+          { trade: 'Carpenter (Formwork)', skilled: 4, semiSkilled: 2, unskilled: 2, agency: 'SN Enterprises' },
+          { trade: 'Barbender (Rebar)', skilled: 5, semiSkilled: 3, unskilled: 3, agency: 'SN Enterprises' },
+          { trade: 'Mason (Brick / Plaster)', skilled: 3, semiSkilled: 2, unskilled: 2, agency: 'SN Enterprises' },
+          { trade: 'Electrician / Plumber', skilled: 2, semiSkilled: 1, unskilled: 1, agency: 'MEP Sub-agency' },
+          { trade: 'General Helper', skilled: 0, semiSkilled: 0, unskilled: 8, agency: 'SN Enterprises' }
+        ];
+        manpower = standardTrades.map((t, idx) => ({
+          sNo: idx + 1,
+          trade: t.trade,
+          skilled: t.skilled,
+          semiSkilled: t.semiSkilled,
+          unskilled: t.unskilled,
+          total: t.skilled + t.semiSkilled + t.unskilled,
+          agency: t.agency,
+          remarks: 'Standard Site Team'
+        }));
+      }
+
+      // 2. Plant & Machinery: Active assets stationed at this site
+      let plantMachinery: any[] = [];
+      try {
+        const assetRows = db.prepare(`
+          SELECT * FROM assets
+          WHERE currentSiteId = ? AND status = 'Operational'
+        `).all(projectId) as any[];
+
+        if (assetRows.length > 0) {
+          plantMachinery = assetRows.map((a, idx) => ({
+            sNo: idx + 1,
+            equipment: a.name + (a.assetCode ? ` (${a.assetCode})` : ''),
+            nos: 1,
+            hoursRun: 8,
+            idleHours: 1,
+            fuelLtr: 15,
+            remarks: a.remarks || 'Working satisfactorily',
+            ownedOrHired: a.brand?.toLowerCase().includes('rent') ? 'Hired' : 'Owned'
+          }));
+        }
+      } catch (e) {
+        console.warn("Asset fetch warning:", e);
+      }
+
+      if (plantMachinery.length === 0) {
+        plantMachinery = [
+          { sNo: 1, equipment: 'Tower Crane / Hoist', nos: 1, hoursRun: 7, idleHours: 1, fuelLtr: 0, remarks: 'In operation', ownedOrHired: 'Owned' },
+          { sNo: 2, equipment: 'Concrete Mixer & Needle Vibrators', nos: 3, hoursRun: 6, idleHours: 2, fuelLtr: 12, remarks: 'Active for slab pouring', ownedOrHired: 'Owned' },
+          { sNo: 3, equipment: 'Diesel Generator 125 kVA', nos: 1, hoursRun: 8, idleHours: 0, fuelLtr: 35, remarks: 'Continuous backup', ownedOrHired: 'Hired' }
+        ];
+      }
+
+      // 3. Material Received: Any purchases/challans on this date
+      let materials: any[] = [];
+      try {
+        const matRows = db.prepare(`
+          SELECT mp.*, mi.name as materialName, mi.unit as materialUnit
+          FROM material_purchases mp
+          LEFT JOIN material_items mi ON mp.itemId = mi.id
+          WHERE mp.projectId = ? AND mp.date = ?
+        `).all(projectId, dateStr) as any[];
+
+        if (matRows.length > 0) {
+          materials = matRows.map((m, idx) => ({
+            sNo: idx + 1,
+            material: m.materialName || 'Construction Material',
+            unit: m.materialUnit || 'Nos',
+            quantity: m.quantity || 0,
+            challanNo: m.billNumber || m.challanNo || `CH-${dateStr.replace(/-/g, '')}`,
+            supplier: m.supplier || 'Approved Vendor',
+            testCertificateReceived: 'Yes',
+            remarks: 'Inspected and verified'
+          }));
+        }
+      } catch (e) {
+        console.warn("Material fetch warning:", e);
+      }
+
+      res.json({
+        project,
+        manpower,
+        plantMachinery,
+        materials
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. Get single DPR
+  app.get("/api/dpr/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const dpr = db.prepare("SELECT * FROM dpr_reports WHERE id = ? OR reportNo = ?").get(id, id) as any;
+      if (!dpr) {
+        return res.status(404).json({ error: "Daily Progress Report not found" });
+      }
+      res.json(dpr);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 4. Create new DPR
+  app.post("/api/dpr", (req, res) => {
+    try {
+      const {
+        id, projectId, projectCode, projectName, clientName, contractorName,
+        date, weather, workingHours, status, preparedBy, reviewedBy, approvedBy,
+        manpowerJson, plantMachineryJson, workExecutedJson, materialReceivedJson,
+        concreteJson, safetyJson, hindrancesJson, instructionsJson,
+        tomorrowPlanJson, photosJson, remarks
+      } = req.body;
+
+      const authUser = (req.headers["x-user-username"] as string) || preparedBy || "Site Engineer";
+      const finalId = id || `dpr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const finalReportNo = req.body.reportNo || generateDPRReportNumber(date);
+      const now = new Date().toISOString();
+
+      db.prepare(`
+        INSERT INTO dpr_reports (
+          id, reportNo, projectId, projectCode, projectName, clientName, contractorName,
+          date, weather, workingHours, status, preparedBy, reviewedBy, approvedBy,
+          manpowerJson, plantMachineryJson, workExecutedJson, materialReceivedJson,
+          concreteJson, safetyJson, hindrancesJson, instructionsJson,
+          tomorrowPlanJson, photosJson, remarks, createdBy, createdDate, modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        finalId, finalReportNo, projectId, projectCode || '', projectName || '', clientName || '',
+        contractorName || 'SN ENTERPRISES', date, weather || 'Sunny',
+        workingHours || '08:00 AM - 06:00 PM (10 hrs)', status || 'Draft',
+        preparedBy || authUser, reviewedBy || '', approvedBy || '',
+        typeof manpowerJson === 'string' ? manpowerJson : JSON.stringify(manpowerJson || []),
+        typeof plantMachineryJson === 'string' ? plantMachineryJson : JSON.stringify(plantMachineryJson || []),
+        typeof workExecutedJson === 'string' ? workExecutedJson : JSON.stringify(workExecutedJson || []),
+        typeof materialReceivedJson === 'string' ? materialReceivedJson : JSON.stringify(materialReceivedJson || []),
+        typeof concreteJson === 'string' ? concreteJson : JSON.stringify(concreteJson || []),
+        typeof safetyJson === 'string' ? safetyJson : JSON.stringify(safetyJson || []),
+        typeof hindrancesJson === 'string' ? hindrancesJson : JSON.stringify(hindrancesJson || []),
+        typeof instructionsJson === 'string' ? instructionsJson : JSON.stringify(instructionsJson || []),
+        typeof tomorrowPlanJson === 'string' ? tomorrowPlanJson : JSON.stringify(tomorrowPlanJson || []),
+        typeof photosJson === 'string' ? photosJson : JSON.stringify(photosJson || []),
+        remarks || '', authUser, now, authUser, now
+      );
+
+      // Audit Log
+      db.prepare(`
+        INSERT INTO dpr_audit_logs (id, dprId, reportNo, action, performedBy, timestamp, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `dpr-aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        finalId, finalReportNo, 'Created', authUser, now,
+        `Created initial DPR draft for project ${projectName || projectId} on date ${date}`
+      );
+
+      logActivity(authUser, "CREATE", "dpr_reports", finalId, `Created DPR ${finalReportNo} for ${date}`);
+
+      res.status(201).json({ success: true, id: finalId, reportNo: finalReportNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 5. Update DPR (with locking protection)
+  app.put("/api/dpr/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        projectId, projectCode, projectName, clientName, contractorName,
+        date, weather, workingHours, preparedBy, reviewedBy, approvedBy,
+        manpowerJson, plantMachineryJson, workExecutedJson, materialReceivedJson,
+        concreteJson, safetyJson, hindrancesJson, instructionsJson,
+        tomorrowPlanJson, photosJson, remarks, bypassLock, overrideReason
+      } = req.body;
+
+      const authUser = (req.headers["x-user-username"] as string) || "Site Engineer";
+      const existing = db.prepare("SELECT * FROM dpr_reports WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "Daily Progress Report not found" });
+      }
+
+      // Check lock state
+      if ((existing.status === 'Approved' || existing.status === 'Locked') && !bypassLock) {
+        return res.status(403).json({
+          error: `DPR ${existing.reportNo} is ${existing.status} and cannot be silently edited. Please unlock or supply an authorized override reason.`
+        });
+      }
+
+      const now = new Date().toISOString();
+
+      db.prepare(`
+        UPDATE dpr_reports
+        SET projectId = ?, projectCode = ?, projectName = ?, clientName = ?, contractorName = ?,
+            date = ?, weather = ?, workingHours = ?, preparedBy = ?, reviewedBy = ?, approvedBy = ?,
+            manpowerJson = ?, plantMachineryJson = ?, workExecutedJson = ?, materialReceivedJson = ?,
+            concreteJson = ?, safetyJson = ?, hindrancesJson = ?, instructionsJson = ?,
+            tomorrowPlanJson = ?, photosJson = ?, remarks = ?, modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        projectId || existing.projectId,
+        projectCode !== undefined ? projectCode : existing.projectCode,
+        projectName !== undefined ? projectName : existing.projectName,
+        clientName !== undefined ? clientName : existing.clientName,
+        contractorName !== undefined ? contractorName : existing.contractorName,
+        date || existing.date,
+        weather || existing.weather,
+        workingHours || existing.workingHours,
+        preparedBy || existing.preparedBy,
+        reviewedBy || existing.reviewedBy,
+        approvedBy || existing.approvedBy,
+        typeof manpowerJson === 'string' ? manpowerJson : JSON.stringify(manpowerJson || []),
+        typeof plantMachineryJson === 'string' ? plantMachineryJson : JSON.stringify(plantMachineryJson || []),
+        typeof workExecutedJson === 'string' ? workExecutedJson : JSON.stringify(workExecutedJson || []),
+        typeof materialReceivedJson === 'string' ? materialReceivedJson : JSON.stringify(materialReceivedJson || []),
+        typeof concreteJson === 'string' ? concreteJson : JSON.stringify(concreteJson || []),
+        typeof safetyJson === 'string' ? safetyJson : JSON.stringify(safetyJson || []),
+        typeof hindrancesJson === 'string' ? hindrancesJson : JSON.stringify(hindrancesJson || []),
+        typeof instructionsJson === 'string' ? instructionsJson : JSON.stringify(instructionsJson || []),
+        typeof tomorrowPlanJson === 'string' ? tomorrowPlanJson : JSON.stringify(tomorrowPlanJson || []),
+        typeof photosJson === 'string' ? photosJson : JSON.stringify(photosJson || []),
+        remarks !== undefined ? remarks : existing.remarks,
+        authUser, now, id
+      );
+
+      // Audit Log
+      const auditDetails = bypassLock 
+        ? `Modified locked DPR with override reason: ${overrideReason || 'Administrative update'}`
+        : `Updated DPR details and work sections`;
+
+      db.prepare(`
+        INSERT INTO dpr_audit_logs (id, dprId, reportNo, action, performedBy, timestamp, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `dpr-aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id, existing.reportNo, bypassLock ? 'Overridden' : 'Updated', authUser, now, auditDetails
+      );
+
+      logActivity(authUser, "UPDATE", "dpr_reports", id, `Updated DPR ${existing.reportNo}`);
+
+      res.json({ success: true, id, reportNo: existing.reportNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 6. Workflow Status Transition (Draft -> Submitted -> Reviewed -> Approved -> Locked)
+  app.post("/api/dpr/:id/workflow", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { targetStatus, reason } = req.body;
+      const authUser = (req.headers["x-user-username"] as string) || "Manager";
+
+      const validStatuses = ['Draft', 'Submitted', 'Reviewed', 'Approved', 'Locked', 'Unlocked'];
+      if (!validStatuses.includes(targetStatus)) {
+        return res.status(400).json({ error: `Invalid target status ${targetStatus}` });
+      }
+
+      const existing = db.prepare("SELECT * FROM dpr_reports WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "Daily Progress Report not found" });
+      }
+
+      const now = new Date().toISOString();
+      let newStatus = targetStatus;
+      let extraFieldUpdate = "";
+      const extraParams: any[] = [];
+
+      if (targetStatus === 'Submitted') {
+        extraFieldUpdate = ", preparedBy = ?";
+        extraParams.push(authUser);
+      } else if (targetStatus === 'Reviewed') {
+        extraFieldUpdate = ", reviewedBy = ?";
+        extraParams.push(authUser);
+      } else if (targetStatus === 'Approved') {
+        extraFieldUpdate = ", approvedBy = ?";
+        extraParams.push(authUser);
+      } else if (targetStatus === 'Locked') {
+        extraFieldUpdate = ", lockedBy = ?, lockedAt = ?";
+        extraParams.push(authUser, now);
+      } else if (targetStatus === 'Unlocked') {
+        newStatus = 'Draft';
+        extraFieldUpdate = ", lockedBy = NULL, lockedAt = NULL";
+      }
+
+      db.prepare(`
+        UPDATE dpr_reports
+        SET status = ?, modifiedBy = ?, modifiedDate = ? ${extraFieldUpdate}
+        WHERE id = ?
+      `).run(newStatus, authUser, now, ...extraParams, id);
+
+      const actionName = targetStatus === 'Unlocked' ? 'Unlocked' : targetStatus;
+      const details = reason ? `Workflow changed from ${existing.status} to ${newStatus}. Reason: ${reason}` : `Workflow progressed from ${existing.status} to ${newStatus}`;
+
+      db.prepare(`
+        INSERT INTO dpr_audit_logs (id, dprId, reportNo, action, performedBy, timestamp, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `dpr-aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id, existing.reportNo, actionName, authUser, now, details
+      );
+
+      logActivity(authUser, "STATUS_CHANGE", "dpr_reports", id, `DPR ${existing.reportNo} -> ${newStatus}`);
+
+      res.json({ success: true, id, status: newStatus, reportNo: existing.reportNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 7. Get Audit Trail
+  app.get("/api/dpr/:id/audit", (req, res) => {
+    try {
+      const { id } = req.params;
+      const logs = db.prepare("SELECT * FROM dpr_audit_logs WHERE dprId = ? ORDER BY timestamp DESC").all(id);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 8. Delete DPR (only draft)
+  app.delete("/api/dpr/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Manager";
+      const existing = db.prepare("SELECT * FROM dpr_reports WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "DPR not found" });
+      }
+
+      if (existing.status !== 'Draft') {
+        return res.status(403).json({ error: `Cannot delete DPR in '${existing.status}' status. Only Draft DPRs may be removed.` });
+      }
+
+      db.prepare("DELETE FROM dpr_reports WHERE id = ?").run(id);
+      db.prepare("DELETE FROM dpr_audit_logs WHERE dprId = ?").run(id);
+
+      logActivity(authUser, "DELETE", "dpr_reports", id, `Deleted Draft DPR ${existing.reportNo}`);
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

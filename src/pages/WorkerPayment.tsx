@@ -67,9 +67,21 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
   const [floorFilterLevel, setFloorFilterLevel] = useState('');
   const [tempFloorSelections, setTempFloorSelections] = useState<Array<{ floorAbstractId: string; level: string; flatNo: string; hajira: number; amount: number }>>([]);
 
-  // Kharchi & Advance Date-by-date Selection state
+  // Kharchi & Advance Selection state (KHAR01 Integration)
   const [showKharchiModal, setShowKharchiModal] = useState(false);
   const [tempKharchiSelections, setTempKharchiSelections] = useState<string[]>([]);
+  const [tempKharchiAmounts, setTempKharchiAmounts] = useState<Record<string, number>>({});
+  const [kharchiData, setKharchiData] = useState<{
+    transactions: any[];
+    previousOutstanding: number;
+    currentMonthKharchi: number;
+    totalRecoverable: number;
+  }>({
+    transactions: [],
+    previousOutstanding: 0,
+    currentMonthKharchi: 0,
+    totalRecoverable: 0
+  });
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [tempAdvanceSelections, setTempAdvanceSelections] = useState<string[]>([]);
   const [advanceFilterMode, setAdvanceFilterMode] = useState<'month' | 'all'>('month');
@@ -84,6 +96,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     allowance: '',
     manualKharchi: '',
     selectedKharchiIds: [] as string[],
+    kharchiAllocations: [] as Array<{ kharchiId: string; amount: number }>,
     manualAdvance: '',
     selectedAdvanceIds: [] as string[],
     messDeduction: '', 
@@ -143,6 +156,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       allowance: payment.allowance ? payment.allowance.toString() : '',
       manualKharchi: payment.kharchiDeduction !== undefined && payment.kharchiDeduction !== null ? payment.kharchiDeduction.toString() : '',
       selectedKharchiIds: payment.kharchiDetailsJson ? JSON.parse(payment.kharchiDetailsJson) : [],
+      kharchiAllocations: (payment as any).kharchiAllocations ? (typeof (payment as any).kharchiAllocations === 'string' ? JSON.parse((payment as any).kharchiAllocations) : (payment as any).kharchiAllocations) : [],
       manualAdvance: payment.advanceDeduction !== undefined && payment.advanceDeduction !== null ? payment.advanceDeduction.toString() : '',
       selectedAdvanceIds: payment.advanceDetailsJson ? JSON.parse(payment.advanceDetailsJson) : [],
       messDeduction: payment.messDeduction.toString(),
@@ -172,6 +186,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       allowance: '',
       manualKharchi: '',
       selectedKharchiIds: [],
+      kharchiAllocations: [],
       manualAdvance: '',
       selectedAdvanceIds: [],
       messDeduction: '', 
@@ -256,13 +271,33 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     }
   };
 
-  // Worker Kharchis for the selected month
+  // Worker Kharchis for the selected month (legacy fallback)
   const workerMonthKharchis = useMemo(() => {
     if (!formData.workerId || !formData.month) return [];
     return kharchis
       .filter(k => k.workerId === formData.workerId && k.date.startsWith(formData.month))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [kharchis, formData.workerId, formData.month]);
+
+  // Requirement 6 & 8: PAY01 Worker Payment Settlement must automatically fetch outstanding kharchi
+  // for the selected worker across ALL projects and historical periods (Not just the current month).
+  useEffect(() => {
+    if (!formData.workerId) {
+      setKharchiData({ transactions: [], previousOutstanding: 0, currentMonthKharchi: 0, totalRecoverable: 0 });
+      return;
+    }
+    const curMonth = formData.month || selectedMonth || new Date().toISOString().substring(0, 7);
+    fetch(`/api/worker-kharchi/outstanding/${formData.workerId}?currentMonth=${curMonth}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.transactions)) {
+          setKharchiData(data);
+        }
+      })
+      .catch(err => {
+        console.error("Error fetching worker outstanding kharchi:", err);
+      });
+  }, [formData.workerId, formData.month, selectedMonth]);
 
   // Worker Advances for the selected month (for optional monthly view)
   const workerMonthAdvances = useMemo(() => {
@@ -316,31 +351,101 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     }, 0);
   }, [previouslyOverBalanceAdvances]);
 
-  // Open & apply Kharchi Modal
+  // Open & apply Kharchi Modal (Supports FIFO & Partial Recoveries)
   const handleOpenKharchiModal = () => {
     if (!formData.workerId) {
-      alert("Please select a worker first to view and select their weekly kharchis.");
+      alert("Please select a worker first to view and select their outstanding kharchi transactions.");
       return;
     }
-    if (formData.selectedKharchiIds && formData.selectedKharchiIds.length > 0) {
-      setTempKharchiSelections([...formData.selectedKharchiIds]);
-    } else if (formData.manualKharchi === '' || Number(formData.manualKharchi) === autoCalculations.kharchi) {
-      setTempKharchiSelections(workerMonthKharchis.map(k => k.id));
+
+    const availableTx = kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis;
+    const initialAmounts: Record<string, number> = {};
+    let initialSelections: string[] = [];
+
+    if (formData.kharchiAllocations && formData.kharchiAllocations.length > 0) {
+      initialSelections = formData.kharchiAllocations.map(a => a.kharchiId);
+      formData.kharchiAllocations.forEach(a => {
+        initialAmounts[a.kharchiId] = a.amount;
+      });
+    } else if (formData.selectedKharchiIds && formData.selectedKharchiIds.length > 0) {
+      initialSelections = [...formData.selectedKharchiIds];
+      availableTx.forEach(k => {
+        if (initialSelections.includes(k.id)) {
+          initialAmounts[k.id] = Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : k.amount);
+        }
+      });
+    } else if (formData.manualKharchi !== '' && Number(formData.manualKharchi) > 0) {
+      // FIFO allocation based on entered manual deduction amount
+      let remaining = Number(formData.manualKharchi);
+      availableTx.forEach(k => {
+        if (remaining > 0) {
+          const maxOs = Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : k.amount);
+          const alloc = Math.min(remaining, maxOs);
+          initialAmounts[k.id] = alloc;
+          initialSelections.push(k.id);
+          remaining -= alloc;
+        }
+      });
     } else {
-      setTempKharchiSelections([]);
+      // Default: select all outstanding kharchis with full outstanding amount
+      initialSelections = availableTx.map(k => k.id);
+      availableTx.forEach(k => {
+        initialAmounts[k.id] = Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : k.amount);
+      });
     }
+
+    setTempKharchiSelections(initialSelections);
+    setTempKharchiAmounts(initialAmounts);
     setShowKharchiModal(true);
   };
 
   const handleApplyKharchiSelection = () => {
-    const selected = workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id));
-    const total = selected.reduce((sum, k) => sum + k.amount, 0);
+    const availableTx = kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis;
+    const allocations = tempKharchiSelections
+      .map(id => {
+        const tx = availableTx.find(k => k.id === id);
+        const maxOs = tx ? Number(tx.outstandingAmount !== undefined && tx.outstandingAmount !== null ? tx.outstandingAmount : tx.amount) : 0;
+        const entered = tempKharchiAmounts[id] !== undefined ? tempKharchiAmounts[id] : maxOs;
+        const validAmt = Math.min(Math.max(0, entered), maxOs);
+        return { kharchiId: id, amount: validAmt };
+      })
+      .filter(a => a.amount > 0);
+
+    const total = allocations.reduce((sum, a) => sum + a.amount, 0);
     setFormData(prev => ({
       ...prev,
       manualKharchi: total.toString(),
-      selectedKharchiIds: tempKharchiSelections
+      selectedKharchiIds: allocations.map(a => a.kharchiId),
+      kharchiAllocations: allocations
     }));
     setShowKharchiModal(false);
+  };
+
+  // Quick FIFO Allocation helper inside modal
+  const handleFIFORecoveryAllocate = (targetTotal?: number) => {
+    const availableTx = kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis;
+    let remaining = targetTotal !== undefined 
+      ? targetTotal 
+      : (formData.manualKharchi !== '' ? Number(formData.manualKharchi) : kharchiData.totalRecoverable);
+    
+    if (isNaN(remaining) || remaining <= 0) {
+      remaining = kharchiData.totalRecoverable || availableTx.reduce((s, k) => s + (Number(k.outstandingAmount || k.amount) || 0), 0);
+    }
+
+    const newSelections: string[] = [];
+    const newAmounts: Record<string, number> = {};
+
+    for (const k of availableTx) {
+      if (remaining <= 0) break;
+      const maxOs = Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : k.amount);
+      const alloc = Math.min(remaining, maxOs);
+      newAmounts[k.id] = alloc;
+      newSelections.push(k.id);
+      remaining -= alloc;
+    }
+
+    setTempKharchiSelections(newSelections);
+    setTempKharchiAmounts(newAmounts);
   };
 
   // Open & apply Advance Modal
@@ -378,10 +483,12 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
   const autoCalculations = useMemo(() => {
     if (!formData.workerId || !formData.month) return { kharchi: 0, advance: 0 };
     
-    // Kharchi for the selected month
-    const kharchiTotal = kharchis
-      .filter(k => k.workerId === formData.workerId && k.date.startsWith(formData.month))
-      .reduce((sum, k) => sum + k.amount, 0);
+    // Total recoverable kharchi (includes previous months + current month)
+    const kharchiTotal = kharchiData.totalRecoverable > 0 
+      ? kharchiData.totalRecoverable 
+      : kharchis
+          .filter(k => k.workerId === formData.workerId)
+          .reduce((sum, k) => sum + (Number((k as any).outstandingAmount !== undefined && (k as any).outstandingAmount !== null ? (k as any).outstandingAmount : k.amount) || 0), 0);
       
     // Advance for the selected month
     const advanceTotal = advances
@@ -389,7 +496,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       .reduce((sum, a) => sum + a.amount, 0);
       
     return { kharchi: kharchiTotal, advance: advanceTotal };
-  }, [formData.workerId, formData.month, kharchis, advances]);
+  }, [formData.workerId, formData.month, kharchiData, kharchis, advances]);
 
   // Calculate historical total outstanding advance for selected worker
   const workerOutstandingAdvance = useMemo(() => {
@@ -401,10 +508,13 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
     let finalWorkAmount = Number(formData.workAmount) || 0;
     
     let finalKharchi = 0;
-    if (formData.selectedKharchiIds && formData.selectedKharchiIds.length > 0) {
-      finalKharchi = kharchis
+    if (formData.kharchiAllocations && formData.kharchiAllocations.length > 0) {
+      finalKharchi = formData.kharchiAllocations.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+    } else if (formData.selectedKharchiIds && formData.selectedKharchiIds.length > 0) {
+      const availableTx = kharchiData.transactions.length > 0 ? kharchiData.transactions : kharchis;
+      finalKharchi = availableTx
         .filter(k => formData.selectedKharchiIds.includes(k.id))
-        .reduce((sum, k) => sum + k.amount, 0);
+        .reduce((sum, k) => sum + (Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : k.amount) || 0), 0);
     } else if (formData.manualKharchi !== '') {
       finalKharchi = Number(formData.manualKharchi);
     } else {
@@ -646,6 +756,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
       floorAbstractsJson: formData.selectedFloorAbstracts && formData.selectedFloorAbstracts.length > 0 ? JSON.stringify(formData.selectedFloorAbstracts) : undefined,
       towerName: formData.towerName || undefined,
       kharchiDetailsJson: formData.selectedKharchiIds.length > 0 ? JSON.stringify(formData.selectedKharchiIds) : undefined,
+      kharchiAllocations: formData.kharchiAllocations && formData.kharchiAllocations.length > 0 ? formData.kharchiAllocations : undefined,
       advanceDetailsJson: consumedAdvanceIds.length > 0 ? JSON.stringify(consumedAdvanceIds) : undefined
     };
 
@@ -1114,36 +1225,45 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                     </div>
 
                     <div className="border border-[#bcc8d0] bg-white divide-y divide-[#bcc8d0]/60 text-[12px]">
-                      {/* Weekly Kharchi */}
-                      <div className="flex items-center justify-between px-3 py-1.5 hover:bg-[#f7f9fa]">
-                        <span className="w-48 text-[#303b44] font-normal">Weekly Kharchi</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[#63717b]">₹</span>
-                          <input 
-                            type="number" 
-                            step="any"
-                            className="sap-input w-36 text-right font-medium" 
-                            placeholder={autoCalculations.kharchi > 0 ? autoCalculations.kharchi.toString() : "0.00"}
-                            value={formData.manualKharchi} 
-                            onChange={e => setFormData({...formData, manualKharchi: e.target.value, selectedKharchiIds: []})} 
-                          />
-                          <button
-                            type="button"
-                            onClick={handleOpenKharchiModal}
-                            className="sap-btn"
-                            title="Select Specific Kharchi Dates"
-                          >
-                            Select ({formData.selectedKharchiIds.length > 0 ? formData.selectedKharchiIds.length : workerMonthKharchis.length})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleOpenKharchiModal}
-                            className="sap-btn"
-                            title="View Date-by-Date Kharchi List"
-                          >
-                            Details
-                          </button>
+                      {/* Outstanding Kharchi (KHAR01 Integration) */}
+                      <div className="flex flex-col px-3 py-1.5 hover:bg-[#f7f9fa] space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="w-48 text-[#303b44] font-normal">Outstanding Kharchi</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-[#63717b]">₹</span>
+                            <input 
+                              type="number" 
+                              step="any"
+                              className="sap-input w-36 text-right font-medium" 
+                              placeholder={autoCalculations.kharchi > 0 ? autoCalculations.kharchi.toString() : "0.00"}
+                              value={formData.manualKharchi} 
+                              onChange={e => setFormData({...formData, manualKharchi: e.target.value, selectedKharchiIds: [], kharchiAllocations: []})} 
+                            />
+                            <button
+                              type="button"
+                              onClick={handleOpenKharchiModal}
+                              className="sap-btn"
+                              title="Select Outstanding Kharchi Transactions"
+                            >
+                              Select Kharchi ({formData.selectedKharchiIds.length > 0 ? formData.selectedKharchiIds.length : (kharchiData.transactions.length || 0)})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleOpenKharchiModal}
+                              className="sap-btn"
+                              title="View Outstanding Kharchi Vouchers & Recoveries"
+                            >
+                              Details
+                            </button>
+                          </div>
                         </div>
+                        {formData.workerId && kharchiData.totalRecoverable > 0 && (
+                          <div className="flex items-center justify-between text-[10.5px] text-gray-600 bg-blue-50/70 border border-blue-200/60 px-2 py-0.5 rounded">
+                            <span>Previous Outstanding: <strong className="text-amber-700 font-mono">₹{kharchiData.previousOutstanding.toLocaleString('en-IN')}</strong></span>
+                            <span>Current Month ({formData.month}): <strong className="text-blue-800 font-mono">₹{kharchiData.currentMonthKharchi.toLocaleString('en-IN')}</strong></span>
+                            <span>Total Kharchi Recoverable: <strong className="text-red-700 font-mono font-bold">₹{kharchiData.totalRecoverable.toLocaleString('en-IN')}</strong></span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Outstanding Advances */}
@@ -1560,28 +1680,36 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[12px]">
-                {/* Kharchi Deductions Detail */}
+                {/* Kharchi Deductions Detail (KHAR01 Integration) */}
                 <div className="border border-[#bcc8d0] p-2.5 bg-[#f4f7f8]">
                   <div className="flex items-center justify-between mb-2 border-b border-[#bcc8d0] pb-1">
                     <span className="font-semibold text-[#303b44]">
-                      Weekly Kharchi for {formData.month} ({workerMonthKharchis.length} total)
+                      Outstanding Kharchi ({kharchiData.transactions.length || workerMonthKharchis.length} records)
                     </span>
                     <button
                       type="button"
                       onClick={handleOpenKharchiModal}
                       className="sap-btn"
                     >
-                      Date Selection
+                      Select Kharchi
                     </button>
                   </div>
                   <div className="space-y-1 text-[11px]">
                     <div className="flex justify-between">
-                      <span className="text-[#63717b]">Month Kharchi Sum:</span>
-                      <span className="font-mono font-bold text-red-650">₹{autoCalculations.kharchi.toLocaleString('en-IN')}</span>
+                      <span className="text-[#63717b]">Previous Outstanding:</span>
+                      <span className="font-mono font-bold text-amber-700">₹{kharchiData.previousOutstanding.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[#63717b]">Selected Kharchi Dates:</span>
-                      <span className="font-mono">{formData.selectedKharchiIds.length > 0 ? `${formData.selectedKharchiIds.length} dates selected` : 'All month dates applied'}</span>
+                      <span className="text-[#63717b]">Current Month ({formData.month}):</span>
+                      <span className="font-mono font-bold text-blue-800">₹{kharchiData.currentMonthKharchi.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Total Kharchi Recoverable:</span>
+                      <span className="font-mono font-bold text-red-650">₹{kharchiData.totalRecoverable.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#63717b]">Selected Deductions:</span>
+                      <span className="font-mono">{formData.selectedKharchiIds.length > 0 ? `${formData.selectedKharchiIds.length} vouchers allocated` : 'All outstanding recoverable'}</span>
                     </div>
                     <div className="flex justify-between font-bold border-t border-[#bcc8d0] pt-1">
                       <span>Applied Kharchi Deduction:</span>
@@ -2345,6 +2473,7 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             allowance: String(record.allowance || ''),
             manualKharchi: record.kharchiDeduction !== undefined && record.kharchiDeduction !== null ? String(record.kharchiDeduction) : '',
             selectedKharchiIds: record.kharchiDetailsJson ? JSON.parse(record.kharchiDetailsJson) : [],
+            kharchiAllocations: (record as any).kharchiAllocations ? (typeof (record as any).kharchiAllocations === 'string' ? JSON.parse((record as any).kharchiAllocations) : (record as any).kharchiAllocations) : [],
             manualAdvance: record.advanceDeduction !== undefined && record.advanceDeduction !== null ? String(record.advanceDeduction) : '',
             selectedAdvanceIds: record.advanceDetailsJson ? JSON.parse(record.advanceDetailsJson) : [],
             messDeduction: String(record.messDeduction || ''),
@@ -2520,16 +2649,16 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
         </div>
       )}
 
-      {/* Kharchi Selection Popup (Date by Date) */}
+      {/* Kharchi Selection Popup (KHAR01 Integration — Voucher by Voucher & Partial Recovery) */}
       {showKharchiModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-2xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-[11px] relative z-10 animate-in fade-in zoom-in-95 duration-150">
+          <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-4xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[88vh] text-[11px] relative z-10 animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="bg-[var(--color-sap-blue-val)] text-white px-3.5 py-2.5 flex justify-between items-center shrink-0">
               <div className="flex items-center space-x-2">
                 <Calendar size={16} className="text-blue-200" />
                 <h3 className="font-bold text-xs uppercase tracking-wider">
-                  Select Kharchi Deduction — Date by Date
+                  Select Kharchi Deduction — Voucher by Voucher (KHAR01)
                 </h3>
               </div>
               <button 
@@ -2542,9 +2671,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
               </button>
             </div>
 
-            {/* Sub-header info bar */}
-            <div className="bg-[#eef2f6] border-b border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center space-x-3 text-gray-800">
+            {/* Sub-header info bar with continuous liability tracking */}
+            <div className="bg-[#eef2f6] border-b border-[#8c9ba8] p-2.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-3 text-gray-800">
                 <div>
                   <span className="text-gray-500 font-bold block text-[9px] uppercase">Worker:</span>
                   <span className="font-bold text-[#0056b3] text-xs">
@@ -2554,33 +2683,60 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                     ({workers.find(w => w.id === formData.workerId)?.workerId || 'Sr ' + workers.find(w => w.id === formData.workerId)?.serialNo})
                   </span>
                 </div>
-                <div className="h-6 border-r border-gray-300 mx-1"></div>
+                <div className="h-6 border-r border-gray-300 mx-0.5"></div>
                 <div>
                   <span className="text-gray-500 font-bold block text-[9px] uppercase">Selected Month:</span>
                   <span className="font-mono font-bold text-gray-800">{formData.month}</span>
                 </div>
-                <div className="h-6 border-r border-gray-300 mx-1"></div>
+                <div className="h-6 border-r border-gray-300 mx-0.5"></div>
                 <div>
-                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Site / Project:</span>
-                  <span className="font-semibold text-gray-700 truncate max-w-[150px] block">
-                    {projects.find(p => p.id === selectedProject)?.name || '-'}
-                  </span>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Previous Outstanding:</span>
+                  <span className="font-mono font-bold text-amber-700">₹{kharchiData.previousOutstanding.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="h-6 border-r border-gray-300 mx-0.5"></div>
+                <div>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Current Month ({formData.month}):</span>
+                  <span className="font-mono font-bold text-blue-800">₹{kharchiData.currentMonthKharchi.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="h-6 border-r border-gray-300 mx-0.5"></div>
+                <div>
+                  <span className="text-gray-500 font-bold block text-[9px] uppercase">Total Recoverable:</span>
+                  <span className="font-mono font-bold text-red-650">₹{kharchiData.totalRecoverable.toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
-              {/* Quick Select Buttons */}
+              {/* Quick Action Buttons */}
               <div className="flex items-center space-x-1.5">
                 <button
                   type="button"
-                  onClick={() => setTempKharchiSelections(workerMonthKharchis.map(k => k.id))}
+                  onClick={() => {
+                    const txList = kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis;
+                    setTempKharchiSelections(txList.map(k => k.id));
+                    const newAmounts: Record<string, number> = {};
+                    txList.forEach(k => {
+                      newAmounts[k.id] = Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : k.amount);
+                    });
+                    setTempKharchiAmounts(newAmounts);
+                  }}
                   className="sap-btn bg-blue-100 hover:bg-blue-200 border-blue-300 text-[#0056b3] text-[10px] font-bold py-1 px-2.5 rounded flex items-center space-x-1"
                 >
                   <CheckSquare size={12} />
-                  <span>Select All ({workerMonthKharchis.length})</span>
+                  <span>Select All ({kharchiData.transactions.length || workerMonthKharchis.length})</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTempKharchiSelections([])}
+                  onClick={() => handleFIFORecoveryAllocate()}
+                  className="sap-btn bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800 text-[10px] font-bold py-1 px-2.5 rounded flex items-center space-x-1"
+                  title="Allocate deduction oldest-first across outstanding vouchers"
+                >
+                  <span>FIFO Allocate</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempKharchiSelections([]);
+                    setTempKharchiAmounts({});
+                  }}
                   className="sap-btn bg-gray-200 hover:bg-gray-300 border-gray-400 text-gray-700 text-[10px] font-bold py-1 px-2 rounded flex items-center space-x-1"
                 >
                   <Square size={12} />
@@ -2591,14 +2747,14 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
 
             {/* List Table */}
             <div className="overflow-y-auto p-3 flex-1">
-              {workerMonthKharchis.length === 0 ? (
+              {(kharchiData.transactions.length === 0 && workerMonthKharchis.length === 0) ? (
                 <div className="text-center py-12 bg-white rounded border border-gray-200 p-6 space-y-2">
                   <AlertCircle size={28} className="mx-auto text-amber-500" />
                   <p className="font-bold text-gray-700 text-xs">
-                    No weekly kharchi records found for this worker in {formData.month}.
+                    No outstanding kharchi transactions found for this worker.
                   </p>
                   <p className="text-gray-500 text-[10px] max-w-sm mx-auto">
-                    Weekly kharchi can be recorded in the <strong className="text-gray-700">Weekly Kharchi</strong> module (PR04) or entered directly as a manual deduction amount.
+                    New kharchi transactions can be created in the <strong className="text-gray-700">KHAR01 – Worker Kharchi Ledger</strong> module.
                   </p>
                 </div>
               ) : (
@@ -2606,34 +2762,49 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-[#eef2f6] text-[var(--color-sap-blue-val)] font-bold border-b border-[#8c9ba8] text-[10px]">
-                        <th className="p-2 border-r border-[#8c9ba8] w-12 text-center">
+                        <th className="p-2 border-r border-[#8c9ba8] w-10 text-center">
                           <input
                             type="checkbox"
-                            checked={workerMonthKharchis.length > 0 && tempKharchiSelections.length === workerMonthKharchis.length}
+                            checked={
+                              (kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis).length > 0 &&
+                              tempKharchiSelections.length === (kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis).length
+                            }
                             onChange={(e) => {
+                              const txList = kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis;
                               if (e.target.checked) {
-                                setTempKharchiSelections(workerMonthKharchis.map(k => k.id));
+                                setTempKharchiSelections(txList.map(k => k.id));
+                                const newAmounts: Record<string, number> = {};
+                                txList.forEach(k => {
+                                  newAmounts[k.id] = Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : k.amount);
+                                });
+                                setTempKharchiAmounts(newAmounts);
                               } else {
                                 setTempKharchiSelections([]);
+                                setTempKharchiAmounts({});
                               }
                             }}
                             className="rounded cursor-pointer"
                             title="Toggle Select All"
                           />
                         </th>
-                        <th className="p-2 border-r border-[#8c9ba8] w-14 text-center">Sr No</th>
-                        <th className="p-2 border-r border-[#8c9ba8]">Kharchi Date</th>
-                        <th className="p-2 border-r border-[#8c9ba8]">Day of Week</th>
-                        <th className="p-2 border-r border-[#8c9ba8] text-right">Kharchi Amount (INR)</th>
-                        <th className="p-2 text-center w-24">Deduction Status</th>
+                        <th className="p-2 border-r border-[#8c9ba8] w-28">Voucher No</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Date</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Project</th>
+                        <th className="p-2 border-r border-[#8c9ba8]">Type</th>
+                        <th className="p-2 border-r border-[#8c9ba8] text-right">Orig. Amount</th>
+                        <th className="p-2 border-r border-[#8c9ba8] text-right">Recovered</th>
+                        <th className="p-2 border-r border-[#8c9ba8] text-right text-red-700">Outstanding</th>
+                        <th className="p-2 border-r border-[#8c9ba8] text-center w-28">Deduct Amt (₹)</th>
+                        <th className="p-2 text-center w-28">Status / Period</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {workerMonthKharchis.map((k, idx) => {
+                      {(kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis).map((k: any) => {
                         const isChecked = tempKharchiSelections.includes(k.id);
-                        const dateObj = new Date(k.date + 'T00:00:00');
-                        const dayName = isNaN(dateObj.getTime()) ? '-' : dateObj.toLocaleDateString('en-IN', { weekday: 'long' });
-                        const isSunday = dayName === 'Sunday';
+                        const origAmt = Number(k.amount || 0);
+                        const recAmt = Number(k.recoveredAmount || 0);
+                        const outAmt = Number(k.outstandingAmount !== undefined && k.outstandingAmount !== null ? k.outstandingAmount : origAmt - recAmt);
+                        const currentDeductVal = tempKharchiAmounts[k.id] !== undefined ? tempKharchiAmounts[k.id] : outAmt;
 
                         return (
                           <tr 
@@ -2643,6 +2814,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                                 setTempKharchiSelections(prev => prev.filter(id => id !== k.id));
                               } else {
                                 setTempKharchiSelections(prev => [...prev, k.id]);
+                                if (tempKharchiAmounts[k.id] === undefined) {
+                                  setTempKharchiAmounts(prev => ({ ...prev, [k.id]: outAmt }));
+                                }
                               }
                             }}
                             className={`hover:bg-blue-50/50 cursor-pointer text-[11px] transition-colors ${isChecked ? 'bg-blue-50/70 font-semibold' : ''}`}
@@ -2654,6 +2828,9 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                                 onChange={(e) => {
                                   if (e.target.checked) {
                                     setTempKharchiSelections(prev => [...prev, k.id]);
+                                    if (tempKharchiAmounts[k.id] === undefined) {
+                                      setTempKharchiAmounts(prev => ({ ...prev, [k.id]: outAmt }));
+                                    }
                                   } else {
                                     setTempKharchiSelections(prev => prev.filter(id => id !== k.id));
                                   }
@@ -2661,28 +2838,64 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                                 className="rounded cursor-pointer"
                               />
                             </td>
-                            <td className="p-2 border-r border-gray-200 text-center font-mono text-gray-600">
-                              {idx + 1}
+                            <td className="p-2 border-r border-gray-200 font-mono font-bold text-[#0a6ed1]">
+                              {k.voucherNo || k.id}
                             </td>
-                            <td className="p-2 border-r border-gray-200 font-mono font-bold text-gray-800">
+                            <td className="p-2 border-r border-gray-200 font-mono text-gray-800 whitespace-nowrap">
                               {formatDateWithDay(k.date)}
                             </td>
-                            <td className="p-2 border-r border-gray-200">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${isSunday ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>
-                                {dayName}
-                              </span>
+                            <td className="p-2 border-r border-gray-200 text-gray-700 truncate max-w-[120px]" title={k.projectName || ''}>
+                              {k.projectName || '-'}
                             </td>
-                            <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-red-650 text-xs">
-                              ₹{(Number(k.amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <td className="p-2 border-r border-gray-200 font-medium text-gray-700">
+                              {k.kharchiType || 'Weekly Kharchi'}
                             </td>
-                            <td className="p-2 text-center">
-                              {isChecked ? (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 border border-green-300">
-                                  ✓ Deduct
-                                </span>
-                              ) : (
-                                <span className="text-[9px] text-gray-400 italic">Excluded</span>
-                              )}
+                            <td className="p-2 border-r border-gray-200 text-right font-mono text-gray-600">
+                              ₹{origAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-2 border-r border-gray-200 text-right font-mono text-emerald-700">
+                              ₹{recAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-2 border-r border-gray-200 text-right font-mono font-bold text-red-700">
+                              ₹{outAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-1.5 border-r border-gray-200 text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="number"
+                                step="any"
+                                min={0}
+                                max={outAmt}
+                                disabled={!isChecked}
+                                value={isChecked ? currentDeductVal : 0}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  const clamped = Math.min(Math.max(0, val), outAmt);
+                                  setTempKharchiAmounts(prev => ({ ...prev, [k.id]: clamped }));
+                                }}
+                                className={`w-24 text-right font-mono text-xs px-1.5 py-0.5 border rounded ${
+                                  isChecked 
+                                    ? 'border-blue-400 bg-white font-bold text-gray-900 focus:ring-1 focus:ring-blue-500' 
+                                    : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                }`}
+                              />
+                            </td>
+                            <td className="p-2 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center space-x-1">
+                                {k.isPrevious ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                    Previous Month
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                                    Current Month
+                                  </span>
+                                )}
+                                {k.status === 'Partially Recovered' && (
+                                  <span className="px-1 py-0.5 rounded text-[8.5px] font-bold bg-orange-100 text-orange-800">
+                                    Part. Rec
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2697,17 +2910,23 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
             <div className="bg-[#f8f9fa] border-t border-[#8c9ba8] p-3 flex flex-wrap items-center justify-between gap-3 text-[10px] shrink-0">
               <div className="flex flex-wrap gap-4 text-gray-800 bg-white px-3 py-1.5 rounded border border-[#8c9ba8] shadow-xs">
                 <div>
-                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Month Records:</span>
-                  <span className="font-bold text-gray-700 font-mono">{workerMonthKharchis.length} dates</span>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Outstanding Records:</span>
+                  <span className="font-bold text-gray-700 font-mono">{(kharchiData.transactions.length || workerMonthKharchis.length)} vouchers</span>
                 </div>
                 <div>
-                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Selected Dates:</span>
-                  <span className="font-bold text-blue-900 font-mono">{tempKharchiSelections.length} of {workerMonthKharchis.length}</span>
+                  <span className="text-gray-400 font-bold block text-[8px] uppercase">Selected Vouchers:</span>
+                  <span className="font-bold text-blue-900 font-mono">{tempKharchiSelections.length} selected</span>
                 </div>
                 <div>
                   <span className="text-gray-400 font-bold block text-[8px] uppercase">Total Kharchi Deducted:</span>
                   <span className="font-black font-mono text-red-650 text-xs">
-                    ₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + (Number(k.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{tempKharchiSelections.reduce((sum, id) => {
+                      const txList = kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis;
+                      const tx = txList.find((k: any) => k.id === id);
+                      const maxOs = tx ? Number(tx.outstandingAmount !== undefined && tx.outstandingAmount !== null ? tx.outstandingAmount : tx.amount) : 0;
+                      const amt = tempKharchiAmounts[id] !== undefined ? tempKharchiAmounts[id] : maxOs;
+                      return sum + Math.min(Math.max(0, amt), maxOs);
+                    }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -2720,7 +2939,13 @@ export const WorkerPayment: React.FC<WorkerPaymentProps> = ({ initialWorkerId, o
                 >
                   <CheckCircle2 size={13} />
                   <span>
-                    Apply Kharchi Deduction (₹{workerMonthKharchis.filter(k => tempKharchiSelections.includes(k.id)).reduce((sum, k) => sum + (Number(k.amount) || 0), 0).toLocaleString('en-IN')})
+                    Apply Kharchi Deduction (₹{tempKharchiSelections.reduce((sum, id) => {
+                      const txList = kharchiData.transactions.length > 0 ? kharchiData.transactions : workerMonthKharchis;
+                      const tx = txList.find((k: any) => k.id === id);
+                      const maxOs = tx ? Number(tx.outstandingAmount !== undefined && tx.outstandingAmount !== null ? tx.outstandingAmount : tx.amount) : 0;
+                      const amt = tempKharchiAmounts[id] !== undefined ? tempKharchiAmounts[id] : maxOs;
+                      return sum + Math.min(Math.max(0, amt), maxOs);
+                    }, 0).toLocaleString('en-IN')})
                   </span>
                 </button>
                 <button
