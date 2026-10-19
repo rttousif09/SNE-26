@@ -43,6 +43,44 @@ export const Billing: React.FC = () => {
   const [recordsProjectId, setRecordsProjectId] = useState('');
   const [printingBill, setPrintingBill] = useState<BillingType | null>(null);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [projectRequiredWarning, setProjectRequiredWarning] = useState(false);
+  const getPreviousBilledQuantity = (projectId: string, boqItemId?: string, itemCode?: string, currentBillId?: string | null): number => {
+    if (!projectId || !billings || billings.length === 0) return 0;
+
+    const projectBills = billings.filter(b =>
+      b.projectId === projectId &&
+      b.id !== currentBillId &&
+      (b as any).status !== 'Draft' &&
+      (b as any).status !== 'Rejected' &&
+      (b as any).status !== 'Cancelled'
+    );
+
+    let totalBilled = 0;
+    for (const b of projectBills) {
+      if (!b.measurementItems || !Array.isArray(b.measurementItems)) continue;
+      for (const m of b.measurementItems) {
+        if (
+          (boqItemId && m.boqItemId === boqItemId) ||
+          (itemCode && m.itemCode === itemCode)
+        ) {
+          totalBilled += Number(m.qtyExecuted || 0);
+        }
+      }
+    }
+
+    if (totalBilled === 0 && (boqItemId || itemCode)) {
+      const projectBoqs = boqs.filter(bq => bq.projectId === projectId);
+      for (const bq of projectBoqs) {
+        const item = (bq.items || []).find(i => (boqItemId && i.id === boqItemId) || (itemCode && i.itemCode === itemCode));
+        if (item && item.billedQuantity) {
+          totalBilled = Number(item.billedQuantity);
+          break;
+        }
+      }
+    }
+
+    return totalBilled;
+  };
 
   React.useEffect(() => {
     if (projects.length > 0 && !summaryProjectId) {
@@ -93,6 +131,79 @@ export const Billing: React.FC = () => {
     gstr3bFileType: ''
   });
 
+  const unitTotals = useMemo(() => {
+    if (!formData.measurementItems || formData.measurementItems.length === 0) return '';
+    const map: Record<string, number> = {};
+    formData.measurementItems.forEach(item => {
+      const u = (item.unit || 'sqft').trim();
+      const q = Number(item.qtyExecuted || 0);
+      map[u] = (map[u] || 0) + q;
+    });
+    return Object.entries(map)
+      .map(([unit, qty]) => `${qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })} ${unit}`)
+      .join(', ');
+  }, [formData.measurementItems]);
+
+  const hasExceededBOQ = useMemo(() => {
+    return formData.measurementItems.some(item => {
+      const boqQ = Number(item.boqQuantity || 0);
+      const cumQ = Number(item.cumulativeQty !== undefined ? item.cumulativeQty : (Number(item.prevQty || 0) + Number(item.qtyExecuted || 0)));
+      return boqQ > 0 && cumQ > boqQ;
+    });
+  }, [formData.measurementItems]);
+
+  const handleProjectOrTypeChange = (field: 'projectId' | 'billType', value: string) => {
+    if (field === 'projectId') {
+      // Calculate previous cumulative amount for this project from approved bills
+      const projectApprovedBills = (billings || []).filter(b =>
+        b.projectId === value &&
+        b.id !== editingId &&
+        (b as any).status !== 'Draft' &&
+        (b as any).status !== 'Rejected' &&
+        (b as any).status !== 'Cancelled'
+      );
+      const previousTotalAmount = projectApprovedBills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+
+      // Re-calculate previous quantities for any existing items with the new project
+      const updatedItems = formData.measurementItems.map(item => {
+        const prevQ = getPreviousBilledQuantity(value, item.boqItemId, item.itemCode, editingId);
+        const thisBillQ = Number(item.qtyExecuted || 0);
+        const rate = Number(item.boqRate !== undefined ? item.boqRate : (item.rate || 0));
+        const boqQ = Number(item.boqQuantity || 0);
+        const cumQ = Number((prevQ + thisBillQ).toFixed(3));
+        const amt = Number((thisBillQ * rate).toFixed(2));
+        const balQ = Number((boqQ - cumQ).toFixed(3));
+
+        return {
+          ...item,
+          prevQty: prevQ,
+          cumulativeQty: cumQ,
+          amount: amt,
+          balanceQty: balQ
+        };
+      });
+
+      const totals = calculateTotalsFromMeasurements(updatedItems);
+      const curAmt = totals.amount > 0 ? parseFloat(totals.amount.toFixed(2)).toString() : formData.amount;
+      const prevAmt = previousTotalAmount > 0 ? previousTotalAmount : (Number(formData.prevAmount) || 0);
+      const cumAmt = prevAmt + (parseFloat(curAmt) || 0);
+
+      setFormData(prev => ({
+        ...prev,
+        projectId: value,
+        prevAmount: prevAmt > 0 ? prevAmt.toString() : '',
+        amount: curAmt,
+        cumulativeAmount: cumAmt > 0 ? cumAmt.toString() : '',
+        measurementItems: updatedItems
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
+  };
+
   React.useEffect(() => {
     if (isAutoBillingActive && !editingId && previewNextNumber && isAdding) {
       previewNextNumber('billing', { projectId: formData.projectId }).then(res => {
@@ -141,7 +252,34 @@ export const Billing: React.FC = () => {
       retentionStatus: bill.retentionStatus || 'Pending',
       holdStatus: bill.holdStatus || 'Pending',
       billType: bill.billType || 'Running Account',
-      measurementItems: bill.measurementItems || [],
+      measurementItems: (bill.measurementItems || []).map((m: any) => {
+        const projBoqs = boqs.filter(b => b.projectId === bill.projectId);
+        const boqItem = projBoqs.flatMap(b => b.items || []).find(i => (m.boqItemId && i.id === m.boqItemId) || (m.itemCode && i.itemCode === m.itemCode));
+
+        const boqQ = m.boqQuantity !== undefined ? Number(m.boqQuantity) : (boqItem ? Number(boqItem.boqQuantity || 0) : 0);
+        const boqR = m.boqRate !== undefined ? Number(m.boqRate) : (boqItem ? Number(boqItem.boqRate || 0) : Number(m.rate || 0));
+        const rt = boqR || Number(m.rate || 0);
+        const prevQ = m.prevQty !== undefined ? Number(m.prevQty) : getPreviousBilledQuantity(bill.projectId, m.boqItemId, m.itemCode, bill.id);
+        const thisBillQ = Number(m.qtyExecuted || 0);
+        const cumQ = Number((prevQ + thisBillQ).toFixed(3));
+        const amt = Number((thisBillQ * rt).toFixed(2));
+        const balQ = Number((boqQ - cumQ).toFixed(3));
+
+        return {
+          ...m,
+          boqQuantity: boqQ,
+          boqRate: boqR,
+          rate: rt,
+          prevQty: prevQ,
+          qtyExecuted: thisBillQ,
+          cumulativeQty: cumQ,
+          amount: amt,
+          balanceQty: balQ,
+          itemCode: m.itemCode || boqItem?.itemCode || '',
+          unit: m.unit || boqItem?.unit || 'sqft',
+          description: m.description || boqItem?.description || ''
+        };
+      }),
       hardCopyFile: bill.hardCopyFile || '',
       hardCopyFileName: bill.hardCopyFileName || '',
       hardCopyFileType: bill.hardCopyFileType || '',
@@ -159,6 +297,7 @@ export const Billing: React.FC = () => {
   const handleCancel = () => {
     setIsAdding(false);
     setEditingId(null);
+    setProjectRequiredWarning(false);
     setFormData({
       srNo: '',
       projectId: '',
@@ -198,93 +337,70 @@ export const Billing: React.FC = () => {
 
   const calculateTotalsFromMeasurements = (items: MeasurementItem[]) => {
     return items.reduce((totals, item) => {
-      const rt = Number(item.rate || 0);
+      const rt = Number(item.boqRate !== undefined ? item.boqRate : (item.rate || 0));
       const pr = Number(item.prevQty || 0);
       const qty = Number(item.qtyExecuted || 0);
+      const curAmt = Number((qty * rt).toFixed(2));
       return {
         prevAmount: totals.prevAmount + (pr * rt),
-        amount: totals.amount + (qty * rt),
-        cumulativeAmount: totals.cumulativeAmount + ((pr + qty) * rt)
+        amount: totals.amount + curAmt,
+        cumulativeAmount: totals.cumulativeAmount + ((pr + qty) * rt),
+        totalCurrentQty: totals.totalCurrentQty + qty
       };
-    }, { prevAmount: 0, amount: 0, cumulativeAmount: 0 });
+    }, { prevAmount: 0, amount: 0, cumulativeAmount: 0, totalCurrentQty: 0 });
   };
 
-  const handleProjectOrTypeChange = (field: 'projectId' | 'billType', value: string) => {
+  const handleAddMultipleBoqItems = (items: MeasurementItem[]) => {
+    const existingBoqIds = new Set(
+      formData.measurementItems.map(m => m.boqItemId).filter(Boolean)
+    );
+    const toAdd = items.filter(it => !it.boqItemId || !existingBoqIds.has(it.boqItemId));
+
+    if (toAdd.length === 0) return;
+
+    const updatedItems = [...formData.measurementItems, ...toAdd];
+    const totals = calculateTotalsFromMeasurements(updatedItems);
+
     setFormData(prev => {
-      const nextFormData = { ...prev, [field]: value };
-      
-      if (isAdding && nextFormData.projectId && (nextFormData.billType || 'Running Account') === 'Running Account') {
-        const projectBills = billings
-          .filter(b => b.projectId === nextFormData.projectId && (b.billType || 'Running Account') === 'Running Account')
-          .sort((a, b) => {
-             const srA = String(a.srNo || '').trim();
-             const srB = String(b.srNo || '').trim();
-             return srA.localeCompare(srB, undefined, { numeric: true, sensitivity: 'base' });
-          });
-          
-        if (projectBills.length > 0) {
-          const lastBill = projectBills[projectBills.length - 1];
-          let cumulativeAmt = 0;
-          let newMeasurementItems = [] as MeasurementItem[];
-          
-          if (lastBill.measurementItems && lastBill.measurementItems.length > 0) {
-            newMeasurementItems = lastBill.measurementItems.map(item => {
-               const prevQ = Number(item.cumulativeQty || 0);
-               const prevA = Number(item.cumulativeAmount || (prevQ * (item.rate || 0)));
-               return {
-                  ...item,
-                  id: Math.random().toString(36).substring(2, 9),
-                  qtyExecuted: 0,
-                  amount: 0,
-                  prevQty: prevQ,
-                  prevAmount: prevA,
-                  cumulativeQty: prevQ,
-                  cumulativeAmount: prevA
-               };
-            });
-            cumulativeAmt = newMeasurementItems.reduce((s, i) => s + (i.cumulativeAmount || 0), 0);
-          } else {
-            cumulativeAmt = Number(lastBill.cumulativeAmount || ((Number(lastBill.prevAmount) || 0) + (Number(lastBill.amount) || 0)));
-          }
-          
-          return {
-             ...nextFormData,
-             measurementItems: newMeasurementItems,
-             prevAmount: cumulativeAmt,
-             cumulativeAmount: cumulativeAmt,
-             amount: ''
-          };
-        } else {
-          return {
-             ...nextFormData,
-             prevAmount: 0,
-             cumulativeAmount: Number(nextFormData.amount) || 0,
-             measurementItems: nextFormData.measurementItems.map(item => ({
-                ...item,
-                prevQty: 0,
-                prevAmount: 0,
-                cumulativeQty: Number(item.qtyExecuted) || 0,
-                cumulativeAmount: Number(item.amount) || 0
-             }))
-          };
-        }
-      }
-      return nextFormData;
+      const amtStr = totals.amount > 0 ? parseFloat(totals.amount.toFixed(2)).toString() : prev.amount;
+      const prevAmtStr = totals.prevAmount > 0 ? parseFloat(totals.prevAmount.toFixed(2)).toString() : prev.prevAmount;
+      const cumulAmtStr = totals.cumulativeAmount > 0 ? parseFloat(totals.cumulativeAmount.toFixed(2)).toString() : prev.cumulativeAmount;
+
+      const amtNum = parseFloat(amtStr) || 0;
+      const tPct = parseFloat(prev.tdsPercent) || 0;
+      const rPct = parseFloat(prev.retentionPercent) || 0;
+      const gPct = parseFloat(prev.gstPercent) || 0;
+
+      return {
+        ...prev,
+        measurementItems: updatedItems,
+        amount: amtStr,
+        prevAmount: prevAmtStr,
+        cumulativeAmount: cumulAmtStr,
+        tds: tPct > 0 ? parseFloat((amtNum * tPct / 100).toFixed(2)).toString() : prev.tds,
+        retention: rPct > 0 ? parseFloat((amtNum * rPct / 100).toFixed(2)).toString() : prev.retention,
+        gst: gPct > 0 ? parseFloat((amtNum * gPct / 100).toFixed(2)).toString() : prev.gst
+      };
     });
   };
 
   const handleAddMeasurementItem = () => {
     const newItem: MeasurementItem = {
       id: Math.random().toString(36).substring(2, 9),
+      itemCode: '',
       description: '',
       qtyExecuted: 0,
-      unit: 'Sqm',
+      unit: 'sqft',
+      boqQuantity: 0,
+      boqRate: 0,
       rate: 0,
       amount: 0,
       prevQty: 0,
       cumulativeQty: 0,
+      balanceQty: 0,
       prevAmount: 0,
-      cumulativeAmount: 0
+      cumulativeAmount: 0,
+      remarks: ''
     };
     const updatedItems = [...formData.measurementItems, newItem];
     const totals = calculateTotalsFromMeasurements(updatedItems);
@@ -316,13 +432,18 @@ export const Billing: React.FC = () => {
     const updatedItems = formData.measurementItems.map((item, idx) => {
       if (idx === index) {
         const merged = { ...item, ...fields };
-        const qty = Number(merged.qtyExecuted || 0);
-        const rt = Number(merged.rate || 0);
-        const pr = Number(merged.prevQty || 0);
-        merged.amount = Number((qty * rt).toFixed(2));
-        merged.cumulativeQty = Number((pr + qty).toFixed(2));
-        merged.prevAmount = Number((pr * rt).toFixed(2));
-        merged.cumulativeAmount = Number((merged.cumulativeQty * rt).toFixed(2));
+        const thisBillQ = Number(merged.qtyExecuted || 0);
+        const rate = Number(merged.boqRate !== undefined ? merged.boqRate : (merged.rate || 0));
+        const prevQ = Number(merged.prevQty || 0);
+        const boqQ = Number(merged.boqQuantity || 0);
+
+        merged.rate = rate;
+        merged.boqRate = rate;
+        merged.amount = Number((thisBillQ * rate).toFixed(2));
+        merged.cumulativeQty = Number((prevQ + thisBillQ).toFixed(3));
+        merged.prevAmount = Number((prevQ * rate).toFixed(2));
+        merged.cumulativeAmount = Number((merged.cumulativeQty * rate).toFixed(2));
+        merged.balanceQty = Number((boqQ - merged.cumulativeQty).toFixed(3));
         return merged;
       }
       return item;
@@ -330,7 +451,7 @@ export const Billing: React.FC = () => {
 
     const totals = calculateTotalsFromMeasurements(updatedItems);
     setFormData(prev => {
-      const amtStr = totals.amount > 0 ? parseFloat(totals.amount.toFixed(2)).toString() : prev.amount;
+      const amtStr = totals.amount > 0 ? parseFloat(totals.amount.toFixed(2)).toString() : (updatedItems.length === 0 ? '' : '0');
       const prevAmtStr = totals.prevAmount > 0 ? parseFloat(totals.prevAmount.toFixed(2)).toString() : prev.prevAmount;
       const cumulAmtStr = totals.cumulativeAmount > 0 ? parseFloat(totals.cumulativeAmount.toFixed(2)).toString() : prev.cumulativeAmount;
       
@@ -1611,354 +1732,632 @@ export const Billing: React.FC = () => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
-          className="sap-panel relative z-10 w-full max-w-max max-h-[95vh] overflow-y-auto p-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
+          className="sap-panel relative z-10 w-full max-w-6xl max-h-[92vh] overflow-y-auto p-4 shadow-[0_10px_40px_rgb(0,0,0,0.2)] bg-[#fcfdfe] rounded-md border-b-4 border-b-[#0056b3]"
         >
           <div className="font-extrabold mb-3 border-b border-[#0056b3]/30 pb-1.5 text-[#0056b3] uppercase tracking-wider text-xs flex justify-between items-center">
-            <span>{editingId ? 'Edit Bill Details' : 'New Bill Details'}</span>
-            <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
-              <X size={12} />
-            </button>
-          </div>
-          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-x-4 gap-y-2 max-w-2xl">
-            <div className="flex items-center">
-              <label className="w-32">Sr No:</label>
-              <input required type="text" className="sap-input flex-1" value={formData.srNo} onChange={e => setFormData({...formData, srNo: e.target.value})} />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Project:</label>
-              <SAPSelect required className="sap-input flex-1" value={formData.projectId} onChange={e => handleProjectOrTypeChange('projectId', e.target.value)}>
-                <option value="">Select Project</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </SAPSelect>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Bill No:</label>
-              {isAutoBillingActive && !editingId ? (
-                <div className="flex flex-1 items-center gap-1.5">
-                  <input
-                    required
-                    readOnly
-                    type="text"
-                    className="sap-input flex-1 bg-indigo-50 border-indigo-200 text-indigo-800 font-mono text-xs font-semibold cursor-not-allowed"
-                    value={formData.billNo || '(Generating...)'}
-                  />
-                  <span className="bg-indigo-500 text-[9px] text-white font-mono px-1.5 py-0.5 rounded font-bold uppercase" title="Automated sequence based on numbering settings rules.">
-                    Auto
-                  </span>
-                </div>
-              ) : (
-                <input required type="text" className="sap-input flex-1" value={formData.billNo} onChange={e => setFormData({...formData, billNo: e.target.value})} />
+            <div className="flex items-center space-x-2">
+              <span>{editingId ? 'Edit Bill Details' : 'New Bill Details (BOQ-Based Entry)'}</span>
+              {formData.projectId && (
+                <span className="text-[10px] font-mono font-semibold bg-blue-50 text-blue-900 px-2 py-0.5 rounded border border-blue-200">
+                  {projects.find(p => p.id === formData.projectId)?.name}
+                </span>
               )}
             </div>
-            <div className="flex items-center">
-              <label className="w-32">Bill Type:</label>
-              <SAPSelect required className="sap-input flex-1" value={formData.billType} onChange={e => handleProjectOrTypeChange('billType', e.target.value)}>
-                <option value="Running Account">Running Account</option>
-                <option value="Final Bill">Final Bill</option>
-                <option value="Extra Item Bill">Extra Item Bill</option>
-                <option value="Additional Work Bill">Additional Work Bill</option>
-                <option value="Manpower Supply Bill">Manpower Supply Bill</option>
-              </SAPSelect>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Work Nature:</label>
-              <input required type="text" className="sap-input flex-1" value={formData.workNature} onChange={e => setFormData({...formData, workNature: e.target.value})} />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Previous Amount:</label>
-              <input type="number" step="any" className="sap-input flex-1" value={formData.prevAmount || ''} onChange={e => setFormData({...formData, prevAmount: parseFloat(e.target.value) || 0, cumulativeAmount: (parseFloat(e.target.value) || 0) + (Number(formData.amount) || 0)})} />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">This Bill Amount:</label>
-              <input required type="number" step="any" className="sap-input flex-1" value={formData.amount} onChange={e => { handleAmountChange(e.target.value); setFormData(prev => ({...prev, cumulativeAmount: Number(prev.prevAmount || 0) + (parseFloat(e.target.value) || 0)})); }} />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Extra Work Amount:</label>
-              <input type="number" step="any" className="sap-input flex-1" value={formData.extraWorkAmount} onChange={e => setFormData(prev => ({...prev, extraWorkAmount: e.target.value}))} placeholder="Amount not subject to TDS/GST" />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Cumulative Amount:</label>
-              <input readOnly type="number" step="any" className="sap-input flex-1 bg-gray-50 text-gray-500" value={formData.cumulativeAmount || ''} />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">TDS Deducted:</label>
-              <div className="flex flex-1 items-center space-x-1">
-                <div className="relative w-16">
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input w-full pr-4 text-right"
-                    value={formData.tdsPercent}
-                    placeholder="%"
-                    onChange={e => handleTdsPercentChange(e.target.value)}
-                  />
-                  <span className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">%</span>
+            <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+              <X size={14} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="w-full space-y-4">
+            {/* 1. General Bill Information Grid */}
+            <div className="bg-slate-50 border border-slate-200 rounded p-3 text-[11px]">
+              <div className="text-[11px] font-bold text-[#1e3a5f] uppercase tracking-wider mb-2 border-b border-slate-200 pb-1 flex items-center justify-between">
+                <span>1. General Bill Information</span>
+                <span className="text-[10px] font-normal text-slate-500">Fields marked with <span className="text-red-500">*</span> are mandatory</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Sr No <span className="text-red-500">*</span></label>
+                  <input required type="text" className="sap-input w-full" value={formData.srNo} onChange={e => setFormData({...formData, srNo: e.target.value})} />
                 </div>
-                <span className="text-gray-400 text-[10px]">or</span>
-                <div className="relative flex-1">
-                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input w-full pl-4.5"
-                    value={formData.tds}
-                    placeholder="Amount"
-                    onChange={e => handleTdsAmountChange(e.target.value)}
-                  />
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Project <span className="text-red-500">*</span></label>
+                  <SAPSelect required className="sap-input w-full font-semibold" value={formData.projectId} onChange={e => { handleProjectOrTypeChange('projectId', e.target.value); setProjectRequiredWarning(false); }}>
+                    <option value="">-- Select Project --</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </SAPSelect>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Bill No <span className="text-red-500">*</span></label>
+                  {isAutoBillingActive && !editingId ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        required
+                        readOnly
+                        type="text"
+                        className="sap-input flex-1 bg-indigo-50 border-indigo-200 text-indigo-800 font-mono text-xs font-semibold cursor-not-allowed"
+                        value={formData.billNo || '(Generating...)'}
+                      />
+                      <span className="bg-indigo-500 text-[9px] text-white font-mono px-1.5 py-0.5 rounded font-bold uppercase">Auto</span>
+                    </div>
+                  ) : (
+                    <input required type="text" className="sap-input w-full font-mono font-bold" value={formData.billNo} onChange={e => setFormData({...formData, billNo: e.target.value})} />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Bill Type <span className="text-red-500">*</span></label>
+                  <SAPSelect required className="sap-input w-full" value={formData.billType} onChange={e => handleProjectOrTypeChange('billType', e.target.value)}>
+                    <option value="Running Account">Running Account</option>
+                    <option value="Final Bill">Final Bill</option>
+                    <option value="Extra Item Bill">Extra Item Bill</option>
+                    <option value="Additional Work Bill">Additional Work Bill</option>
+                    <option value="Manpower Supply Bill">Manpower Supply Bill</option>
+                  </SAPSelect>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Work Nature / Scope <span className="text-red-500">*</span></label>
+                  <input required type="text" className="sap-input w-full" value={formData.workNature} onChange={e => setFormData({...formData, workNature: e.target.value})} placeholder="e.g. Civil, Structural & Finishing Works" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Billing Month <span className="text-red-500">*</span></label>
+                  <input required type="month" className="sap-input w-full" value={formData.month} onChange={e => setFormData({...formData, month: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Bill Certify Date <span className="text-red-500">*</span></label>
+                  <input required type="date" className="sap-input w-full" value={formData.certifyDate} onChange={e => setFormData({...formData, certifyDate: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Previous Cumulative Amount (₹)</label>
+                  <div className="relative">
+                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
+                    <input
+                      type="number"
+                      step="any"
+                      className="sap-input w-full pl-4.5 bg-slate-100 font-mono text-slate-700"
+                      value={formData.prevAmount || ''}
+                      onChange={e => {
+                        const pVal = parseFloat(e.target.value) || 0;
+                        setFormData(prev => ({
+                          ...prev,
+                          prevAmount: pVal,
+                          cumulativeAmount: (pVal + (parseFloat(prev.amount as string) || 0)).toFixed(2)
+                        }));
+                      }}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-blue-900 mb-0.5">
+                    This Bill Amount (₹) <span className="text-[9px] font-normal text-slate-500">(Auto-summed from items)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-blue-800 font-bold text-[9px] pointer-events-none">₹</span>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      className="sap-input w-full pl-4.5 font-mono font-bold text-blue-900 bg-blue-50/60 border-blue-300"
+                      value={formData.amount}
+                      onChange={e => {
+                        handleAmountChange(e.target.value);
+                        setFormData(prev => ({
+                          ...prev,
+                          cumulativeAmount: ((Number(prev.prevAmount) || 0) + (parseFloat(e.target.value) || 0)).toFixed(2)
+                        }));
+                      }}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Total Cumulative Amount (₹)</label>
+                  <div className="relative">
+                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
+                    <input
+                      readOnly
+                      type="text"
+                      className="sap-input w-full pl-4.5 bg-slate-100 font-mono font-bold text-slate-800 cursor-not-allowed"
+                      value={formData.cumulativeAmount ? Number(formData.cumulativeAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Extra Work Amount (₹)</label>
+                  <div className="relative">
+                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
+                    <input
+                      type="number"
+                      step="any"
+                      className="sap-input w-full pl-4.5 font-mono"
+                      value={formData.extraWorkAmount}
+                      onChange={e => setFormData(prev => ({ ...prev, extraWorkAmount: e.target.value }))}
+                      placeholder="Amount not subject to TDS"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Retention Money:</label>
-              <div className="flex flex-1 items-center space-x-1">
-                <div className="relative w-16">
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input w-full pr-4 text-right"
-                    value={formData.retentionPercent}
-                    placeholder="%"
-                    onChange={e => handleRetentionPercentChange(e.target.value)}
-                  />
-                  <span className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">%</span>
-                </div>
-                <span className="text-gray-400 text-[10px]">or</span>
-                <div className="relative flex-1">
-                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input w-full pl-4.5"
-                    value={formData.retention}
-                    placeholder="Amount"
-                    onChange={e => handleRetentionAmountChange(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">GST Amount:</label>
-              <div className="flex flex-1 items-center space-x-1">
-                <div className="relative w-16">
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input w-full pr-4 text-right"
-                    value={formData.gstPercent}
-                    placeholder="%"
-                    onChange={e => handleGstPercentChange(e.target.value)}
-                  />
-                  <span className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">%</span>
-                </div>
-                <span className="text-gray-400 text-[10px]">or</span>
-                <div className="relative flex-1">
-                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
-                  <input
-                    type="number"
-                    step="any"
-                    className="sap-input w-full pl-4.5"
-                    value={formData.gst}
-                    placeholder="Amount"
-                    onChange={e => handleGstAmountChange(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Debit Amount:</label>
-              <div className="relative flex-1">
-                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
-                <input
-                  type="number"
-                  step="any"
-                  className="sap-input w-full pl-4.5"
-                  value={formData.debitAmount}
-                  placeholder="Debit Amount"
-                  onChange={e => setFormData({...formData, debitAmount: e.target.value})}
-                />
-              </div>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Debit Reason:</label>
-              <input
-                type="text"
-                className="sap-input flex-1"
-                value={formData.debitReason}
-                placeholder="Reason for debit deduction"
-                onChange={e => setFormData({...formData, debitReason: e.target.value})}
-              />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Hold Amount:</label>
-              <div className="relative flex-1">
-                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">₹</span>
-                <input
-                  type="number"
-                  step="any"
-                  className="sap-input w-full pl-4.5"
-                  value={formData.holdAmount}
-                  placeholder="Hold Amount"
-                  onChange={e => setFormData({...formData, holdAmount: e.target.value})}
-                />
-              </div>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Hold Reason:</label>
-              <input
-                type="text"
-                className="sap-input flex-1"
-                value={formData.holdReason}
-                placeholder="Reason for hold/penalty"
-                onChange={e => setFormData({...formData, holdReason: e.target.value})}
-              />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Retention Status:</label>
-              <SAPSelect
-                className="sap-input flex-1"
-                value={formData.retentionStatus}
-                onChange={e => setFormData({...formData, retentionStatus: e.target.value})}
-              >
-                <option value="Pending">Pending</option>
-                <option value="Partially Cleared">Partially Cleared</option>
-                <option value="Fully Resolved">Fully Resolved</option>
-              </SAPSelect>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Hold Status:</label>
-              <SAPSelect
-                className="sap-input flex-1"
-                value={formData.holdStatus}
-                onChange={e => setFormData({...formData, holdStatus: e.target.value})}
-              >
-                <option value="Pending">Pending</option>
-                <option value="Partially Cleared">Partially Cleared</option>
-                <option value="Fully Resolved">Fully Resolved</option>
-              </SAPSelect>
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Billing Month:</label>
-              <input required type="month" className="sap-input flex-1" value={formData.month} onChange={e => setFormData({...formData, month: e.target.value})} />
-            </div>
-            <div className="flex items-center">
-              <label className="w-32">Bill Certify Date:</label>
-              <input required type="date" className="sap-input flex-1" value={formData.certifyDate} onChange={e => setFormData({...formData, certifyDate: e.target.value})} />
             </div>
 
-            {/* Measurement Sheet Subform */}
-            <div className="col-span-2 border-t border-gray-200 pt-3 mt-2">
-              <div className="flex justify-between items-center mb-1.5">
-                <span className="font-semibold text-[#0056b3] text-[11px] uppercase tracking-wider">
-                  Bill Measurement Sheet
-                </span>
-                <div className="flex gap-2">
+            {/* Warning if user tried to add items without selecting a project */}
+            {projectRequiredWarning && (
+              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded text-amber-900 text-xs flex items-center justify-between animate-in fade-in duration-150">
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-amber-700">⚠️ Project Required:</span>
+                  <span>Please select a Project from the dropdown above before adding BOQ items.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProjectRequiredWarning(false)}
+                  className="text-amber-700 hover:text-amber-900 font-bold px-2 py-0.5 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* 2. BOQ-Based Bill Item Entry Table Section */}
+            <div className="border border-slate-300 rounded bg-white overflow-hidden shadow-xs">
+              <div className="bg-[#1e3a5f] text-white px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-xs uppercase tracking-wider text-white">
+                    📋 2. BOQ-Based Bill Items & Measurement Entry
+                  </span>
+                  <span className="text-[10px] bg-blue-900/80 text-blue-200 px-2 py-0.5 rounded border border-blue-400/30">
+                    {formData.measurementItems.length} Item(s)
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
                   <button
                     type="button"
-                    onClick={() => setIsBOQSelectorOpen(true)}
-                    className="bg-purple-600 hover:bg-purple-750 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-purple-700 border-b-2 border-slate-200 transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (!formData.projectId) {
+                        setProjectRequiredWarning(true);
+                        return;
+                      }
+                      setProjectRequiredWarning(false);
+                      setIsBOQSelectorOpen(true);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1 rounded shadow-xs flex items-center space-x-1 cursor-pointer transition-colors"
+                    title="Open searchable popup to select items from Project BOQ Master"
                   >
-                    + Add from BOQ
+                    <Plus size={14} />
+                    <span>Add BOQ Item</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleAddMeasurementItem}
-                    className="bg-blue-600 hover:bg-blue-750 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-700 border-b-2 border-slate-200 transition-colors cursor-pointer"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-2.5 py-1 rounded shadow-xs flex items-center space-x-1 cursor-pointer transition-colors"
+                    title="Add a custom/extra measurement row"
                   >
-                    + Add Item Row
+                    <Plus size={13} />
+                    <span>Add Custom Row</span>
                   </button>
+                  {formData.measurementItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          measurementItems: [],
+                          amount: '0',
+                          cumulativeAmount: prev.prevAmount || '0'
+                        }));
+                      }}
+                      className="text-red-300 hover:text-white hover:bg-red-900/50 text-[10px] px-2 py-1 rounded transition-colors cursor-pointer"
+                      title="Remove all measurement items"
+                    >
+                      Clear All
+                    </button>
+                  )}
                 </div>
               </div>
 
               {formData.measurementItems.length === 0 ? (
-                <div className="text-center py-4 bg-gray-50 border border-dashed border-gray-200 rounded text-gray-400 text-[10px]">
-                  No measurement items added. Adding a measurement item will compute bill amount automatically.
+                <div className="p-8 text-center bg-slate-50 border-b border-slate-200">
+                  <div className="font-bold text-slate-700 text-sm mb-1">No BOQ Bill Items Added</div>
+                  <div className="text-slate-500 text-xs mb-3">
+                    Click <strong className="text-emerald-700">“Add BOQ Item”</strong> to choose contract items directly from the project's BOQ Master.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!formData.projectId) {
+                        setProjectRequiredWarning(true);
+                        return;
+                      }
+                      setProjectRequiredWarning(false);
+                      setIsBOQSelectorOpen(true);
+                    }}
+                    className="inline-flex items-center space-x-1.5 bg-[#2c5282] hover:bg-[#1e3a5f] text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer transition-colors"
+                  >
+                    <Plus size={14} />
+                    <span>Add BOQ Item</span>
+                  </button>
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-gray-200 rounded max-h-[220px] overflow-y-auto mb-2">
-                  <table className="w-full text-left text-[10px] border-collapse bg-white">
-                    <thead>
-                      <tr className="bg-gray-100 border-b border-gray-200 sticky top-0 z-10 text-[9px] uppercase tracking-wider text-gray-600 font-bold">
-                        <th className="p-1 w-6 text-center">#</th>
-                        <th className="p-1 min-w-[200px]">Description</th>
-                        <th className="p-1 w-12 text-center">Unit</th>
-                        <th className="p-1 w-20 text-right">Rate</th>
-                        <th className="p-1 w-16 text-right">Qty Executed</th>
-                        <th className="p-1 w-20 text-right">Amount</th>
-                        <th className="p-1 w-6 text-center"></th>
+                <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+                  <table className="w-full border-collapse border border-slate-200 text-[11px] bg-white">
+                    <thead className="bg-[#2c5282] text-white text-[10px] font-semibold sticky top-0 uppercase tracking-wider select-none z-10 shadow-xs">
+                      <tr>
+                        <th className="border border-blue-900 px-2 py-2 text-center w-10">S.No.</th>
+                        <th className="border border-blue-900 px-2 py-2 text-left w-24">BOQ Item Code</th>
+                        <th className="border border-blue-900 px-3 py-2 text-left min-w-[200px]">Description of Work</th>
+                        <th className="border border-blue-900 px-2 py-2 text-center w-14">Unit</th>
+                        <th className="border border-blue-900 px-2 py-2 text-right w-24">BOQ Quantity</th>
+                        <th className="border border-blue-900 px-2 py-2 text-right w-24">BOQ Rate</th>
+                        <th className="border border-blue-900 px-2 py-2 text-right w-28 bg-[#1e3a5f]">Previous Cumulative Qty</th>
+                        <th className="border border-blue-900 px-2 py-2 text-right w-32 bg-blue-800">This Bill Quantity</th>
+                        <th className="border border-blue-900 px-2 py-2 text-right w-28">Total Cumulative Qty</th>
+                        <th className="border border-blue-900 px-2 py-2 text-right w-28 bg-[#1e3a5f]">This Bill Amount</th>
+                        <th className="border border-blue-900 px-2 py-2 text-right w-28">Balance BOQ Qty</th>
+                        <th className="border border-blue-900 px-2 py-2 text-left min-w-[140px]">Remarks</th>
+                        <th className="border border-blue-900 px-2 py-2 text-center w-12">Action</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {formData.measurementItems.map((item, idx) => (
-                        <tr key={item.id || idx} className="border-b border-gray-100 hover:bg-gray-50/50">
-                          <td className="p-1 text-center text-gray-400 font-mono text-[9px]">{idx + 1}</td>
-                          <td className="p-1">
-                            <input
-                              type="text"
-                              required
-                              className="sap-input w-full py-0.5 text-[10px]"
-                              value={item.description}
-                              placeholder="e.g. Brickwork in superstructure"
-                              onChange={e => handleUpdateMeasurementItem(idx, { description: e.target.value })}
-                            />
-                          </td>
-                          <td className="p-1">
-                            <input
-                              type="text"
-                              required
-                              className="sap-input w-full py-0.5 text-center text-[10px]"
-                              value={item.unit}
-                              placeholder="Sqm"
-                              onChange={e => handleUpdateMeasurementItem(idx, { unit: e.target.value })}
-                            />
-                          </td>
-                          <td className="p-1">
-                            <input
-                              type="number"
-                              step="any"
-                              required
-                              className="sap-input w-full py-0.5 text-right text-[10px]"
-                              value={item.rate || ''}
-                              placeholder="0"
-                              onChange={e => handleUpdateMeasurementItem(idx, { rate: parseFloat(e.target.value) || 0 })}
-                            />
-                          </td>
-                          <td className="p-1">
-                            <input
-                              type="number"
-                              step="any"
-                              required
-                              className="sap-input w-full py-0.5 text-right text-[10px]"
-                              value={item.qtyExecuted || ''}
-                              placeholder="0"
-                              onChange={e => handleUpdateMeasurementItem(idx, { qtyExecuted: parseFloat(e.target.value) || 0 })}
-                            />
-                          </td>
-                          <td className="p-1 text-right font-mono text-gray-900 pr-1 select-none text-[10px]">
-                            {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(item.amount || 0)}
-                          </td>
-                          <td className="p-1 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteMeasurementItem(idx)}
-                              className="text-red-500 hover:text-red-700 cursor-pointer"
-                              title="Delete Item"
-                            >
-                              <X size={12} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-50/70 font-semibold border-t border-gray-200 text-[10px]">
-                        <td colSpan={5} className="p-1 text-right text-gray-500 pr-2">Subtotal Amount:</td>
-                        <td className="p-1 text-right font-extrabold text-blue-950 font-mono pr-1 select-none text-[10px]">
-                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(calculateTotalsFromMeasurements(formData.measurementItems).amount)}
-                        </td>
-                        <td colSpan={1}></td>
-                      </tr>
+                    <tbody className="divide-y divide-slate-100">
+                      {formData.measurementItems.map((item, idx) => {
+                        const boqQ = Number(item.boqQuantity || 0);
+                        const boqR = Number(item.boqRate !== undefined ? item.boqRate : (item.rate || 0));
+                        const prevQ = Number(item.prevQty || 0);
+                        const thisBillQ = Number(item.qtyExecuted || 0);
+                        const cumQ = Number(item.cumulativeQty !== undefined ? item.cumulativeQty : (prevQ + thisBillQ));
+                        const itemAmt = Number((thisBillQ * boqR).toFixed(2));
+                        const balQ = Number(item.balanceQty !== undefined ? item.balanceQty : (boqQ - cumQ));
+                        const isOver = balQ < 0 && boqQ > 0;
+
+                        return (
+                          <tr key={item.id || idx} className={`hover:bg-blue-50/50 transition-colors ${isOver ? 'bg-amber-50/40' : ''}`}>
+                            <td className="border border-slate-200 px-2 py-1.5 text-center font-mono text-slate-500 font-bold">
+                              {idx + 1}
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 font-bold font-mono text-blue-900">
+                              {item.itemCode ? (
+                                <span className="bg-blue-50 text-blue-900 px-1.5 py-0.5 rounded border border-blue-200 text-[10px]">
+                                  {item.itemCode}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic font-normal text-[10px]">Custom</span>
+                              )}
+                            </td>
+                            <td className="border border-slate-200 px-3 py-1.5 text-slate-800">
+                              <div className="font-medium text-slate-900">{item.description}</div>
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 text-center">
+                              <span className="font-bold text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                                {item.unit || 'sqft'}
+                              </span>
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 text-right font-mono text-slate-800">
+                              {boqQ > 0 ? boqQ.toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 text-right font-mono font-bold text-blue-700">
+                              ₹{boqR.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 text-right font-mono text-purple-700 font-semibold bg-purple-50/20">
+                              {prevQ > 0 ? prevQ.toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}
+                            </td>
+                            <td className="border border-slate-200 px-1.5 py-1 bg-blue-50/30">
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                required
+                                value={item.qtyExecuted === 0 ? '0' : (item.qtyExecuted || '')}
+                                onChange={e => handleUpdateMeasurementItem(idx, { qtyExecuted: parseFloat(e.target.value) || 0 })}
+                                placeholder="0"
+                                className="w-full text-right font-mono font-bold py-1 px-1.5 border-2 border-blue-400 focus:border-blue-600 rounded bg-white text-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-xs"
+                              />
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 text-right font-mono font-bold text-slate-900">
+                              {cumQ.toLocaleString('en-IN', { maximumFractionDigits: 3 })}
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 text-right font-mono font-bold text-emerald-700 bg-emerald-50/20">
+                              ₹{itemAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className={`border border-slate-200 px-2 py-1.5 text-right font-mono font-bold ${
+                              isOver ? 'text-red-600 bg-red-50/50' : 'text-emerald-700'
+                            }`}>
+                              {boqQ > 0 ? (
+                                <span className={isOver ? 'inline-flex items-center gap-1 font-bold' : ''}>
+                                  {isOver && '⚠️ '}
+                                  {balQ.toLocaleString('en-IN', { maximumFractionDigits: 3 })}
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td className="border border-slate-200 px-1.5 py-1">
+                              <input
+                                type="text"
+                                value={item.remarks || ''}
+                                onChange={e => handleUpdateMeasurementItem(idx, { remarks: e.target.value })}
+                                placeholder="e.g. 2nd Floor Grid A-C"
+                                className="w-full text-[10px] py-1 px-1.5 border border-slate-300 rounded focus:border-blue-500 focus:outline-none bg-white"
+                              />
+                            </td>
+                            <td className="border border-slate-200 px-2 py-1.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMeasurementItem(idx)}
+                                className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                                title="Remove item row"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
+                    <tfoot className="bg-slate-100 font-semibold border-t-2 border-slate-300 text-[11px] sticky bottom-0 z-10 select-none">
+                      <tr>
+                        <td colSpan={7} className="px-3 py-2 text-right text-slate-600 font-bold uppercase tracking-wide">
+                          Total Current Bill Quantity (by unit):
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono font-bold text-blue-900 bg-blue-100/60 border border-blue-200">
+                          {unitTotals || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-600 font-bold uppercase">
+                          Current Bill Subtotal:
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono font-extrabold text-blue-950 text-xs bg-emerald-100/60 border border-emerald-300">
+                          ₹{calculateTotalsFromMeasurements(formData.measurementItems).amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td colSpan={3} className="px-2 py-2 text-slate-400 text-[10px] italic">
+                          (Excludes previous bills)
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               )}
+
+              {hasExceededBOQ && (
+                <div className="p-2.5 bg-amber-50 border-t border-amber-300 text-amber-900 text-xs flex items-center space-x-2 font-medium">
+                  <span className="text-amber-600 font-bold text-sm">⚠️</span>
+                  <span><strong>BOQ Quantity Exceeded:</strong> One or more items have a Total Cumulative Quantity greater than the Contract BOQ Quantity (Balance BOQ Quantity is negative). Verify whether an amendment or extra work order is needed.</span>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Financial Deductions, Retention, TDS, GST & Net Payable */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <div className="lg:col-span-2 bg-slate-50 border border-slate-200 rounded p-3 text-[11px] space-y-2.5">
+                <div className="font-bold text-[#1e3a5f] uppercase tracking-wider text-[11px] border-b border-slate-200 pb-1">
+                  3. Statutory Deductions, Retention & Adjustments
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* TDS */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">TDS Deducted</label>
+                    <div className="flex items-center space-x-1">
+                      <div className="relative w-18">
+                        <input
+                          type="number"
+                          step="any"
+                          className="sap-input w-full pr-4 text-right font-mono"
+                          value={formData.tdsPercent}
+                          placeholder="%"
+                          onChange={e => handleTdsPercentChange(e.target.value)}
+                        />
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">%</span>
+                      </div>
+                      <span className="text-gray-400 text-[10px]">or ₹</span>
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          step="any"
+                          className="sap-input w-full font-mono font-semibold"
+                          value={formData.tds}
+                          placeholder="Amount"
+                          onChange={e => handleTdsAmountChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Retention */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Retention Money</label>
+                    <div className="flex items-center space-x-1">
+                      <div className="relative w-18">
+                        <input
+                          type="number"
+                          step="any"
+                          className="sap-input w-full pr-4 text-right font-mono"
+                          value={formData.retentionPercent}
+                          placeholder="%"
+                          onChange={e => handleRetentionPercentChange(e.target.value)}
+                        />
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">%</span>
+                      </div>
+                      <span className="text-gray-400 text-[10px]">or ₹</span>
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          step="any"
+                          className="sap-input w-full font-mono font-semibold"
+                          value={formData.retention}
+                          placeholder="Amount"
+                          onChange={e => handleRetentionAmountChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* GST */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">GST (CGST + SGST / IGST)</label>
+                    <div className="flex items-center space-x-1">
+                      <div className="relative w-18">
+                        <input
+                          type="number"
+                          step="any"
+                          className="sap-input w-full pr-4 text-right font-mono"
+                          value={formData.gstPercent}
+                          placeholder="%"
+                          onChange={e => handleGstPercentChange(e.target.value)}
+                        />
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-500 font-normal text-[9px] pointer-events-none">%</span>
+                      </div>
+                      <span className="text-gray-400 text-[10px]">or ₹</span>
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          step="any"
+                          className="sap-input w-full font-mono font-semibold"
+                          value={formData.gst}
+                          placeholder="Amount"
+                          onChange={e => handleGstAmountChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Retention Status */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Retention Status</label>
+                    <SAPSelect
+                      className="sap-input w-full"
+                      value={formData.retentionStatus}
+                      onChange={e => setFormData({...formData, retentionStatus: e.target.value})}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Partially Cleared">Partially Cleared</option>
+                      <option value="Fully Resolved">Fully Resolved</option>
+                    </SAPSelect>
+                  </div>
+
+                  {/* Debit Amount */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Debit Amount (₹)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="sap-input w-full font-mono"
+                      value={formData.debitAmount}
+                      placeholder="0.00"
+                      onChange={e => setFormData({...formData, debitAmount: e.target.value})}
+                    />
+                  </div>
+
+                  {/* Debit Reason */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Debit Reason</label>
+                    <input
+                      type="text"
+                      className="sap-input w-full"
+                      value={formData.debitReason}
+                      placeholder="Reason for debit deduction"
+                      onChange={e => setFormData({...formData, debitReason: e.target.value})}
+                    />
+                  </div>
+
+                  {/* Hold Amount */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Hold Amount (₹)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="sap-input w-full font-mono"
+                      value={formData.holdAmount}
+                      placeholder="0.00"
+                      onChange={e => setFormData({...formData, holdAmount: e.target.value})}
+                    />
+                  </div>
+
+                  {/* Hold Reason & Status */}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Hold Status</label>
+                      <SAPSelect
+                        className="sap-input w-full"
+                        value={formData.holdStatus}
+                        onChange={e => setFormData({...formData, holdStatus: e.target.value})}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Partially Cleared">Partially Cleared</option>
+                        <option value="Fully Resolved">Fully Resolved</option>
+                      </SAPSelect>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Hold Reason</label>
+                      <input
+                        type="text"
+                        className="sap-input w-full"
+                        value={formData.holdReason}
+                        placeholder="Reason"
+                        onChange={e => setFormData({...formData, holdReason: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Net Payable Breakdown Card */}
+              {(() => {
+                const subtotal = calculateTotalsFromMeasurements(formData.measurementItems).amount || (parseFloat(formData.amount as string) || 0);
+                const extra = parseFloat(formData.extraWorkAmount as string) || 0;
+                const tdsVal = parseFloat(formData.tds as string) || 0;
+                const retVal = parseFloat(formData.retention as string) || 0;
+                const gstVal = parseFloat(formData.gst as string) || 0;
+                const debVal = parseFloat(formData.debitAmount as string) || 0;
+                const hldVal = parseFloat(formData.holdAmount as string) || 0;
+                const netPayable = subtotal + extra + gstVal - tdsVal - retVal - debVal - hldVal;
+
+                return (
+                  <div className="bg-[#1e3a5f]/5 border border-[#1e3a5f]/20 rounded p-3 text-[11px] flex flex-col justify-between">
+                    <div>
+                      <div className="font-bold text-[#1e3a5f] uppercase tracking-wider text-[11px] border-b border-slate-200 pb-1 mb-2">
+                        Payment & Receivable Summary
+                      </div>
+                      <div className="space-y-1.5 font-mono text-slate-700">
+                        <div className="flex justify-between">
+                          <span>Current Bill Subtotal:</span>
+                          <strong className="text-slate-900">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        </div>
+                        {extra > 0 && (
+                          <div className="flex justify-between text-blue-700">
+                            <span>(+) Extra Work:</span>
+                            <strong>₹{extra.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                          </div>
+                        )}
+                        {gstVal > 0 && (
+                          <div className="flex justify-between text-emerald-700">
+                            <span>(+) GST:</span>
+                            <strong>₹{gstVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                          </div>
+                        )}
+                        {tdsVal > 0 && (
+                          <div className="flex justify-between text-red-600">
+                            <span>(-) TDS Deducted:</span>
+                            <strong>-₹{tdsVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                          </div>
+                        )}
+                        {retVal > 0 && (
+                          <div className="flex justify-between text-amber-700">
+                            <span>(-) Retention Money:</span>
+                            <strong>-₹{retVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                          </div>
+                        )}
+                        {(debVal > 0 || hldVal > 0) && (
+                          <div className="flex justify-between text-purple-700">
+                            <span>(-) Debit / Hold:</span>
+                            <strong>-₹{(debVal + hldVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t-2 border-[#1e3a5f]/30 flex justify-between items-center">
+                      <span className="font-bold text-slate-900 uppercase tracking-wide">Net Receivable / Payable:</span>
+                      <span className="font-mono text-base font-extrabold text-[#1e3a5f]">
+                        ₹{netPayable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             
             <div className="col-span-2 border border-dashed border-gray-300 rounded-sm p-3 bg-gray-50 flex flex-col mt-2">
@@ -3631,13 +4030,16 @@ export const Billing: React.FC = () => {
       {isBOQSelectorOpen && (
         <BOQAllocationSelector
           projectId={formData.projectId || ''}
+          projectName={projects.find(p => p.id === formData.projectId)?.name}
           boqs={boqs || []}
+          billings={billings || []}
+          currentBillId={editingId}
+          alreadySelectedBoqItemIds={formData.measurementItems.map(m => m.boqItemId).filter(Boolean) as string[]}
           onSelect={(item) => {
-            setFormData(prev => {
-              const items = [...prev.measurementItems];
-              items.push(item);
-              return { ...prev, measurementItems: items };
-            });
+            handleAddMultipleBoqItems([item]);
+          }}
+          onSelectMultiple={(items) => {
+            handleAddMultipleBoqItems(items);
           }}
           onClose={() => setIsBOQSelectorOpen(false)}
         />

@@ -42,16 +42,21 @@ export interface Worker {
 
 export interface MeasurementItem {
   id: string;
+  boqItemId?: string;
+  itemCode?: string;
   description: string;
-  qtyExecuted: number;
   unit: string;
+  boqQuantity?: number;
+  boqRate?: number;
   rate: number;
-  amount: number; // qtyExecuted * rate
-  prevQty: number;
-  cumulativeQty: number; // prevQty + qtyExecuted
+  prevQty: number; // Previous Cumulative Quantity
+  qtyExecuted: number; // This Bill Quantity
+  cumulativeQty: number; // Total Cumulative Quantity (prevQty + qtyExecuted)
+  amount: number; // This Bill Amount (qtyExecuted * rate)
   prevAmount?: number;
   cumulativeAmount?: number;
-  boqItemId?: string;
+  balanceQty?: number; // BOQ Quantity - Total Cumulative Quantity
+  remarks?: string;
   floorId?: string;
 }
 
@@ -845,13 +850,52 @@ export interface BOQBillingHistory {
   status: string;
 }
 
+export interface BOQItemRevision {
+  id: string;
+  revisionNo?: number;
+  date: string;
+  type: 'BOQ Revision' | 'Variation';
+  workOrderNo?: string;
+  originalQuantity: number;
+  additionalQuantity: number; // can be positive (increase) or negative (decrease)
+  revisedQuantity: number; // originalQuantity + additionalQuantity
+  rate: number;
+  amount: number; // additionalQuantity * rate
+  reason: string;
+  approvalStatus: 'Draft' | 'Pending Approval' | 'Approved' | 'Rejected';
+  approvedBy?: string;
+  approvedDate?: string;
+  remarks?: string;
+}
+
+export interface BOQItemVariation {
+  id: string;
+  variationNo?: string;
+  boqItemId: string; // Links directly to existing BOQ item
+  projectId: string;
+  workOrderNo?: string;
+  date: string;
+  originalQuantity: number;
+  additionalQuantity: number;
+  revisedQuantity: number;
+  rate: number;
+  amount: number;
+  reason: string;
+  approvalStatus: 'Draft' | 'Pending Approval' | 'Approved' | 'Rejected';
+  approvedBy?: string;
+  approvedDate?: string;
+  remarks?: string;
+}
+
 export interface BOQItem {
   id: string;
   itemCode: string;
   description: string;
   unit: string;
-  boqQuantity: number;
-  boqRate: number;
+  originalQuantity?: number; // baseline contract quantity (Rev 0)
+  originalRate?: number;
+  boqQuantity: number; // current revised approved quantity
+  boqRate: number; // applicable rate
   boqAmount: number; // calculated: boqQuantity * boqRate
   executedQuantity: number;
   billedQuantity: number;
@@ -859,6 +903,8 @@ export interface BOQItem {
   category?: 'Shuttering' | 'Reinforcement' | 'Concreting' | 'Excavation' | 'Masonry' | 'Plastering' | 'Flooring' | 'Other';
   floors?: BOQFloor[];
   billingHistory?: BOQBillingHistory[];
+  revisionsHistory?: BOQItemRevision[];
+  variations?: BOQItemVariation[];
 }
 
 export interface BOQRevision {
@@ -878,7 +924,15 @@ export interface BOQExtraItem {
   rate: number;
   amount: number;
   remarks?: string;
-  approvalStatus: 'Draft' | 'Pending Approval' | 'Approved' | 'Closed';
+  approvalStatus: 'Draft' | 'Pending Approval' | 'Approved' | 'Closed' | 'Rejected';
+  boqItemId?: string; // If variation links to an existing BOQ item
+  workOrderNo?: string;
+  reason?: string;
+  date?: string;
+  originalQuantity?: number;
+  revisedQuantity?: number;
+  approvedBy?: string;
+  approvedDate?: string;
 }
 
 export interface BOQ {

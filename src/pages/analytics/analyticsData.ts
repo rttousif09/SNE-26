@@ -901,7 +901,19 @@ export function computeAnalyticsData(
   filteredBoqs.forEach(boq => {
     (boq.items || []).forEach(item => {
       const boqQty = item.boqQuantity || 0;
-      const executedQty = item.executedQuantity || 0;
+      
+      // Derive claimed quantity from saved RA bills in Billing Management
+      const billedQtyFromBills = filteredBillings
+        .filter(b => b.projectId === boq.projectId && (b as any).status !== 'Draft' && (b as any).status !== 'Rejected' && (b as any).status !== 'Cancelled')
+        .reduce((sum, b) => {
+          const mi = b.measurementItems?.find(m => 
+            (m.boqItemId && m.boqItemId === item.id) || 
+            (m.itemCode && item.itemCode && m.itemCode.trim().toLowerCase() === item.itemCode.trim().toLowerCase())
+          );
+          return sum + (mi?.qtyExecuted || 0);
+        }, 0);
+
+      const executedQty = billedQtyFromBills > 0 ? billedQtyFromBills : (item.executedQuantity || 0);
       const remainingQty = Math.max(0, boqQty - executedQty);
       const boqAmt = item.boqAmount || (boqQty * (item.boqRate || 0));
       const execAmt = executedQty * (item.boqRate || 0);

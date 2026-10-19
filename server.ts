@@ -1262,10 +1262,62 @@ function initDbSchema() {
       timestamp TEXT NOT NULL,
       details TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS measurement_sheets (
+      id TEXT PRIMARY KEY,
+      sheetNo TEXT UNIQUE NOT NULL,
+      projectId TEXT NOT NULL,
+      projectCode TEXT,
+      projectName TEXT,
+      clientName TEXT,
+      contractNo TEXT,
+      raBillNo TEXT,
+      billId TEXT,
+      date TEXT NOT NULL,
+      billingPeriodFrom TEXT,
+      billingPeriodTo TEXT,
+      preparedBy TEXT,
+      checkedBy TEXT,
+      approvedBy TEXT,
+      status TEXT NOT NULL DEFAULT 'Draft',
+      remarks TEXT,
+      totalAmount REAL DEFAULT 0,
+      totalPreviousAmount REAL DEFAULT 0,
+      totalCumulativeAmount REAL DEFAULT 0,
+      totalBoqAmount REAL DEFAULT 0,
+      itemsJson TEXT,
+      lockedBy TEXT,
+      lockedAt TEXT,
+      createdBy TEXT,
+      createdDate TEXT,
+      modifiedBy TEXT,
+      modifiedDate TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS measurement_sheet_audit (
+      id TEXT PRIMARY KEY,
+      sheetId TEXT NOT NULL,
+      sheetNo TEXT,
+      action TEXT NOT NULL,
+      performedBy TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      details TEXT
+    );
   `);
 
-  // Ensure Subcontractor Master and Billing are in Numbering Settings
+  // Ensure Subcontractor Master, Billing and BMS Measurement Sheets are in Numbering Settings
   try {
+    const checkBMS = db.prepare("SELECT COUNT(*) as count FROM numbering_settings WHERE moduleKey = 'measurement-sheet'").get() as { count: number };
+    if (checkBMS.count === 0) {
+      db.prepare(`
+        INSERT INTO numbering_settings (moduleKey, moduleName, prefix, suffix, fyFormat, startingNumber, numLength, separator, seriesType, status)
+        VALUES ('measurement-sheet', 'Billing Measurement Sheet', 'BMS', '', 'FY25-26', 1, 3, '/', 'project', 'Active')
+      `).run();
+      db.prepare(`
+        INSERT OR IGNORE INTO numbering_sequences (moduleKey, seriesValue, currentNumber)
+        VALUES ('measurement-sheet', 'global', 0)
+      `).run();
+    }
     const checkSubmaster = db.prepare("SELECT COUNT(*) as count FROM numbering_settings WHERE moduleKey = 'subcontractor-master'").get() as { count: number };
     if (checkSubmaster.count === 0) {
       db.prepare(`
@@ -7604,7 +7656,31 @@ async function startServer() {
   // --- BOQ MASTER & MANAGEMENT API ---
   app.get("/api/boqs", (req, res) => {
     try {
-      const rows = db.prepare("SELECT * FROM boqs").all() as any[];
+      const { projectId } = req.query;
+      let query = "SELECT * FROM boqs";
+      const params: any[] = [];
+      if (projectId) {
+        query += " WHERE projectId = ?";
+        params.push(projectId);
+      }
+      const rows = db.prepare(query).all(...params) as any[];
+      const mapped = rows.map(r => ({
+        ...r,
+        items: r.items ? JSON.parse(r.items) : [],
+        revisions: r.revisions ? JSON.parse(r.revisions) : [],
+        extraItems: r.extraItems ? JSON.parse(r.extraItems) : []
+      }));
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Direct BOQ Master items query from SQLite 'boqs' table
+  app.get("/api/boq-master/items/:projectId", (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const rows = db.prepare("SELECT * FROM boqs WHERE projectId = ?").all(projectId) as any[];
       const mapped = rows.map(r => ({
         ...r,
         items: r.items ? JSON.parse(r.items) : [],
@@ -8399,6 +8475,557 @@ async function startServer() {
       db.prepare("DELETE FROM dpr_audit_logs WHERE dprId = ?").run(id);
 
       logActivity(authUser, "DELETE", "dpr_reports", id, `Deleted Draft DPR ${existing.reportNo}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================================================
+  // BMS01 – BILLING MEASUREMENT SHEET MODULE API ENDPOINTS
+  // ============================================================================
+
+  function generateMeasurementSheetNumber(projectCode?: string, dateStr?: string): string {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const fyStart = month >= 4 ? year : year - 1;
+    const fyEnd = (fyStart + 1).toString().slice(-2);
+    const fy = `${fyStart}-${fyEnd}`;
+    const pCode = projectCode ? projectCode.trim().toUpperCase() : 'MAIN';
+    const prefix = `BMS/${pCode}/${fy}/`;
+
+    const rows = db.prepare("SELECT sheetNo FROM measurement_sheets WHERE sheetNo LIKE ?").all(`${prefix}%`) as { sheetNo: string }[];
+    let maxNum = 0;
+    for (const r of rows) {
+      const parts = r.sheetNo.split('/');
+      if (parts.length >= 4) {
+        const n = parseInt(parts[3], 10);
+        if (!isNaN(n) && n > maxNum) maxNum = n;
+      }
+    }
+    return `${prefix}${String(maxNum + 1).padStart(3, '0')}`;
+  }
+
+  // 1. Get next sheet number
+  app.get("/api/measurement-sheets/next-number", (req, res) => {
+    try {
+      const { projectCode, date } = req.query;
+      const nextSheetNo = generateMeasurementSheetNumber(projectCode as string, date as string);
+      res.json({ nextSheetNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 2. Get previous billed quantities for all BOQ items for a project
+  app.get("/api/measurement-sheets/previous-history/:projectId", (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { beforeSheetId, beforeDate } = req.query;
+
+      let query = "SELECT * FROM measurement_sheets WHERE projectId = ? AND status IN ('Approved', 'Locked')";
+      const params: any[] = [projectId];
+
+      if (beforeSheetId) {
+        query += " AND id != ?";
+        params.push(beforeSheetId);
+      }
+      if (beforeDate) {
+        query += " AND date < ?";
+        params.push(beforeDate);
+      }
+      query += " ORDER BY date ASC, sheetNo ASC";
+
+      const sheets = db.prepare(query).all(...params) as any[];
+      const historyMap: Record<string, { previousQuantity: number; previousAmount: number; sheetCount: number; lastSheetNo: string }> = {};
+
+      for (const s of sheets) {
+        if (!s.itemsJson) continue;
+        try {
+          const items = JSON.parse(s.itemsJson);
+          if (Array.isArray(items)) {
+            for (const it of items) {
+              const k = it.boqItemId || it.itemCode;
+              if (!k) continue;
+              if (!historyMap[k]) {
+                historyMap[k] = {
+                  previousQuantity: 0,
+                  previousAmount: 0,
+                  sheetCount: 0,
+                  lastSheetNo: s.sheetNo
+                };
+              }
+              historyMap[k].previousQuantity += Number(it.currentQuantity || 0);
+              historyMap[k].previousAmount += Number(it.currentAmount || 0);
+              historyMap[k].sheetCount += 1;
+              historyMap[k].lastSheetNo = s.sheetNo;
+            }
+          }
+        } catch (e) {}
+      }
+
+      res.json(historyMap);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. List measurement sheets
+  app.get("/api/measurement-sheets", (req, res) => {
+    try {
+      const { projectId, raBillNo, status, search } = req.query;
+      let query = "SELECT * FROM measurement_sheets WHERE 1=1";
+      const params: any[] = [];
+
+      if (projectId && projectId !== 'All') {
+        query += " AND projectId = ?";
+        params.push(projectId);
+      }
+      if (raBillNo) {
+        query += " AND raBillNo = ?";
+        params.push(raBillNo);
+      }
+      if (status && status !== 'All') {
+        query += " AND status = ?";
+        params.push(status);
+      }
+      if (search) {
+        query += " AND (sheetNo LIKE ? OR projectName LIKE ? OR clientName LIKE ? OR raBillNo LIKE ? OR contractNo LIKE ?)";
+        const s = `%${search}%`;
+        params.push(s, s, s, s, s);
+      }
+
+      query += " ORDER BY date DESC, sheetNo DESC";
+      const rows = db.prepare(query).all(...params) as any[];
+
+      const mapped = rows.map(r => {
+        let parsedItems: any[] = [];
+        if (r.itemsJson) {
+          try {
+            parsedItems = JSON.parse(r.itemsJson);
+          } catch (e) {
+            parsedItems = [];
+          }
+        }
+        return {
+          ...r,
+          items: parsedItems
+        };
+      });
+
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 4. Get single measurement sheet
+  app.get("/api/measurement-sheets/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const row = db.prepare("SELECT * FROM measurement_sheets WHERE id = ?").get(id) as any;
+      if (!row) {
+        return res.status(404).json({ error: "Measurement Sheet not found" });
+      }
+
+      let parsedItems: any[] = [];
+      if (row.itemsJson) {
+        try {
+          parsedItems = JSON.parse(row.itemsJson);
+        } catch (e) {
+          parsedItems = [];
+        }
+      }
+
+      res.json({
+        ...row,
+        items: parsedItems
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 5. Create measurement sheet
+  app.post("/api/measurement-sheets", (req, res) => {
+    try {
+      const authUser = (req.headers["x-user-username"] as string) || "User";
+      const {
+        projectId,
+        projectCode,
+        projectName,
+        clientName,
+        contractNo,
+        raBillNo,
+        billId,
+        date,
+        billingPeriodFrom,
+        billingPeriodTo,
+        preparedBy,
+        checkedBy,
+        approvedBy,
+        status = 'Draft',
+        remarks,
+        items = []
+      } = req.body;
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Project is required" });
+      }
+
+      const finalDate = date || new Date().toISOString().substring(0, 10);
+      let sheetNo = req.body.sheetNo;
+      if (!sheetNo || sheetNo.trim() === '') {
+        sheetNo = generateMeasurementSheetNumber(projectCode, finalDate);
+      }
+
+      const id = req.body.id || `bms-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const now = new Date().toISOString();
+
+      // Calculate totals
+      let totalAmount = 0;
+      let totalPreviousAmount = 0;
+      let totalCumulativeAmount = 0;
+      let totalBoqAmount = 0;
+
+      for (const item of items) {
+        const curAmt = Number(item.currentAmount ?? (Number(item.currentQuantity || 0) * Number(item.boqRate || 0)));
+        const prevAmt = Number(item.previousAmount ?? (Number(item.previousQuantity || 0) * Number(item.boqRate || 0)));
+        const cumAmt = Number(item.totalCumulativeAmount ?? (Number(item.totalCumulativeQuantity || 0) * Number(item.boqRate || 0)));
+        const boqAmt = Number(item.boqAmount ?? (Number(item.boqQuantity || 0) * Number(item.boqRate || 0)));
+
+        totalAmount += curAmt;
+        totalPreviousAmount += prevAmt;
+        totalCumulativeAmount += cumAmt;
+        totalBoqAmount += boqAmt;
+      }
+
+      const itemsJson = JSON.stringify(items);
+
+      db.prepare(`
+        INSERT INTO measurement_sheets (
+          id, sheetNo, projectId, projectCode, projectName, clientName,
+          contractNo, raBillNo, billId, date, billingPeriodFrom, billingPeriodTo,
+          preparedBy, checkedBy, approvedBy, status, remarks,
+          totalAmount, totalPreviousAmount, totalCumulativeAmount, totalBoqAmount,
+          itemsJson, createdBy, createdDate, modifiedBy, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, sheetNo, projectId, projectCode || null, projectName || null, clientName || null,
+        contractNo || null, raBillNo || null, billId || null, finalDate,
+        billingPeriodFrom || null, billingPeriodTo || null,
+        preparedBy || authUser, checkedBy || null, approvedBy || null, status, remarks || null,
+        totalAmount, totalPreviousAmount, totalCumulativeAmount, totalBoqAmount,
+        itemsJson, authUser, now, authUser, now
+      );
+
+      // Audit Log
+      db.prepare(`
+        INSERT INTO measurement_sheet_audit (id, sheetId, sheetNo, action, performedBy, timestamp, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `bms-aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id, sheetNo, 'Created', authUser, now, `Created measurement sheet with ${items.length} BOQ item(s). Total Amount: ₹${totalAmount.toFixed(2)}`
+      );
+
+      logActivity(authUser, "CREATE", "measurement_sheets", id, `Created Measurement Sheet ${sheetNo}`);
+
+      res.status(201).json({ success: true, id, sheetNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 6. Update measurement sheet
+  app.put("/api/measurement-sheets/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "User";
+      const existing = db.prepare("SELECT * FROM measurement_sheets WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "Measurement Sheet not found" });
+      }
+
+      // Strict lock check: Locked sheets cannot be edited
+      if (existing.status === 'Locked') {
+        return res.status(403).json({ error: "Cannot modify a Locked measurement sheet. Please unlock first." });
+      }
+
+      const {
+        sheetNo,
+        projectId,
+        projectCode,
+        projectName,
+        clientName,
+        contractNo,
+        raBillNo,
+        billId,
+        date,
+        billingPeriodFrom,
+        billingPeriodTo,
+        preparedBy,
+        checkedBy,
+        approvedBy,
+        remarks,
+        items = []
+      } = req.body;
+
+      const now = new Date().toISOString();
+
+      let totalAmount = 0;
+      let totalPreviousAmount = 0;
+      let totalCumulativeAmount = 0;
+      let totalBoqAmount = 0;
+
+      for (const item of items) {
+        const curAmt = Number(item.currentAmount ?? (Number(item.currentQuantity || 0) * Number(item.boqRate || 0)));
+        const prevAmt = Number(item.previousAmount ?? (Number(item.previousQuantity || 0) * Number(item.boqRate || 0)));
+        const cumAmt = Number(item.totalCumulativeAmount ?? (Number(item.totalCumulativeQuantity || 0) * Number(item.boqRate || 0)));
+        const boqAmt = Number(item.boqAmount ?? (Number(item.boqQuantity || 0) * Number(item.boqRate || 0)));
+
+        totalAmount += curAmt;
+        totalPreviousAmount += prevAmt;
+        totalCumulativeAmount += cumAmt;
+        totalBoqAmount += boqAmt;
+      }
+
+      const itemsJson = JSON.stringify(items);
+
+      db.prepare(`
+        UPDATE measurement_sheets
+        SET sheetNo = ?, projectId = ?, projectCode = ?, projectName = ?, clientName = ?,
+            contractNo = ?, raBillNo = ?, billId = ?, date = ?, billingPeriodFrom = ?, billingPeriodTo = ?,
+            preparedBy = ?, checkedBy = ?, approvedBy = ?, remarks = ?,
+            totalAmount = ?, totalPreviousAmount = ?, totalCumulativeAmount = ?, totalBoqAmount = ?,
+            itemsJson = ?, modifiedBy = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        sheetNo || existing.sheetNo,
+        projectId || existing.projectId,
+        projectCode || existing.projectCode,
+        projectName || existing.projectName,
+        clientName || existing.clientName,
+        contractNo !== undefined ? contractNo : existing.contractNo,
+        raBillNo !== undefined ? raBillNo : existing.raBillNo,
+        billId !== undefined ? billId : existing.billId,
+        date || existing.date,
+        billingPeriodFrom !== undefined ? billingPeriodFrom : existing.billingPeriodFrom,
+        billingPeriodTo !== undefined ? billingPeriodTo : existing.billingPeriodTo,
+        preparedBy || existing.preparedBy,
+        checkedBy !== undefined ? checkedBy : existing.checkedBy,
+        approvedBy !== undefined ? approvedBy : existing.approvedBy,
+        remarks !== undefined ? remarks : existing.remarks,
+        totalAmount, totalPreviousAmount, totalCumulativeAmount, totalBoqAmount,
+        itemsJson, authUser, now, id
+      );
+
+      // Audit Log
+      db.prepare(`
+        INSERT INTO measurement_sheet_audit (id, sheetId, sheetNo, action, performedBy, timestamp, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `bms-aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id, existing.sheetNo, 'Updated', authUser, now, `Updated measurements with ${items.length} item(s). Total: ₹${totalAmount.toFixed(2)}`
+      );
+
+      logActivity(authUser, "UPDATE", "measurement_sheets", id, `Updated Measurement Sheet ${existing.sheetNo}`);
+
+      res.json({ success: true, id, sheetNo: sheetNo || existing.sheetNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 7. Workflow status transition: Draft -> Submitted -> Checked -> Approved -> Locked
+  app.post("/api/measurement-sheets/:id/status", (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Manager";
+      const { targetStatus, reason } = req.body;
+
+      const existing = db.prepare("SELECT * FROM measurement_sheets WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "Measurement Sheet not found" });
+      }
+
+      const validStatuses = ['Draft', 'Submitted', 'Checked', 'Approved', 'Rejected', 'Locked', 'Unlocked'];
+      if (!validStatuses.includes(targetStatus)) {
+        return res.status(400).json({ error: `Invalid status: ${targetStatus}` });
+      }
+
+      let newStatus = targetStatus;
+      let extraFieldUpdate = "";
+      const extraParams: any[] = [];
+      const now = new Date().toISOString();
+
+      if (targetStatus === 'Locked') {
+        extraFieldUpdate = ", lockedBy = ?, lockedAt = ?";
+        extraParams.push(authUser, now);
+      } else if (targetStatus === 'Unlocked') {
+        newStatus = 'Approved';
+        extraFieldUpdate = ", lockedBy = NULL, lockedAt = NULL";
+      } else if (targetStatus === 'Approved') {
+        extraFieldUpdate = ", approvedBy = ?";
+        extraParams.push(authUser);
+      } else if (targetStatus === 'Checked') {
+        extraFieldUpdate = ", checkedBy = ?";
+        extraParams.push(authUser);
+      } else if (targetStatus === 'Submitted') {
+        extraFieldUpdate = ", preparedBy = ?";
+        extraParams.push(authUser);
+      }
+
+      db.prepare(`
+        UPDATE measurement_sheets
+        SET status = ?, modifiedBy = ?, modifiedDate = ? ${extraFieldUpdate}
+        WHERE id = ?
+      `).run(newStatus, authUser, now, ...extraParams, id);
+
+      const actionName = targetStatus === 'Unlocked' ? 'Unlocked' : targetStatus;
+      const details = reason ? `Workflow changed from ${existing.status} to ${newStatus}. Reason: ${reason}` : `Workflow progressed from ${existing.status} to ${newStatus}`;
+
+      db.prepare(`
+        INSERT INTO measurement_sheet_audit (id, sheetId, sheetNo, action, performedBy, timestamp, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `bms-aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id, existing.sheetNo, actionName, authUser, now, details
+      );
+
+      logActivity(authUser, "STATUS_CHANGE", "measurement_sheets", id, `Measurement Sheet ${existing.sheetNo} -> ${newStatus}`);
+
+      res.json({ success: true, id, status: newStatus, sheetNo: existing.sheetNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 8. Push to RA Bill (Link with billings table)
+  app.post("/api/measurement-sheets/:id/push-to-bill", (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "BillingEngineer";
+      const sheet = db.prepare("SELECT * FROM measurement_sheets WHERE id = ?").get(id) as any;
+      if (!sheet) {
+        return res.status(404).json({ error: "Measurement Sheet not found" });
+      }
+
+      let items: any[] = [];
+      if (sheet.itemsJson) {
+        try {
+          items = JSON.parse(sheet.itemsJson);
+        } catch (e) {
+          items = [];
+        }
+      }
+
+      // Convert BMS items to Billing MeasurementItem format
+      const convertedItems = items.map((it, idx) => ({
+        id: it.id || `mi-${Date.now()}-${idx}`,
+        boqItemId: it.boqItemId,
+        description: `${it.itemCode}: ${it.description}${it.location ? ` (${it.location})` : ''}`,
+        qtyExecuted: Number(it.currentQuantity || 0),
+        unit: it.unit || 'cum',
+        rate: Number(it.boqRate || 0),
+        amount: Number(it.currentAmount || 0),
+        prevQty: Number(it.previousQuantity || 0),
+        cumulativeQty: Number(it.totalCumulativeQuantity || 0),
+        prevAmount: Number(it.previousAmount || 0),
+        cumulativeAmount: Number(it.totalCumulativeAmount || 0)
+      }));
+
+      const mItemsStr = JSON.stringify(convertedItems);
+      const billNo = sheet.raBillNo || `RA-${sheet.sheetNo.split('/').pop() || '01'}`;
+
+      // Check if billing record exists with this billNo & projectId
+      const existingBill = db.prepare("SELECT * FROM billings WHERE projectId = ? AND billNo = ?").get(sheet.projectId, billNo) as any;
+
+      let billId = existingBill?.id;
+      if (existingBill) {
+        // Update existing bill
+        db.prepare(`
+          UPDATE billings
+          SET amount = ?, measurementItems = ?, certifyDate = ?, workNature = ?
+          WHERE id = ?
+        `).run(
+          sheet.totalAmount,
+          mItemsStr,
+          sheet.date,
+          `Civil & Structural Works as per Measurement Sheet ${sheet.sheetNo}`,
+          existingBill.id
+        );
+      } else {
+        // Create new bill
+        billId = `bill-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        db.prepare(`
+          INSERT INTO billings (
+            id, projectId, billNo, workNature, amount, month, certifyDate,
+            tds, retention, gst, debitAmount, holdAmount, extraWorkAmount,
+            billType, measurementItems
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 'Running Account', ?)
+        `).run(
+          billId,
+          sheet.projectId,
+          billNo,
+          `Civil & Structural Works as per Measurement Sheet ${sheet.sheetNo}`,
+          sheet.totalAmount,
+          sheet.date.substring(0, 7),
+          sheet.date,
+          mItemsStr
+        );
+      }
+
+      // Link billId in measurement sheet
+      db.prepare("UPDATE measurement_sheets SET billId = ?, raBillNo = ? WHERE id = ?").run(billId, billNo, id);
+
+      // Audit Log
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO measurement_sheet_audit (id, sheetId, sheetNo, action, performedBy, timestamp, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `bms-aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id, sheet.sheetNo, 'PushedToBilling', authUser, now, `Exported & linked measurements to RA Bill ${billNo}. Total: ₹${sheet.totalAmount.toFixed(2)}`
+      );
+
+      logActivity(authUser, "INTEGRATE", "measurement_sheets", id, `Pushed Measurement Sheet ${sheet.sheetNo} to RA Bill ${billNo}`);
+
+      res.json({ success: true, billId, billNo });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 9. Get Audit Trail
+  app.get("/api/measurement-sheets/:id/audit", (req, res) => {
+    try {
+      const { id } = req.params;
+      const logs = db.prepare("SELECT * FROM measurement_sheet_audit WHERE sheetId = ? ORDER BY timestamp DESC").all(id);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 10. Delete Measurement Sheet (only Draft)
+  app.delete("/api/measurement-sheets/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUser = (req.headers["x-user-username"] as string) || "Manager";
+      const existing = db.prepare("SELECT * FROM measurement_sheets WHERE id = ?").get(id) as any;
+      if (!existing) {
+        return res.status(404).json({ error: "Measurement Sheet not found" });
+      }
+
+      if (existing.status !== 'Draft') {
+        return res.status(403).json({ error: `Cannot delete measurement sheet in '${existing.status}' status. Only Draft sheets may be deleted.` });
+      }
+
+      db.prepare("DELETE FROM measurement_sheets WHERE id = ?").run(id);
+      db.prepare("DELETE FROM measurement_sheet_audit WHERE sheetId = ?").run(id);
+
+      logActivity(authUser, "DELETE", "measurement_sheets", id, `Deleted Draft Measurement Sheet ${existing.sheetNo}`);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
