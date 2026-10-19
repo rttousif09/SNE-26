@@ -15,6 +15,7 @@ import 'jspdf-autotable';
 import { BOQItemFloorManager } from '../components/BOQItemFloorManager';
 import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
 import { SAPTabs } from '../components/common/SAPTabs';
+import { BOQItemModal } from '../components/BOQItemModal';
 
 export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: boolean) => void }) {
   const { 
@@ -94,6 +95,22 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
   const [isSimulateModalOpen, setIsSimulateModalOpen] = useState<boolean>(false);
   const [simItem, setSimItem] = useState<{ boqId: string; itemId: string; code: string; type: 'executed' | 'billed' } | null>(null);
   const [simValue, setSimValue] = useState<number>(0);
+
+  // Dedicated Add / Edit BOQ Item Modal state
+  const [boqItemModalState, setBoqItemModalState] = useState<{
+    isOpen: boolean;
+    mode: 'add' | 'edit';
+    item: BOQItem | null;
+    targetBoqId?: string;
+    formIndex?: number | null;
+  }>({
+    isOpen: false,
+    mode: 'add',
+    item: null,
+    targetBoqId: undefined,
+    formIndex: null
+  });
+  const [isSavingBOQ, setIsSavingBOQ] = useState<boolean>(false);
 
   // Drag and Drop Ref for Excel file parsing
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -243,7 +260,8 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
   const handleOpenRevisionModal = (boq: BOQ, item: BOQItem, defaultWorkflow: 'revision' | 'variation' = 'revision') => {
     setRevisionModalItem({ boq, item });
     setModalWorkflow(defaultWorkflow);
-    setRevWorkOrderNo(boq.workOrderNo || '');
+    const proj = projects.find(p => p.id === boq.projectId);
+    setRevWorkOrderNo(proj?.workOrderNo || '');
     setRevDate(new Date().toISOString().split('T')[0]);
     setRevAdditionalQty(0);
     setRevTargetTotalQty(item.boqQuantity);
@@ -835,6 +853,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
   // Save / Update BOQ Master
   const handleSaveBOQ = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingBOQ) return;
     if (!formProjectId) {
       alert('Please select a project');
       return;
@@ -844,71 +863,148 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
       return;
     }
 
-    const totalBOQAmount = formItems.reduce((acc, it) => acc + (it.boqQuantity * it.boqRate), 0);
+    setIsSavingBOQ(true);
+    try {
+      const totalBOQAmount = formItems.reduce((acc, it) => acc + (it.boqQuantity * it.boqRate), 0);
 
-    // If updating an approved or revised BOQ, track revisions if quantity changed
-    let finalItems = formItems;
-    if (selectedBOQ && (selectedBOQ.status === 'Approved' || selectedBOQ.status === 'Revised')) {
-      const todayStr = new Date().toISOString().split('T')[0];
-      finalItems = formItems.map(item => {
-        const oldItem = (selectedBOQ.items || []).find(i => i.id === item.id || i.itemCode === item.itemCode);
-        if (oldItem && oldItem.boqQuantity !== item.boqQuantity) {
-          const diff = item.boqQuantity - oldItem.boqQuantity;
-          const revRecord: BOQItemRevision = {
-            id: 'rev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-            revisionNo: (oldItem.revisionsHistory?.length || 0) + 1,
-            date: todayStr,
-            type: 'BOQ Revision',
-            originalQuantity: oldItem.boqQuantity,
-            additionalQuantity: diff,
-            revisedQuantity: item.boqQuantity,
-            rate: item.boqRate,
-            amount: Number((diff * item.boqRate).toFixed(2)),
-            reason: `Direct master BOQ quantity edit (${diff >= 0 ? '+' : ''}${diff} ${item.unit})`,
-            approvalStatus: 'Approved',
-            approvedBy: user?.name || user?.username || 'Contract Admin',
-            approvedDate: todayStr
-          };
-          return {
-            ...item,
-            originalQuantity: oldItem.originalQuantity !== undefined ? oldItem.originalQuantity : oldItem.boqQuantity,
-            revisionsHistory: [...(oldItem.revisionsHistory || []), revRecord]
-          };
+      // If updating an approved or revised BOQ, track revisions if quantity changed
+      let finalItems = formItems;
+      if (selectedBOQ && (selectedBOQ.status === 'Approved' || selectedBOQ.status === 'Revised')) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        finalItems = formItems.map(item => {
+          const oldItem = (selectedBOQ.items || []).find(i => i.id === item.id || i.itemCode === item.itemCode);
+          if (oldItem && oldItem.boqQuantity !== item.boqQuantity) {
+            const diff = item.boqQuantity - oldItem.boqQuantity;
+            const revRecord: BOQItemRevision = {
+              id: 'rev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+              revisionNo: (oldItem.revisionsHistory?.length || 0) + 1,
+              date: todayStr,
+              type: 'BOQ Revision',
+              originalQuantity: oldItem.boqQuantity,
+              additionalQuantity: diff,
+              revisedQuantity: item.boqQuantity,
+              rate: item.boqRate,
+              amount: Number((diff * item.boqRate).toFixed(2)),
+              reason: `Direct master BOQ quantity edit (${diff >= 0 ? '+' : ''}${diff} ${item.unit})`,
+              approvalStatus: 'Approved',
+              approvedBy: user?.name || user?.username || 'Contract Admin',
+              approvedDate: todayStr
+            };
+            return {
+              ...item,
+              originalQuantity: oldItem.originalQuantity !== undefined ? oldItem.originalQuantity : oldItem.boqQuantity,
+              revisionsHistory: [...(oldItem.revisionsHistory || []), revRecord]
+            };
+          }
+          return item;
+        });
+      }
+
+      const boqData: Omit<BOQ, 'id'> = {
+        boqNo: selectedBOQ ? selectedBOQ.boqNo : 'BOQ-' + Math.floor(1000 + Math.random() * 9000),
+        projectId: formProjectId,
+        clientName: formClientName || 'SNE Client',
+        date: formDate,
+        revisionNo: formRevisionNo,
+        remarks: formRemarks,
+        items: finalItems,
+        revisions: selectedBOQ ? selectedBOQ.revisions || [] : [],
+        extraItems: selectedBOQ ? selectedBOQ.extraItems || [] : [],
+        status: (selectedBOQ ? selectedBOQ.status : 'Draft') as any,
+        boqPdfName: formPdfFile || undefined,
+        boqExcelName: formExcelFile || undefined
+      };
+
+      if (selectedBOQ) {
+        // It's an update or revision
+        const changedNotes = `Updated BOQ configuration. Revision level: ${formRevisionNo}. Item count: ${finalItems.length}. Total Value: ₹${totalBOQAmount.toLocaleString('en-IN')}`;
+        await updateBOQ(selectedBOQ.id, boqData);
+        await logAudit(selectedBOQ.id, selectedBOQ.boqNo, 'Update', changedNotes);
+      } else {
+        // It's a brand new entry
+        await addBOQ(boqData);
+        await logAudit('', boqData.boqNo, 'Creation', `Logged initial BOQ. Value: ₹${totalBOQAmount.toLocaleString('en-IN')}`);
+      }
+
+      setIsFormOpen(false);
+      setSelectedBOQ(null);
+      clearForm();
+      updateHasUnsavedChanges(false);
+    } catch (err: any) {
+      console.error('Error saving BOQ:', err);
+      alert('Failed to save BOQ: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsSavingBOQ(false);
+    }
+  };
+
+  // Dedicated Add / Edit BOQ Item handlers
+  const handleOpenAddBOQItem = (targetBoqId?: string) => {
+    setBoqItemModalState({
+      isOpen: true,
+      mode: 'add',
+      item: null,
+      targetBoqId: targetBoqId || (selectedBOQ ? selectedBOQ.id : undefined),
+      formIndex: null
+    });
+  };
+
+  const handleOpenEditBOQItem = (item: BOQItem, targetBoqId?: string, formIndex?: number) => {
+    setBoqItemModalState({
+      isOpen: true,
+      mode: 'edit',
+      item,
+      targetBoqId: targetBoqId || (selectedBOQ ? selectedBOQ.id : undefined),
+      formIndex: formIndex !== undefined ? formIndex : null
+    });
+  };
+
+  const handleSaveBOQItemModal = async (savedItem: BOQItem) => {
+    // 1. If inside master form (updating existing row by index or adding)
+    if (boqItemModalState.formIndex !== null && boqItemModalState.formIndex !== undefined && boqItemModalState.formIndex >= 0) {
+      const updated = [...formItems];
+      updated[boqItemModalState.formIndex] = savedItem;
+      setFormItems(updated);
+      updateHasUnsavedChanges(true);
+      return;
+    }
+
+    if (isFormOpen && !boqItemModalState.targetBoqId) {
+      setFormItems(prev => [...prev, savedItem]);
+      updateHasUnsavedChanges(true);
+      return;
+    }
+
+    // 2. Direct edit or add to an existing persisted BOQ
+    const boqId = boqItemModalState.targetBoqId || (selectedBOQ ? selectedBOQ.id : null);
+    if (boqId) {
+      const targetBoq = boqs.find(b => b.id === boqId);
+      if (targetBoq) {
+        const existingItems = targetBoq.items || [];
+        const itemIdx = existingItems.findIndex(i => i.id === savedItem.id || i.itemCode.toLowerCase() === savedItem.itemCode.toLowerCase());
+        let newItems: BOQItem[];
+        if (itemIdx >= 0) {
+          newItems = [...existingItems];
+          newItems[itemIdx] = savedItem;
+        } else {
+          newItems = [...existingItems, savedItem];
         }
-        return item;
-      });
-    }
-
-    const boqData: Omit<BOQ, 'id'> = {
-      boqNo: selectedBOQ ? selectedBOQ.boqNo : 'BOQ-' + Math.floor(1000 + Math.random() * 9000),
-      projectId: formProjectId,
-      clientName: formClientName || 'SNE Client',
-      date: formDate,
-      revisionNo: formRevisionNo,
-      remarks: formRemarks,
-      items: finalItems,
-      revisions: selectedBOQ ? selectedBOQ.revisions || [] : [],
-      extraItems: selectedBOQ ? selectedBOQ.extraItems || [] : [],
-      status: (selectedBOQ ? selectedBOQ.status : 'Draft') as any,
-      boqPdfName: formPdfFile || undefined,
-      boqExcelName: formExcelFile || undefined
-    };
-
-    if (selectedBOQ) {
-      // It's an update or revision
-      const changedNotes = `Updated BOQ configuration. Revision level: ${formRevisionNo}. Item count: ${finalItems.length}. Total Value: ₹${totalBOQAmount.toLocaleString('en-IN')}`;
-      await updateBOQ(selectedBOQ.id, boqData);
-      await logAudit(selectedBOQ.id, selectedBOQ.boqNo, 'Update', changedNotes);
+        await updateBOQ(boqId, { items: newItems });
+        await logAudit(
+          boqId,
+          targetBoq.boqNo,
+          boqItemModalState.mode === 'edit' ? 'Update' : 'Creation',
+          `${boqItemModalState.mode === 'edit' ? 'Updated' : 'Added'} BOQ item ${savedItem.itemCode}: ${savedItem.description.substring(0, 80)}... Qty: ${savedItem.boqQuantity} ${savedItem.unit}`
+        );
+        if (isFormOpen && selectedBOQ && selectedBOQ.id === boqId) {
+          setFormItems(newItems);
+        }
+      }
     } else {
-      // It's a brand new entry
-      await addBOQ(boqData);
-      await logAudit('', boqData.boqNo, 'Creation', `Logged initial BOQ. Value: ₹${totalBOQAmount.toLocaleString('en-IN')}`);
+      // Fallback: append to formItems
+      setFormItems(prev => [...prev, savedItem]);
+      updateHasUnsavedChanges(true);
     }
-
-    setIsFormOpen(false);
-    setSelectedBOQ(null);
-    clearForm();
-    updateHasUnsavedChanges(false);
   };
 
   // Add Item to the temporary items list
@@ -1265,6 +1361,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
         revisionNo: 0,
         remarks: 'Contract BOQ Master (Auto-initialized with Variation)',
         items: initialItems,
+        revisions: [],
         extraItems: [newExtra],
         status: 'Approved' as any
       };
@@ -1916,6 +2013,24 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => {
+                  const targetB = boqs.find(b => (b.status === 'Approved' || b.status === 'Revised') && (selectedProjectId ? b.projectId === selectedProjectId : true)) ||
+                                  boqs.find(b => selectedProjectId ? b.projectId === selectedProjectId : true) ||
+                                  boqs[0];
+                  if (targetB) {
+                    handleOpenAddBOQItem(targetB.id);
+                  } else {
+                    handleOpenCreateForm();
+                  }
+                }}
+                className="bg-blue-700 hover:bg-blue-800 text-white border border-blue-900 px-3 py-1.5 rounded text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                title="Add new BOQ item with full specifications"
+              >
+                <Plus size={14} />
+                <span>Add BOQ Item</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleExportExecutionExcel}
                 className="bg-white hover:bg-slate-50 text-blue-900 border border-blue-300 px-3 py-1.5 rounded text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
               >
@@ -2108,14 +2223,23 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
 
                             {/* Actions: Revise / Variation & Claim History */}
                             <td className="px-3 py-2 text-center">
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditBOQItem(item, boq.id)}
+                                  className="text-[10px] text-blue-900 hover:text-white hover:bg-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-300 font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                  title="Edit full item specifications, description, and rates"
+                                >
+                                  <Edit size={11} />
+                                  <span>Edit Item</span>
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenRevisionModal(boq, item, 'revision')}
                                   className="text-[10px] text-blue-900 hover:text-white hover:bg-blue-700 bg-blue-100/80 px-2 py-1 rounded border border-blue-400 font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
                                   title="Edit quantity, increase contract scope, or log extra variation"
                                 >
-                                  <Edit size={11} />
+                                  <ArrowUpDown size={11} />
                                   <span>Adjust Qty</span>
                                 </button>
                                 <button
@@ -2616,9 +2740,9 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
 
       {/* MODAL 1: Create / Edit / View BOQ Master Form */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
           <div className="sap-panel bg-[#f0f4f8] border-2 border-[#8c9ba8] w-full max-w-5xl rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[11px] relative z-10">
-            <div className="px-6 py-4 bg-[#f8fafc] border-b border-slate-200 flex justify-between items-center">
+            <div className="px-6 py-3.5 bg-[#f8fafc] border-b border-slate-200 flex justify-between items-center flex-shrink-0 select-none">
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 📂 {isViewing ? 'View BOQ Master Specifications' : selectedBOQ ? 'Update BOQ Specifications' : 'Draft New BOQ Master'}
               </h2>
@@ -2634,307 +2758,346 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
               </button>
             </div>
 
-            <form onSubmit={handleSaveBOQ} className="p-6 space-y-4">
-              
-              {/* Header section */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded border border-slate-200">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Target Project</label>
-                  <SAPSelect
-                    value={formProjectId}
-                    onChange={(e) => handleFormProjectChange(e.target.value)}
-                    disabled={isViewing || !!selectedBOQ}
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="">-- Choose Project --</option>
-                    {activeProjects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </SAPSelect>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Client Authority</label>
-                  <input
-                    type="text"
-                    value={formClientName}
-                    onChange={(e) => setFormClientName(e.target.value)}
-                    disabled={isViewing}
-                    placeholder="Auto populated client"
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">BOQ Master Date</label>
-                  <input
-                    type="date"
-                    value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
-                    disabled={isViewing}
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Revision Level</label>
-                  <input
-                    type="number"
-                    value={formRevisionNo}
-                    onChange={(e) => setFormRevisionNo(Number(e.target.value))}
-                    disabled={isViewing || !selectedBOQ}
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
-                    min="0"
-                  />
-                </div>
-              </div>
-
-              {/* Remarks Box */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Scope description & remarks</label>
-                <textarea
-                  value={formRemarks}
-                  onChange={(e) => setFormRemarks(e.target.value)}
-                  disabled={isViewing}
-                  placeholder="Provide scope statements or core contract guidelines"
-                  className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 h-16"
-                />
-              </div>
-
-              {selectedBOQ && (selectedBOQ.status === 'Approved' || selectedBOQ.status === 'Revised') && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded text-xs flex items-center justify-between">
+            <form onSubmit={handleSaveBOQ} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
+                {/* Header section */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded border border-slate-200">
                   <div>
-                    <strong>Editing Approved BOQ (Rev {selectedBOQ.revisionNo}):</strong> You can increase or adjust quantities, rates, and specifications. Any quantity changes will automatically be recorded as formal contract revisions and update approved contract allowances.
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Target Project</label>
+                    <SAPSelect
+                      value={formProjectId}
+                      onChange={(e) => handleFormProjectChange(e.target.value)}
+                      disabled={isViewing || !!selectedBOQ}
+                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">-- Choose Project --</option>
+                      {activeProjects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </SAPSelect>
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Client Authority</label>
+                    <input
+                      type="text"
+                      value={formClientName}
+                      onChange={(e) => setFormClientName(e.target.value)}
+                      disabled={isViewing}
+                      placeholder="Auto populated client"
+                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">BOQ Master Date</label>
+                    <input
+                      type="date"
+                      value={formDate}
+                      onChange={(e) => setFormDate(e.target.value)}
+                      disabled={isViewing}
+                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Revision Level</label>
+                    <input
+                      type="number"
+                      value={formRevisionNo}
+                      onChange={(e) => setFormRevisionNo(Number(e.target.value))}
+                      disabled={isViewing || !selectedBOQ}
+                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                {/* Remarks Box */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Scope description & remarks</label>
+                  <textarea
+                    value={formRemarks}
+                    onChange={(e) => setFormRemarks(e.target.value)}
+                    disabled={isViewing}
+                    placeholder="Provide scope statements or core contract guidelines"
+                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 h-16 resize-y"
+                  />
+                </div>
+
+                {selectedBOQ && (selectedBOQ.status === 'Approved' || selectedBOQ.status === 'Revised') && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded text-xs flex items-center justify-between">
+                    <div>
+                      <strong>Editing Approved BOQ (Rev {selectedBOQ.revisionNo}):</strong> You can increase or adjust quantities, rates, and specifications. Any quantity changes will automatically be recorded as formal contract revisions and update approved contract allowances.
+                    </div>
+                    {isViewing && (
+                      <button
+                        type="button"
+                        onClick={() => setIsViewing(false)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1 rounded cursor-pointer shrink-0 ml-3"
+                      >
+                        ✏️ Enable Edit Mode
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Items Table Input Section (Hidden if viewing) */}
+                {!isViewing && (
+                  <div className="bg-blue-50/50 p-4 rounded border border-blue-200">
+                    <h3 className="text-xs font-bold text-slate-800 mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span>✏️ Item Specifications Input</span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAddBOQItem(selectedBOQ?.id)}
+                          className="bg-blue-700 hover:bg-blue-800 text-white text-[11px] font-bold px-2.5 py-1 rounded flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                          title="Open dedicated Add BOQ Item Form dialog with multiline Work Description and scrolling"
+                        >
+                          <Plus size={12} /> Open Add BOQ Item Form
+                        </button>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-normal text-slate-600">Import template items:</span>
+                        <input 
+                          type="file" 
+                          ref={fileInputRef}
+                          onChange={handleExcelImport}
+                          accept=".xlsx, .xls"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Upload size={10} /> Excel Import
+                        </button>
+                      </div>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                      <div>
+                        <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Item Code</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. CONC-01"
+                          value={itemCode}
+                          onChange={(e) => setItemCode(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1 font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Item Description</label>
+                        <textarea
+                          placeholder="e.g. M25 Grade Reinforced Concrete with aggregate, batching, curing..."
+                          value={itemDesc}
+                          onChange={(e) => setItemDesc(e.target.value)}
+                          rows={2}
+                          className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1 resize-y min-h-[30px] max-h-24 overflow-y-auto break-words whitespace-pre-wrap"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Unit</label>
+                        <SAPSelect
+                          value={itemUnit}
+                          onChange={(e) => setItemUnit(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1"
+                        >
+                          <option value="cum">cum</option>
+                          <option value="sqm">sqm</option>
+                          <option value="rm">rm</option>
+                          <option value="kg">kg</option>
+                          <option value="mt">mt</option>
+                          <option value="nos">nos</option>
+                          <option value="Sq.ft">Sq.ft</option>
+                          <option value="Cu.ft">Cu.ft</option>
+                          <option value="Rft">Rft</option>
+                          <option value="Lumpsum">Lumpsum</option>
+                          <option value="Bags">Bags</option>
+                          <option value="Ltr">Ltr</option>
+                          <option value="Pcs">Pcs</option>
+                          <option value="Brass">Brass</option>
+                          <option value="Trips">Trips</option>
+                          <option value="Days">Days</option>
+                          <option value="Months">Months</option>
+                        </SAPSelect>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-500 font-medium mb-0.5">BOQ Quantity</label>
+                        <input
+                          type="number"
+                          value={itemQty}
+                          onChange={(e) => setItemQty(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1 font-bold"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Contract Rate (₹)</label>
+                        <input
+                          type="number"
+                          value={itemRate}
+                          onChange={(e) => setItemRate(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1 font-bold"
+                          min="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-3">
+                      <input
+                        type="text"
+                        placeholder="Optional Item Specific remarks"
+                        value={itemRemarks}
+                        onChange={(e) => setItemRemarks(e.target.value)}
+                        className="bg-white border border-slate-300 rounded text-xs px-2.5 py-1 w-2/3"
+                      />
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAddBOQItem(selectedBOQ?.id)}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded border border-slate-300 cursor-pointer transition-colors"
+                        >
+                          Full Item Form
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddItem}
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-1.5 rounded cursor-pointer transition-colors"
+                        >
+                          {editingItemIndex !== null ? 'Save Edit Item' : '+ Add Item Row'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Items List Table */}
+                <div className="bg-white rounded border border-slate-200 overflow-hidden">
+                  <table className="w-full border-collapse text-left text-xs text-slate-700">
+                    <thead className="bg-[#f8fafc] border-b border-slate-200 text-slate-600 uppercase text-[10px] font-semibold">
+                      <tr>
+                        <th className="px-4 py-2.5">S.No</th>
+                        <th className="px-4 py-2.5">Item Code</th>
+                        <th className="px-4 py-2.5 min-w-[220px]">Description</th>
+                        <th className="px-4 py-2.5">Unit</th>
+                        <th className="px-4 py-2.5">BOQ Quantity</th>
+                        <th className="px-4 py-2.5">Contract Rate</th>
+                        <th className="px-4 py-2.5">Gross Amount</th>
+                        <th className="px-4 py-2.5">Remarks</th>
+                        {!isViewing && <th className="px-4 py-2.5 text-right">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {formItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={isViewing ? 8 : 9} className="px-4 py-6 text-center text-slate-400 italic">
+                            No items added. Add items manually or use the Excel Import feature.
+                          </td>
+                        </tr>
+                      ) : (
+                        formItems.map((item, index) => (
+                          <tr key={item.id} className="hover:bg-slate-50/50">
+                            <td className="px-4 py-2 font-mono text-slate-500">{index + 1}</td>
+                            <td className="px-4 py-2 font-bold text-slate-800 font-mono">{item.itemCode}</td>
+                            <td className="px-4 py-2 font-medium max-w-md break-words whitespace-pre-wrap">{item.description}</td>
+                            <td className="px-4 py-2 font-mono text-slate-600">{item.unit}</td>
+                            <td className="px-4 py-2 font-bold">{item.boqQuantity.toLocaleString('en-IN')}</td>
+                            <td className="px-4 py-2 font-bold text-slate-600">₹{item.boqRate.toLocaleString('en-IN')}</td>
+                            <td className="px-4 py-2 font-bold text-slate-900">₹{(item.boqQuantity * item.boqRate).toLocaleString('en-IN')}</td>
+                            <td className="px-4 py-2 italic text-slate-500">{item.remarks || '-'}</td>
+                            {!isViewing && (
+                              <td className="px-4 py-2 text-right">
+                                <div className="flex justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditBOQItem(item, selectedBOQ?.id, index)}
+                                    className="text-blue-600 hover:bg-blue-50 p-1 rounded cursor-pointer"
+                                    title="Edit BOQ Item in full form"
+                                  >
+                                    <Edit size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteItemInForm(index)}
+                                    className="text-red-500 hover:bg-red-50 p-1 rounded cursor-pointer"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                      <tr>
+                        <td colSpan={4} className="px-4 py-3 text-slate-600 text-right uppercase">Grand Total:</td>
+                        <td colSpan={2} className="px-4 py-3"></td>
+                        <td colSpan={isViewing ? 2 : 3} className="px-4 py-3 text-slate-950 text-base">₹{totalBOQAmount.toLocaleString('en-IN')}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* Persistent Actions Footer outside scrollable container */}
+              <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center flex-shrink-0 select-none">
+                <div className="text-xs font-bold text-slate-700">
+                  Grand Total: <span className="font-mono text-blue-900 text-sm">₹{totalBOQAmount.toLocaleString('en-IN')}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFormOpen(false);
+                      setSelectedBOQ(null);
+                      updateHasUnsavedChanges(false);
+                    }}
+                    disabled={isSavingBOQ}
+                    className="bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold px-4 py-2 rounded border border-slate-300 cursor-pointer disabled:opacity-50"
+                  >
+                    Close Window
+                  </button>
+                  
                   {isViewing && (
                     <button
                       type="button"
                       onClick={() => setIsViewing(false)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1 rounded cursor-pointer shrink-0 ml-3"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded flex items-center gap-1 cursor-pointer shadow-sm"
                     >
-                      ✏️ Enable Edit Mode
+                      <Edit size={13} /> Switch to Edit / Revise Mode
+                    </button>
+                  )}
+
+                  {!isViewing && (
+                    <button
+                      type="submit"
+                      disabled={isSavingBOQ}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded flex items-center gap-1.5 cursor-pointer shadow-sm disabled:bg-blue-400 disabled:cursor-not-allowed"
+                    >
+                      {isSavingBOQ ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save size={14} /> {selectedBOQ ? 'Update Specifications' : 'Save Draft Master'}
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
-              )}
-
-              {/* Items Table Input Section (Hidden if viewing) */}
-              {!isViewing && (
-                <div className="bg-blue-50/50 p-4 rounded border border-blue-200">
-                  <h3 className="text-xs font-bold text-slate-800 mb-2.5 flex items-center justify-between">
-                    <span>✏️ Item Specifications Input</span>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-normal text-slate-600">Import template items:</span>
-                      <input 
-                        type="file" 
-                        ref={fileInputRef}
-                        onChange={handleExcelImport}
-                        accept=".xlsx, .xls"
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <Upload size={10} /> Excel Import
-                      </button>
-                    </div>
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
-                    <div>
-                      <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Item Code</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. CONC-01"
-                        value={itemCode}
-                        onChange={(e) => setItemCode(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Item Description</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. M25 Grade Reinforced Concrete..."
-                        value={itemDesc}
-                        onChange={(e) => setItemDesc(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Unit</label>
-                      <SAPSelect
-                        value={itemUnit}
-                        onChange={(e) => setItemUnit(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1"
-                      >
-                        <option value="cum">cum</option>
-                        <option value="sqm">sqm</option>
-                        <option value="rm">rm</option>
-                        <option value="kg">kg</option>
-                        <option value="mt">mt</option>
-                        <option value="nos">nos</option>
-                        <option value="Sq.ft">Sq.ft</option>
-                        <option value="Cu.ft">Cu.ft</option>
-                        <option value="Rft">Rft</option>
-                        <option value="Lumpsum">Lumpsum</option>
-                        <option value="Bags">Bags</option>
-                        <option value="Ltr">Ltr</option>
-                        <option value="Pcs">Pcs</option>
-                        <option value="Brass">Brass</option>
-                        <option value="Trips">Trips</option>
-                        <option value="Days">Days</option>
-                        <option value="Months">Months</option>
-                      </SAPSelect>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-slate-500 font-medium mb-0.5">BOQ Quantity</label>
-                      <input
-                        type="number"
-                        value={itemQty}
-                        onChange={(e) => setItemQty(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1 font-bold"
-                        min="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-slate-500 font-medium mb-0.5">Contract Rate (₹)</label>
-                      <input
-                        type="number"
-                        value={itemRate}
-                        onChange={(e) => setItemRate(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-300 rounded text-xs px-2 py-1 font-bold"
-                        min="0"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center mt-3">
-                    <input
-                      type="text"
-                      placeholder="Optional Item Specific remarks"
-                      value={itemRemarks}
-                      onChange={(e) => setItemRemarks(e.target.value)}
-                      className="bg-white border border-slate-300 rounded text-xs px-2.5 py-1 w-2/3"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={handleAddItem}
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-1.5 rounded cursor-pointer transition-colors"
-                    >
-                      {editingItemIndex !== null ? 'Save Edit Item' : '+ Add Item Row'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Items List Table */}
-              <div className="bg-white rounded border border-slate-200 overflow-hidden">
-                <table className="w-full border-collapse text-left text-xs text-slate-700">
-                  <thead className="bg-[#f8fafc] border-b border-slate-200 text-slate-600 uppercase text-[10px] font-semibold">
-                    <tr>
-                      <th className="px-4 py-2.5">S.No</th>
-                      <th className="px-4 py-2.5">Item Code</th>
-                      <th className="px-4 py-2.5">Description</th>
-                      <th className="px-4 py-2.5">Unit</th>
-                      <th className="px-4 py-2.5">BOQ Quantity</th>
-                      <th className="px-4 py-2.5">Contract Rate</th>
-                      <th className="px-4 py-2.5">Gross Amount</th>
-                      <th className="px-4 py-2.5">Remarks</th>
-                      {!isViewing && <th className="px-4 py-2.5 text-right">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {formItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={isViewing ? 8 : 9} className="px-4 py-6 text-center text-slate-400 italic">
-                          No items added. Add items manually or use the Excel Import feature.
-                        </td>
-                      </tr>
-                    ) : (
-                      formItems.map((item, index) => (
-                        <tr key={item.id} className="hover:bg-slate-50/50">
-                          <td className="px-4 py-2 font-mono text-slate-500">{index + 1}</td>
-                          <td className="px-4 py-2 font-bold text-slate-800">{item.itemCode}</td>
-                          <td className="px-4 py-2 font-medium">{item.description}</td>
-                          <td className="px-4 py-2 font-mono text-slate-600">{item.unit}</td>
-                          <td className="px-4 py-2 font-bold">{item.boqQuantity.toLocaleString('en-IN')}</td>
-                          <td className="px-4 py-2 font-bold text-slate-600">₹{item.boqRate.toLocaleString('en-IN')}</td>
-                          <td className="px-4 py-2 font-bold text-slate-900">₹{(item.boqQuantity * item.boqRate).toLocaleString('en-IN')}</td>
-                          <td className="px-4 py-2 italic text-slate-500">{item.remarks || '-'}</td>
-                          {!isViewing && (
-                            <td className="px-4 py-2 text-right">
-                              <div className="flex justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditItemInForm(index)}
-                                  className="text-blue-600 hover:bg-blue-50 p-1 rounded cursor-pointer"
-                                >
-                                  <Edit size={12} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteItemInForm(index)}
-                                  className="text-red-500 hover:bg-red-50 p-1 rounded cursor-pointer"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
-                    <tr>
-                      <td colSpan={4} className="px-4 py-3 text-slate-600 text-right uppercase">Grand Total:</td>
-                      <td colSpan={2} className="px-4 py-3"></td>
-                      <td colSpan={isViewing ? 2 : 3} className="px-4 py-3 text-slate-950 text-base">₹{totalBOQAmount.toLocaleString('en-IN')}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              {/* Actions Footer */}
-              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsFormOpen(false);
-                    setSelectedBOQ(null);
-                    updateHasUnsavedChanges(false);
-                  }}
-                  className="bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold px-4 py-2 rounded border border-slate-300 cursor-pointer"
-                >
-                  Close Window
-                </button>
-                
-                {isViewing && (
-                  <button
-                    type="button"
-                    onClick={() => setIsViewing(false)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded flex items-center gap-1 cursor-pointer shadow-sm"
-                  >
-                    <Edit size={13} /> Switch to Edit / Revise Mode
-                  </button>
-                )}
-
-                {!isViewing && (
-                  <button
-                    type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded flex items-center gap-1 cursor-pointer shadow-sm"
-                  >
-                    <Save size={14} /> {selectedBOQ ? 'Update Specifications' : 'Save Draft Master'}
-                  </button>
-                )}
               </div>
             </form>
           </div>
@@ -2962,214 +3125,217 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
                 </button>
               </div>
 
-              <form onSubmit={handleAddExtraItem} className="p-5 space-y-3.5 overflow-y-auto">
-                {/* Project Selector */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Target Project</label>
-                  <SAPSelect
-                    value={curProjId}
-                    onChange={(e) => {
-                      setExtraProjectId(e.target.value);
-                      setExtraBoqItemId('');
-                    }}
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-medium"
-                    required
-                  >
-                    <option value="">-- Choose Project --</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </SAPSelect>
-                </div>
-
-                {/* Variation Type Switch */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Variation Scope</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExtraTargetType('new_item');
-                        setExtraBoqItemId('');
-                      }}
-                      className={`py-1.5 px-3 rounded text-xs font-bold transition-colors cursor-pointer border ${
-                        extraTargetType === 'new_item'
-                          ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      New Extra Scope Item
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExtraTargetType('existing_item');
-                      }}
-                      className={`py-1.5 px-3 rounded text-xs font-bold transition-colors cursor-pointer border ${
-                        extraTargetType === 'existing_item'
-                          ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      Extra Qty on Existing Item
-                    </button>
-                  </div>
-                </div>
-
-                {/* Existing Item Selector if applicable */}
-                {extraTargetType === 'existing_item' && (
+              <form onSubmit={handleAddExtraItem} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3.5">
+                  {/* Project Selector */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Select BOQ Item to Increase / Vary
-                    </label>
-                    <select
-                      value={extraBoqItemId}
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Target Project</label>
+                    <SAPSelect
+                      value={curProjId}
                       onChange={(e) => {
-                        const itId = e.target.value;
-                        setExtraBoqItemId(itId);
-                        const found = targetBOQ?.items?.find(it => it.id === itId);
-                        if (found) {
-                          setExtraCode(found.itemCode);
-                          setExtraDesc(found.description);
-                          setExtraUnit(found.unit);
-                          setExtraRate(found.boqRate);
-                        }
+                        setExtraProjectId(e.target.value);
+                        setExtraBoqItemId('');
                       }}
                       className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-medium"
                       required
                     >
-                      <option value="">-- Choose Existing BOQ Item --</option>
-                      {(targetBOQ?.items || []).map(it => (
-                        <option key={it.id} value={it.id}>
-                          {it.itemCode} - {it.description} (Current Approved: {it.boqQuantity} {it.unit} @ ₹{it.boqRate})
-                        </option>
+                      <option value="">-- Choose Project --</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
-                    </select>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Item Code</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. EXTRA-CONC-01"
-                      value={extraCode}
-                      onChange={(e) => setExtraCode(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">WO / Change Order Ref</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. WO-VAR-2026-01"
-                      value={extraWorkOrderNo}
-                      onChange={(e) => setExtraWorkOrderNo(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Item Description</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Additional excavation due to hard rock stratum..."
-                    value={extraDesc}
-                    onChange={(e) => setExtraDesc(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">UoM</label>
-                    <SAPSelect
-                      value={extraUnit}
-                      onChange={(e) => setExtraUnit(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
-                    >
-                      <option value="cum">cum</option>
-                      <option value="sqm">sqm</option>
-                      <option value="rm">rm</option>
-                      <option value="kg">kg</option>
-                      <option value="mt">mt</option>
-                      <option value="nos">nos</option>
-                      <option value="Sq.ft">Sq.ft</option>
-                      <option value="Cu.ft">Cu.ft</option>
-                      <option value="Rft">Rft</option>
-                      <option value="Lumpsum">Lumpsum</option>
-                      <option value="Bags">Bags</option>
-                      <option value="Ltr">Ltr</option>
-                      <option value="Pcs">Pcs</option>
-                      <option value="Brass">Brass</option>
-                      <option value="Trips">Trips</option>
-                      <option value="Days">Days</option>
-                      <option value="Months">Months</option>
                     </SAPSelect>
                   </div>
 
+                  {/* Variation Type Switch */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Variation Qty</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={extraQty || ''}
-                      onChange={(e) => setExtraQty(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-bold"
-                      min="0.001"
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Variation Scope</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExtraTargetType('new_item');
+                          setExtraBoqItemId('');
+                        }}
+                        className={`py-1.5 px-3 rounded text-xs font-bold transition-colors cursor-pointer border ${
+                          extraTargetType === 'new_item'
+                            ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        New Extra Scope Item
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExtraTargetType('existing_item');
+                        }}
+                        className={`py-1.5 px-3 rounded text-xs font-bold transition-colors cursor-pointer border ${
+                          extraTargetType === 'existing_item'
+                            ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        Extra Qty on Existing Item
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Existing Item Selector if applicable */}
+                  {extraTargetType === 'existing_item' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Select BOQ Item to Increase / Vary
+                      </label>
+                      <select
+                        value={extraBoqItemId}
+                        onChange={(e) => {
+                          const itId = e.target.value;
+                          setExtraBoqItemId(itId);
+                          const found = targetBOQ?.items?.find(it => it.id === itId);
+                          if (found) {
+                            setExtraCode(found.itemCode);
+                            setExtraDesc(found.description);
+                            setExtraUnit(found.unit);
+                            setExtraRate(found.boqRate);
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-medium"
+                        required
+                      >
+                        <option value="">-- Choose Existing BOQ Item --</option>
+                        {(targetBOQ?.items || []).map(it => (
+                          <option key={it.id} value={it.id}>
+                            {it.itemCode} - {it.description} (Current Approved: {it.boqQuantity} {it.unit} @ ₹{it.boqRate})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Item Code</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. EXTRA-CONC-01"
+                        value={extraCode}
+                        onChange={(e) => setExtraCode(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">WO / Change Order Ref</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. WO-VAR-2026-01"
+                        value={extraWorkOrderNo}
+                        onChange={(e) => setExtraWorkOrderNo(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Item Description / Scope Specifications</label>
+                    <textarea
+                      rows={3}
+                      placeholder="e.g. Additional excavation due to hard rock stratum, including hydraulic breaker, loading and disposal within 5km lead..."
+                      value={extraDesc}
+                      onChange={(e) => setExtraDesc(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 resize-y min-h-[60px] max-h-32 overflow-y-auto break-words whitespace-pre-wrap leading-relaxed"
                       required
                     />
                   </div>
 
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">UoM</label>
+                      <SAPSelect
+                        value={extraUnit}
+                        onChange={(e) => setExtraUnit(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5"
+                      >
+                        <option value="cum">cum</option>
+                        <option value="sqm">sqm</option>
+                        <option value="rm">rm</option>
+                        <option value="kg">kg</option>
+                        <option value="mt">mt</option>
+                        <option value="nos">nos</option>
+                        <option value="Sq.ft">Sq.ft</option>
+                        <option value="Cu.ft">Cu.ft</option>
+                        <option value="Rft">Rft</option>
+                        <option value="Lumpsum">Lumpsum</option>
+                        <option value="Bags">Bags</option>
+                        <option value="Ltr">Ltr</option>
+                        <option value="Pcs">Pcs</option>
+                        <option value="Brass">Brass</option>
+                        <option value="Trips">Trips</option>
+                        <option value="Days">Days</option>
+                        <option value="Months">Months</option>
+                      </SAPSelect>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Variation Qty</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={extraQty || ''}
+                        onChange={(e) => setExtraQty(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-bold"
+                        min="0.001"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Rate (₹)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={extraRate || ''}
+                        onChange={(e) => setExtraRate(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-bold"
+                        min="0.01"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50/70 border border-amber-200 rounded p-2.5 flex justify-between items-center text-xs">
+                    <span className="text-amber-900 font-semibold">Total Variation Amount:</span>
+                    <span className="font-mono font-bold text-amber-950 text-sm">
+                      ₹{(Number(extraQty || 0) * Number(extraRate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Rate (₹)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={extraRate || ''}
-                      onChange={(e) => setExtraRate(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-bold"
-                      min="0.01"
-                      required
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Approval Status</label>
+                    <select
+                      value={extraApprovalStatus}
+                      onChange={(e) => setExtraApprovalStatus(e.target.value as any)}
+                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-semibold"
+                    >
+                      <option value="Approved">Approved (Directly updates approved contract BOQ quantity)</option>
+                      <option value="Pending Approval">Pending Approval (Tracked in Variation Register until approved)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Variation Justification / Remarks</label>
+                    <textarea
+                      value={extraRemarks}
+                      onChange={(e) => setExtraRemarks(e.target.value)}
+                      placeholder="Reference official change order document or site instruction number"
+                      className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 h-14 resize-y"
                     />
                   </div>
                 </div>
 
-                <div className="bg-amber-50/70 border border-amber-200 rounded p-2.5 flex justify-between items-center text-xs">
-                  <span className="text-amber-900 font-semibold">Total Variation Amount:</span>
-                  <span className="font-mono font-bold text-amber-950 text-sm">
-                    ₹{(Number(extraQty || 0) * Number(extraRate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Approval Status</label>
-                  <select
-                    value={extraApprovalStatus}
-                    onChange={(e) => setExtraApprovalStatus(e.target.value as any)}
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 font-semibold"
-                  >
-                    <option value="Approved">Approved (Directly updates approved contract BOQ quantity)</option>
-                    <option value="Pending Approval">Pending Approval (Tracked in Variation Register until approved)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Variation Justification / Remarks</label>
-                  <textarea
-                    value={extraRemarks}
-                    onChange={(e) => setExtraRemarks(e.target.value)}
-                    placeholder="Reference official change order document or site instruction number"
-                    className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 h-14"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+                {/* Persistent Footer */}
+                <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3 bg-[#f8fafc] flex-shrink-0 select-none">
                   <button
                     type="button"
                     onClick={() => setIsExtraModalOpen(false)}
@@ -3640,10 +3806,10 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
 
       {/* MODAL: BOQ Revision & Extra Quantity / Variation */}
       {revisionModalItem && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden border border-slate-300 text-xs">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden border border-slate-300 text-xs max-h-[90vh]">
             {/* Header */}
-            <div className="bg-[#1e3a5f] text-white px-5 py-3.5 flex justify-between items-center select-none">
+            <div className="bg-[#1e3a5f] text-white px-5 py-3.5 flex justify-between items-center select-none flex-shrink-0">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Plus size={16} className="text-blue-300" />
@@ -3663,7 +3829,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
             </div>
 
             {/* Workflow Mode Tabs */}
-            <div className="bg-slate-100 p-2 border-b border-slate-200 flex gap-2">
+            <div className="bg-slate-100 p-2 border-b border-slate-200 flex gap-2 flex-shrink-0 select-none">
               <button
                 type="button"
                 onClick={() => {
@@ -3702,190 +3868,192 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSaveItemRevisionOrVariation} className="p-5 space-y-4">
-              {/* Context Summary */}
-              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded border border-slate-200">
-                <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">Baseline Original Qty</span>
-                  <span className="text-xs font-bold text-slate-800 font-mono">
-                    {(revisionModalItem.item.originalQuantity !== undefined ? revisionModalItem.item.originalQuantity : revisionModalItem.item.boqQuantity).toLocaleString('en-IN')} {revisionModalItem.item.unit}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">Current Approved Qty</span>
-                  <span className="text-xs font-bold text-blue-900 font-mono">
-                    {revisionModalItem.item.boqQuantity.toLocaleString('en-IN')} {revisionModalItem.item.unit}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">Contract Rate</span>
-                  <span className="text-xs font-bold text-slate-800 font-mono">
-                    ₹{revisionModalItem.item.boqRate.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Input fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Work Order / Amendment Reference
-                  </label>
-                  <input
-                    type="text"
-                    value={revWorkOrderNo}
-                    onChange={(e) => setRevWorkOrderNo(e.target.value)}
-                    placeholder="e.g. WO-AMEND-01 or VAR-2026-004"
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500"
-                  />
+            <form onSubmit={handleSaveItemRevisionOrVariation} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+                {/* Context Summary */}
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded border border-slate-200">
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">Baseline Original Qty</span>
+                    <span className="text-xs font-bold text-slate-800 font-mono">
+                      {(revisionModalItem.item.originalQuantity !== undefined ? revisionModalItem.item.originalQuantity : revisionModalItem.item.boqQuantity).toLocaleString('en-IN')} {revisionModalItem.item.unit}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">Current Approved Qty</span>
+                    <span className="text-xs font-bold text-blue-900 font-mono">
+                      {revisionModalItem.item.boqQuantity.toLocaleString('en-IN')} {revisionModalItem.item.unit}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block">Contract Rate</span>
+                    <span className="text-xs font-bold text-slate-800 font-mono">
+                      ₹{revisionModalItem.item.boqRate.toLocaleString('en-IN')}
+                    </span>
+                  </div>
                 </div>
 
+                {/* Input fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Work Order / Amendment Reference
+                    </label>
+                    <input
+                      type="text"
+                      value={revWorkOrderNo}
+                      onChange={(e) => setRevWorkOrderNo(e.target.value)}
+                      placeholder="e.g. WO-AMEND-01 or VAR-2026-004"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Effective Date
+                    </label>
+                    <input
+                      type="date"
+                      value={revDate}
+                      onChange={(e) => setRevDate(e.target.value)}
+                      required
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Additional Qty (+ or -)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={revAdditionalQty || ''}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setRevAdditionalQty(val);
+                        setRevTargetTotalQty(revisionModalItem.item.boqQuantity + val);
+                      }}
+                      placeholder="e.g. 1000 or -500"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-bold text-blue-950 focus:ring-1 focus:ring-blue-500"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Type quantity addition or reduction
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Or New Total Target Qty
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={revTargetTotalQty || ''}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setRevTargetTotalQty(val);
+                        setRevAdditionalQty(val - revisionModalItem.item.boqQuantity);
+                      }}
+                      placeholder={`Current: ${revisionModalItem.item.boqQuantity}`}
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-bold text-blue-950 focus:ring-1 focus:ring-blue-500"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Target: {revisionModalItem.item.boqQuantity} + addition
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Applicable Rate (₹/{revisionModalItem.item.unit})
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={revRate || ''}
+                      onChange={(e) => setRevRate(Number(e.target.value))}
+                      placeholder="Rate"
+                      required
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:ring-1 focus:ring-blue-500"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Defaults to contract rate
+                    </span>
+                  </div>
+                </div>
+
+                {/* Impact Calculation Preview */}
+                <div className="bg-blue-50/70 border border-blue-200 rounded p-3 grid grid-cols-3 gap-2">
+                  <div>
+                    <span className="text-[10px] text-blue-700 uppercase font-semibold block">Adjustment</span>
+                    <span className={`text-xs font-bold font-mono ${revAdditionalQty > 0 ? 'text-emerald-700' : revAdditionalQty < 0 ? 'text-amber-700' : 'text-slate-500'}`}>
+                      {revAdditionalQty > 0 ? `+${revAdditionalQty}` : revAdditionalQty} {revisionModalItem.item.unit}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-blue-700 uppercase font-semibold block">Revised Quantity</span>
+                    <span className="text-xs font-bold text-blue-950 font-mono">
+                      {(revisionModalItem.item.boqQuantity + Number(revAdditionalQty || 0)).toLocaleString('en-IN')} {revisionModalItem.item.unit}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-blue-700 uppercase font-semibold block">Additional Value</span>
+                    <span className="text-xs font-bold text-emerald-800 font-mono">
+                      ₹{(Number(revAdditionalQty || 0) * Number(revRate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Reason / Contract Authorization */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Effective Date
+                    Reason / Contract Authorization Reference <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="date"
-                    value={revDate}
-                    onChange={(e) => setRevDate(e.target.value)}
+                  <textarea
+                    value={revReason}
+                    onChange={(e) => setRevReason(e.target.value)}
+                    placeholder="Detail the rationale, site instruction number, client request letter, or architectural revision..."
                     required
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500"
+                    rows={2}
+                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 resize-y min-h-[50px] max-h-32 overflow-y-auto break-words whitespace-pre-wrap"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Approval Workflow Status
+                    </label>
+                    <select
+                      value={revApprovalStatus}
+                      onChange={(e) => setRevApprovalStatus(e.target.value as any)}
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="Approved">Approved (Immediately updates current approved BOQ qty)</option>
+                      <option value="Pending Approval">Pending Approval (Tracked separately until formally approved)</option>
+                      <option value="Draft">Draft</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Internal Remarks (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={revRemarks}
+                      onChange={(e) => setRevRemarks(e.target.value)}
+                      placeholder="Optional notes or references"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Additional Qty (+ or -)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={revAdditionalQty || ''}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setRevAdditionalQty(val);
-                      setRevTargetTotalQty(revisionModalItem.item.boqQuantity + val);
-                    }}
-                    placeholder="e.g. 1000 or -500"
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-bold text-blue-950 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Type quantity addition or reduction
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Or New Total Target Qty
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={revTargetTotalQty || ''}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setRevTargetTotalQty(val);
-                      setRevAdditionalQty(val - revisionModalItem.item.boqQuantity);
-                    }}
-                    placeholder={`Current: ${revisionModalItem.item.boqQuantity}`}
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-bold text-blue-950 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Target: {revisionModalItem.item.boqQuantity} + addition
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Applicable Rate (₹/{revisionModalItem.item.unit})
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={revRate || ''}
-                    onChange={(e) => setRevRate(Number(e.target.value))}
-                    placeholder="Rate"
-                    required
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:ring-1 focus:ring-blue-500"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Defaults to contract rate
-                  </span>
-                </div>
-              </div>
-
-              {/* Impact Calculation Preview */}
-              <div className="bg-blue-50/70 border border-blue-200 rounded p-3 grid grid-cols-3 gap-2">
-                <div>
-                  <span className="text-[10px] text-blue-700 uppercase font-semibold block">Adjustment</span>
-                  <span className={`text-xs font-bold font-mono ${revAdditionalQty > 0 ? 'text-emerald-700' : revAdditionalQty < 0 ? 'text-amber-700' : 'text-slate-500'}`}>
-                    {revAdditionalQty > 0 ? `+${revAdditionalQty}` : revAdditionalQty} {revisionModalItem.item.unit}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-blue-700 uppercase font-semibold block">Revised Quantity</span>
-                  <span className="text-xs font-bold text-blue-950 font-mono">
-                    {(revisionModalItem.item.boqQuantity + Number(revAdditionalQty || 0)).toLocaleString('en-IN')} {revisionModalItem.item.unit}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-blue-700 uppercase font-semibold block">Additional Value</span>
-                  <span className="text-xs font-bold text-emerald-800 font-mono">
-                    ₹{(Number(revAdditionalQty || 0) * Number(revRate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-
-              {/* Reason / Contract Authorization */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Reason / Contract Authorization Reference <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={revReason}
-                  onChange={(e) => setRevReason(e.target.value)}
-                  placeholder="Detail the rationale, site instruction number, client request letter, or architectural revision..."
-                  required
-                  rows={2}
-                  className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Approval Workflow Status
-                  </label>
-                  <select
-                    value={revApprovalStatus}
-                    onChange={(e) => setRevApprovalStatus(e.target.value as any)}
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs font-semibold focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="Approved">Approved (Immediately updates current approved BOQ qty)</option>
-                    <option value="Pending Approval">Pending Approval (Tracked separately until formally approved)</option>
-                    <option value="Draft">Draft</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Internal Remarks (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={revRemarks}
-                    onChange={(e) => setRevRemarks(e.target.value)}
-                    placeholder="Optional notes or references"
-                    className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+              {/* Persistent Actions Footer */}
+              <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3 bg-[#f8fafc] flex-shrink-0 select-none">
                 <button
                   type="button"
                   onClick={() => setRevisionModalItem(null)}
@@ -3906,6 +4074,28 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
           </div>
         </div>
       )}
+
+      {/* Standalone Add / Edit BOQ Item Responsive Modal */}
+      <BOQItemModal
+        isOpen={boqItemModalState.isOpen}
+        mode={boqItemModalState.mode}
+        initialItem={boqItemModalState.item}
+        onClose={() => setBoqItemModalState(prev => ({ ...prev, isOpen: false, item: null }))}
+        onSave={handleSaveBOQItemModal}
+        projectName={
+          projects.find(p => p.id === (
+            selectedBOQ?.projectId ||
+            formProjectId ||
+            boqs.find(b => b.id === boqItemModalState.targetBoqId)?.projectId ||
+            selectedProjectId
+          ))?.name
+        }
+        existingItemCodes={
+          isFormOpen
+            ? formItems.map(i => i.itemCode)
+            : (boqs.find(b => b.id === boqItemModalState.targetBoqId)?.items || []).map(i => i.itemCode)
+        }
+      />
 
     </div>
   );
