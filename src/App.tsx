@@ -11,6 +11,7 @@ import { Login } from './components/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Projects } from './pages/Projects';
 import { BOQPage } from './pages/BOQPage';
+import { JMRPage } from './pages/JMRPage';
 import { Workers } from './pages/Workers';
 import { Billing } from './pages/Billing';
 import { ClientPayment } from './pages/ClientPayment';
@@ -179,6 +180,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'workers': return 'Workers Management';
       case 'dms': return 'DMS Document Center';
       case 'boqs': return 'BOQ Management';
+      case 'jmr': return 'Joint Measurement Record (JMR01)';
       case 'billing': return 'Billing Management';
       case 'gst-register': return 'GST Payment & Filing Register';
       case 'client-payment': return 'Client Payment';
@@ -451,6 +453,7 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
       case 'dms': return <DMSPage key={key} />;
       case 'workers': return <Workers key={key} initialWorkerId={props.initialWorkerId} initialView={props.initialView} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
       case 'boqs': return <BOQPage key={key} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
+      case 'jmr': return <JMRPage key={key} initialAction={props.initialAction} initialProjectId={props.initialProjectId} initialBoqId={props.initialBoqId} onUnsavedChange={NOOP_UNSAVED_CHANGE} />;
       case 'billing': return <Billing key={key} />;
       case 'gst-register': return <GSTRegister key={key} />;
       case 'client-payment': return <ClientPayment key={key} />;
@@ -526,6 +529,8 @@ function AppContent({ user, onLogout }: { user: { username: string; name: string
         return ['Subcontractor Management', 'Audit Trail Logs'];
       case 'boqs':
         return ['Billing & Collections', 'BOQ Management'];
+      case 'jmr':
+        return ['Billing & Collections', 'Joint Measurement Record (JMR01)'];
       case 'dms':
         return ['Document System', 'DMS Document Center'];
       case 'document-flow':

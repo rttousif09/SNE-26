@@ -12,8 +12,9 @@ import { PDFExportButton } from '../components/PDFExportButton';
 import { exportIndividualBillToPDF, downloadPDF } from '../lib/pdfGenerator';
 import { MeasurementItem, Billing as BillingType } from '../types';
 import { RelatedDocumentsSection } from '../components/RelatedDocumentsSection';
-import { GitFork } from 'lucide-react';
+import { GitFork, Calculator } from 'lucide-react';
 import { BOQAllocationSelector } from '../components/BOQAllocationSelector';
+import { JMRBillAllocationModal } from '../components/JMRBillAllocationModal';
 import { GSTRegister } from './GSTRegister';
 import { SAPTransactionHeader } from '../components/common/SAPTransactionHeader';
 import { SAPTabs } from '../components/common/SAPTabs';
@@ -29,12 +30,13 @@ import {
 } from 'recharts';
 
 export const Billing: React.FC = () => {
-  const { user, boqs = [], billings, projects, clientPayments = [], addBilling, updateBilling, deleteBilling, numberingSettings = [], previewNextNumber, consumeNextNumber } = useAppContext();
+  const { user, boqs = [], billings, projects, clientPayments = [], addBilling, updateBilling, deleteBilling, numberingSettings = [], previewNextNumber, consumeNextNumber, jmrs = [], updateJMR } = useAppContext();
   const isReadOnly = user?.username === 'saddamsne';
   const billingConfig = numberingSettings?.find((s: any) => s.moduleKey === 'billing');
   const isAutoBillingActive = false; // Turned off as per user request so bill numbers are entered manually
 
   const [isBOQSelectorOpen, setIsBOQSelectorOpen] = useState(false);
+  const [isJMRSelectorOpen, setIsJMRSelectorOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'records' | 'retention' | 'tds' | 'debit' | 'hold' | 'gst'>('records');
   const [summaryProjectId, setSummaryProjectId] = useState<string>('all');
   const [isAdding, setIsAdding] = useState(false);
@@ -1927,6 +1929,22 @@ export const Billing: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      if (!formData.projectId) {
+                        setProjectRequiredWarning(true);
+                        return;
+                      }
+                      setProjectRequiredWarning(false);
+                      setIsJMRSelectorOpen(true);
+                    }}
+                    className="bg-[#1e3a5f] hover:bg-[#152840] text-white font-bold text-xs px-3 py-1 rounded shadow-xs flex items-center space-x-1 cursor-pointer transition-colors border border-blue-900"
+                    title="Pull certified measurements directly from Approved Joint Measurement Records (JMR01)"
+                  >
+                    <Calculator size={13} className="text-[#a5c7f9]" />
+                    <span>Pull from Approved JMR</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleAddMeasurementItem}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-2.5 py-1 rounded shadow-xs flex items-center space-x-1 cursor-pointer transition-colors"
                     title="Add a custom/extra measurement row"
@@ -1960,21 +1978,38 @@ export const Billing: React.FC = () => {
                   <div className="text-slate-500 text-xs mb-3">
                     Click <strong className="text-emerald-700">“Add BOQ Item”</strong> to choose contract items directly from the project's BOQ Master.
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!formData.projectId) {
-                        setProjectRequiredWarning(true);
-                        return;
-                      }
-                      setProjectRequiredWarning(false);
-                      setIsBOQSelectorOpen(true);
-                    }}
-                    className="inline-flex items-center space-x-1.5 bg-[#2c5282] hover:bg-[#1e3a5f] text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer transition-colors"
-                  >
-                    <Plus size={14} />
-                    <span>Add BOQ Item</span>
-                  </button>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!formData.projectId) {
+                          setProjectRequiredWarning(true);
+                          return;
+                        }
+                        setProjectRequiredWarning(false);
+                        setIsBOQSelectorOpen(true);
+                      }}
+                      className="inline-flex items-center space-x-1.5 bg-[#2c5282] hover:bg-[#1e3a5f] text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      <Plus size={14} />
+                      <span>Add BOQ Item</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!formData.projectId) {
+                          setProjectRequiredWarning(true);
+                          return;
+                        }
+                        setProjectRequiredWarning(false);
+                        setIsJMRSelectorOpen(true);
+                      }}
+                      className="inline-flex items-center space-x-1.5 bg-[#1e3a5f] hover:bg-[#152840] text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      <Calculator size={14} className="text-[#a5c7f9]" />
+                      <span>Pull from Approved JMR</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
@@ -4042,6 +4077,23 @@ export const Billing: React.FC = () => {
             handleAddMultipleBoqItems(items);
           }}
           onClose={() => setIsBOQSelectorOpen(false)}
+        />
+      )}
+
+      {isJMRSelectorOpen && (
+        <JMRBillAllocationModal
+          isOpen={isJMRSelectorOpen}
+          onClose={() => setIsJMRSelectorOpen(false)}
+          projectId={formData.projectId || ''}
+          projectName={projects.find(p => p.id === formData.projectId)?.name}
+          jmrs={jmrs || []}
+          onImportItems={(items, jmrNo, jmrId) => {
+            handleAddMultipleBoqItems(items as MeasurementItem[]);
+            setFormData(prev => ({
+              ...prev,
+              workNature: prev.workNature ? `${prev.workNature} (JMR: ${jmrNo})` : `JMR Certified: ${jmrNo}`
+            }));
+          }}
         />
       )}
     </div>

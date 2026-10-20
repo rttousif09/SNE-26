@@ -202,6 +202,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       action: () => { onNavigate('boqs'); onClose(); }
     },
     {
+      id: 'mod-jmr',
+      title: 'Joint Measurement Record (JMR01)',
+      subtitle: 'Site measurement certification, Reliance SupplierFirst workflow',
+      category: 'Modules & T-Codes',
+      tcode: 'JMR01',
+      icon: <FileText size={14} className="text-blue-600" />,
+      action: () => { onNavigate('jmr'); onClose(); }
+    },
+    {
       id: 'mod-mat',
       title: 'Materials & Inventory Store',
       subtitle: 'Stock balances, GRN, inward delivery challans',

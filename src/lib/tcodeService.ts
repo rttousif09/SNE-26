@@ -81,11 +81,13 @@ export const DEFAULT_TCODES: TCode[] = [
   { code: "SUB04", name: "Ledger", description: "Generate real-time reconciliation logs for subcontractors", module: "Subcontractor", tab: "subcontractors-ledger", isActive: true },
   { code: "SUB05", name: "Documents", description: "Audit compliance records, agreements, and security checklists", module: "Subcontractor", tab: "subcontractors-audit", isActive: true },
 
-  // BOQ
+  // BOQ & Joint Measurement
   { code: "BOQ01", name: "Create BOQ", description: "Draft Bill of Quantities schedule, items, and unit rates", module: "BOQ", tab: "boqs", props: { initialAction: "create" }, isActive: true },
   { code: "BOQ02", name: "Edit BOQ", description: "Amend measurements, quantities, or rate structures", module: "BOQ", tab: "boqs", props: { initialAction: "edit" }, isActive: true, requiredRoles: ["admin"] },
   { code: "BOQ03", name: "BOQ Comparison", description: "Perform cost analysis or comparative audits between BOQ versions", module: "BOQ", tab: "boqs", props: { initialAction: "compare" }, isActive: true },
   { code: "BOQ04", name: "BOQ Reports", description: "Consolidated summaries of quantities scheduled vs consumed", module: "BOQ", tab: "boqs", props: { initialAction: "reports" }, isActive: true },
+  { code: "JMR01", name: "Joint Measurement Record", description: "Joint measurement sheets, site measurement entry, and verification", module: "BOQ", tab: "jmr", isActive: true },
+  { code: "JMR02", name: "Create JMR", description: "Initiate new site measurement record wizard against approved BOQs", module: "BOQ", tab: "jmr", props: { initialAction: "create" }, isActive: true },
 
   // Material
   { code: "MAT01", name: "Material Issue", description: "Issue cement, steel, or other assets to workers or site locations", module: "Material", tab: "materials", props: { initialTab: "issue" }, isActive: true },

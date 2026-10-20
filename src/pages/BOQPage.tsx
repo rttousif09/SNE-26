@@ -19,11 +19,11 @@ import { BOQItemModal } from '../components/BOQItemModal';
 
 export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: boolean) => void }) {
   const { 
-    projects, boqs, boqAuditLogs, addBOQ, updateBOQ, deleteBOQ, addBOQAuditLog, user, billings 
+    projects, boqs, boqAuditLogs, addBOQ, updateBOQ, deleteBOQ, addBOQAuditLog, user, billings, jmrs 
   } = useAppContext();
 
   // Active navigation tab inside BOQ Module
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'executed' | 'billing' | 'extra' | 'audit'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'executed' | 'billing' | 'extra' | 'audit' | 'jmr'>('dashboard');
   
   // Floor Manager State
   const [managingFloorItem, setManagingFloorItem] = useState<{ boqId: string, item: BOQItem } | null>(null);
@@ -1678,6 +1678,7 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
           { id: 'executed', label: 'BOQ vs Execution' },
           { id: 'billing', label: 'BOQ vs Billed Tracking' },
           { id: 'extra', label: 'Variations Register' },
+          { id: 'jmr', label: 'Joint Measurement (JMR01)', count: (jmrs || []).filter(j => !selectedProjectId || j.projectId === selectedProjectId).length },
           { id: 'audit', label: 'Audit & Revisions Trail' }
         ]}
         activeTab={activeTab}
@@ -2735,6 +2736,125 @@ export function BOQPage({ onUnsavedChange }: { onUnsavedChange?: (hasUnsaved: bo
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Tab 7: Joint Measurement Records (JMR01) */}
+      {activeTab === 'jmr' && (
+        <div className="space-y-4">
+          <div className="bg-[#f8fafc] border border-slate-300 p-4 rounded-sm shadow-xs flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm text-[#1e3a5f]">
+                  JOINT MEASUREMENT RECORDS (JMR01)
+                </span>
+                <span className="bg-blue-100 text-blue-900 text-[10px] font-mono px-2 py-0.5 border border-blue-300">
+                  Site Measurement Certification
+                </span>
+              </div>
+              <p className="text-slate-600 text-[11px] mt-0.5">
+                Certified measurements from site engineers and client authorities for contract items. Approved JMRs directly feed RA Billing (BIL01).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if ((window as any).openWorkspaceTab) {
+                    (window as any).openWorkspaceTab('jmr', 'Joint Measurement (JMR)', { initialAction: 'create', initialProjectId: selectedProjectId });
+                  }
+                }}
+                className="bg-[#2e7d32] hover:bg-[#1b5e20] text-white px-3 py-1.5 font-bold text-xs flex items-center gap-1 shadow-2xs border border-[#1b5e20]"
+              >
+                + Create JMR for BOQ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if ((window as any).openWorkspaceTab) {
+                    (window as any).openWorkspaceTab('jmr', 'Joint Measurement (JMR)', { initialProjectId: selectedProjectId });
+                  }
+                }}
+                className="bg-[#1e3a5f] hover:bg-[#152840] text-white px-3 py-1.5 font-bold text-xs flex items-center gap-1 shadow-2xs border border-[#0f233a]"
+              >
+                Open JMR01 Workbench →
+              </button>
+            </div>
+          </div>
+
+          {/* JMR Table */}
+          <div className="bg-white border border-slate-200 rounded-sm overflow-hidden shadow-xs">
+            <table className="w-full border-collapse text-left text-xs text-slate-700">
+              <thead className="bg-[#f8fafc] border-b border-slate-200 text-slate-600 uppercase text-[10px] tracking-wider font-semibold">
+                <tr>
+                  <th className="px-3 py-2.5">JMR Number</th>
+                  <th className="px-3 py-2.5">Project</th>
+                  <th className="px-3 py-2.5">BOQ Ref</th>
+                  <th className="px-3 py-2.5">Client</th>
+                  <th className="px-3 py-2.5">Period</th>
+                  <th className="px-3 py-2.5">Date</th>
+                  <th className="px-3 py-2.5 text-center">Items</th>
+                  <th className="px-3 py-2.5 text-right">Total Qty</th>
+                  <th className="px-3 py-2.5 text-right">Claim Amount (₹)</th>
+                  <th className="px-3 py-2.5 text-center">Status</th>
+                  <th className="px-3 py-2.5 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+                {((jmrs || []).filter(j => !selectedProjectId || j.projectId === selectedProjectId)).length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="px-4 py-8 text-center text-slate-400 italic">
+                      No Joint Measurement Records created for this project yet. Click "+ Create JMR for BOQ" above to record site measurements.
+                    </td>
+                  </tr>
+                ) : (
+                  (jmrs || [])
+                    .filter(j => !selectedProjectId || j.projectId === selectedProjectId)
+                    .map((jmr) => {
+                      const totalQty = (jmr.items || []).reduce((acc, it) => acc + (it.netQuantity || 0), 0);
+                      const totalAmt = (jmr.items || []).reduce((acc, it) => acc + (it.currentClaimAmount || 0), 0);
+                      return (
+                        <tr key={jmr.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-3 py-2 font-bold text-[#1e3a5f]">{jmr.jmrNo}</td>
+                          <td className="px-3 py-2 font-sans font-semibold">{projects.find(p => p.id === jmr.projectId)?.name || jmr.projectId}</td>
+                          <td className="px-3 py-2">{boqs.find(b => b.id === jmr.boqId)?.boqNo || jmr.boqId}</td>
+                          <td className="px-3 py-2 font-sans">{jmr.clientName}</td>
+                          <td className="px-3 py-2 text-slate-500">{jmr.startDate} to {jmr.endDate}</td>
+                          <td className="px-3 py-2 text-slate-500">{jmr.date}</td>
+                          <td className="px-3 py-2 text-center">{(jmr.items || []).length}</td>
+                          <td className="px-3 py-2 text-right">{totalQty.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-2 text-right font-bold text-[#1e3a5f]">₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-2 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              jmr.status === 'Approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                              jmr.status === 'Submitted' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                              jmr.status === 'Under Verification' ? 'bg-purple-100 text-purple-800 border border-purple-300' :
+                              jmr.status === 'Returned' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                              'bg-gray-100 text-gray-700 border border-gray-300'
+                            }`}>
+                              {jmr.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-center font-sans">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if ((window as any).openWorkspaceTab) {
+                                  (window as any).openWorkspaceTab('jmr', 'Joint Measurement (JMR)', { initialProjectId: jmr.projectId });
+                                }
+                              }}
+                              className="text-blue-600 hover:text-blue-800 font-semibold underline text-[11px]"
+                            >
+                              Open in JMR01
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

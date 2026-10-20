@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog, BOQ, BOQItem, BOQRevision, BOQExtraItem, BOQAuditLog, ClientFloorBill } from './types';
+import { Project, Worker, Billing, ClientPayment, Kharchi, Advance, WorkerPayment, Approval, ExpenseEntry, PaymentSheetApproval, MessBooking, DailyLabourReport, KharchiApproval, MaterialItem, MaterialIssue, MaterialReturn, MaterialPurchase, LabourPlanning, WorkerTransfer, Asset, AssetTransfer, AssetMaintenance, WorkerLedgerEntry, WorkerHold, WorkerRecoveryAuditTrail, AdvanceSheetApproval, Attendance, TrackedBill, BillTimelineEntry, FinancialYear, Staff, FloorAbstract, ActivityLog, NumberingSettings, NumberingAuditLog, BOQ, BOQItem, BOQRevision, BOQExtraItem, BOQAuditLog, ClientFloorBill, JMR, JMRItem, JMRAuditLog, JMRBillAllocation } from './types';
 import { getAllFromStore, saveAllToStore } from './lib/indexedDB';
 
 class GlobalEventBus {
@@ -73,6 +73,8 @@ interface AppState {
   numberingAuditLogs: NumberingAuditLog[];
   boqs: BOQ[];
   boqAuditLogs: BOQAuditLog[];
+  jmrs: JMR[];
+  jmrAuditLogs: JMRAuditLog[];
 }
 
 
@@ -84,6 +86,7 @@ interface AppContextType extends AppState {
   refreshActivityLogs: () => Promise<void>;
   refreshBillings: () => Promise<void>;
   refreshClientPayments: () => Promise<void>;
+  refreshJMRs: () => Promise<void>;
   fetchNumberingSettings: () => Promise<void>;
   fetchNumberingAuditLogs: () => Promise<void>;
   updateNumberingSetting: (moduleKey: string, payload: any) => Promise<boolean>;
@@ -97,6 +100,10 @@ interface AppContextType extends AppState {
   updateBOQ: (id: string, boq: Partial<BOQ>) => Promise<void>;
   deleteBOQ: (id: string) => Promise<void>;
   addBOQAuditLog: (log: Omit<BOQAuditLog, 'id' | 'timestamp'>) => Promise<void>;
+  addJMR: (jmr: Omit<JMR, 'id'>) => Promise<string>;
+  updateJMR: (id: string, jmr: Partial<JMR>) => Promise<void>;
+  deleteJMR: (id: string) => Promise<void>;
+  addJMRAuditLog: (log: Omit<JMRAuditLog, 'id' | 'timestamp'>) => Promise<void>;
   addWorker: (worker: Omit<Worker, 'id'>) => void;
   updateWorker: (id: string, worker: Partial<Worker>) => void;
   deleteWorker: (id: string) => void;
@@ -260,6 +267,8 @@ const initialState: AppState = {
   numberingAuditLogs: [],
   boqs: [],
   boqAuditLogs: [],
+  jmrs: [],
+  jmrAuditLogs: []
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -315,6 +324,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     numberingAuditLogs: [],
     boqs: [],
     boqAuditLogs: [],
+    jmrs: [],
+    jmrAuditLogs: []
   });
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
@@ -326,7 +337,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const [
           pRes, wRes, bRes, cpRes, kRes, aRes, wpRes, apRes, psaRes, elRes, mbRes, dlrRes, kaRes, miRes, misRes, mrRes, mpRes, lpRes, wtRes, assetsRes, assetTransfersRes, assetMaintenancesRes,
-          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes, staffRes, faRes, actRes, numSetRes, numAuditRes, boqsRes, boqAuditRes
+          wlRes, whRes, wratRes, asaRes, attRes, tbRes, tlRes, fyRes, staffRes, faRes, actRes, numSetRes, numAuditRes, boqsRes, boqAuditRes, jmrsRes, jmrAuditRes
         ] = await Promise.all([
           fetch('/api/projects').then(r => r.json()),
           fetch('/api/workers').then(r => r.json()),
@@ -364,7 +375,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/numbering-settings').then(r => r.json()).catch(() => []),
           fetch('/api/numbering-settings/audit-logs').then(r => r.json()).catch(() => []),
           fetch('/api/boqs').then(r => r.json()).catch(() => []),
-          fetch('/api/boqs-audit-logs').then(r => r.json()).catch(() => [])
+          fetch('/api/boqs-audit-logs').then(r => r.json()).catch(() => []),
+          fetch('/api/jmrs').then(r => r.json()).catch(() => []),
+          fetch('/api/jmrs-audit-logs').then(r => r.json()).catch(() => [])
         ]);
 
         const stateObj: AppState = {
@@ -405,7 +418,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           numberingSettings: numSetRes || [],
           numberingAuditLogs: numAuditRes || [],
           boqs: boqsRes || [],
-          boqAuditLogs: boqAuditRes || []
+          boqAuditLogs: boqAuditRes || [],
+          jmrs: (jmrsRes as any) || [],
+          jmrAuditLogs: (jmrAuditRes as any) || []
         };
         setState(stateObj);
 
@@ -537,7 +552,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               numberingSettings,
               numberingAuditLogs,
               boqs,
-              boqAuditLogs
+              boqAuditLogs,
+              jmrs: (state as any).jmrs || [],
+              jmrAuditLogs: (state as any).jmrAuditLogs || []
             });
           }
         } catch (e) {
@@ -2585,6 +2602,95 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const refreshJMRs = async () => {
+    try {
+      const res = await fetch('/api/jmrs');
+      if (res.ok) {
+        const data = await res.json();
+        setState(s => ({ ...s, jmrs: data }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addJMR = async (jmr: Omit<JMR, 'id'>): Promise<string> => {
+    const newId = generateId();
+    const newJMR: JMR = { ...jmr, id: newId };
+    setState(s => ({ ...s, jmrs: [newJMR, ...s.jmrs] }));
+    triggerSuccess('JMR successfully created: ' + newJMR.jmrNo);
+    try {
+      await fetch('/api/jmrs', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-Username': user?.username || 'Admin'
+        },
+        body: JSON.stringify(newJMR)
+      });
+      refreshActivityLogs();
+    } catch (e) {
+      console.error(e);
+    }
+    return newId;
+  };
+
+  const updateJMR = async (id: string, jmr: Partial<JMR>) => {
+    setState(s => {
+      const updated = s.jmrs.map(j => j.id === id ? { ...j, ...jmr } as JMR : j);
+      return { ...s, jmrs: updated };
+    });
+    triggerSuccess('JMR updated successfully.');
+    try {
+      const existing = state.jmrs.find(j => j.id === id);
+      if (existing) {
+        const merged = { ...existing, ...jmr };
+        await fetch(`/api/jmrs/${id}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-Username': user?.username || 'Admin'
+          },
+          body: JSON.stringify(merged)
+        });
+        refreshActivityLogs();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteJMR = async (id: string) => {
+    setState(s => ({ ...s, jmrs: s.jmrs.filter(j => j.id !== id) }));
+    triggerSuccess('JMR deleted successfully.');
+    try {
+      await fetch(`/api/jmrs/${id}`, { 
+        method: 'DELETE',
+        headers: { 'X-User-Username': user?.username || 'Admin' }
+      });
+      refreshActivityLogs();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addJMRAuditLog = async (log: Omit<JMRAuditLog, 'id' | 'timestamp'>) => {
+    const newLog: JMRAuditLog = {
+      ...log,
+      id: 'jlog_' + Math.random().toString(36).substring(2, 11),
+      timestamp: new Date().toISOString()
+    };
+    setState(s => ({ ...s, jmrAuditLogs: [newLog, ...s.jmrAuditLogs] }));
+    try {
+      await fetch('/api/jmrs-audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLog)
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   return (
     <AppContext.Provider value={{
@@ -2697,7 +2803,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteFinancialYear,
       addFloorAbstract,
       updateFloorAbstract,
-      deleteFloorAbstract
+      deleteFloorAbstract,
+      refreshJMRs,
+      addJMR,
+      updateJMR,
+      deleteJMR,
+      addJMRAuditLog
     }}>
       {children}
     </AppContext.Provider>

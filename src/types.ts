@@ -997,6 +997,98 @@ export interface BOQAuditLog {
   details: string;
 }
 
+// --- JMR01 Joint Measurement Record Types ---
+export type JMRMeasurementMethod = 'direct' | 'dimensions' | 'length_width' | 'multiplier' | 'count';
+
+export interface JMRMeasurementRow {
+  id: string;
+  entryType: 'Add' | 'Subtract';
+  startDate: string;
+  endDate: string;
+  location: string;
+  equipmentNo?: string;
+  method: JMRMeasurementMethod;
+  length?: number;
+  width?: number;
+  height?: number; // depth / thickness
+  numberOfTimes?: number;
+  baseQuantity?: number;
+  calculatedQuantity: number;
+  remarks?: string;
+  description?: string;
+}
+
+export interface JMRItem {
+  id: string;
+  boqItemId: string;
+  itemNumber: string;
+  itemCode: string;
+  description: string;
+  unit: string;
+  rate: number;
+  contractQuantity: number;
+  previouslyApprovedQuantity: number;
+  previouslyBilledQuantity?: number;
+  availableContractQuantity: number;
+  netQuantity: number;
+  currentClaimAmount: number;
+  measurementRows: JMRMeasurementRow[];
+  remarks?: string;
+}
+
+export type JMRStatus = 'Draft' | 'Submitted' | 'Under Verification' | 'Returned' | 'Approved' | 'Partially Billed' | 'Billed' | 'Rejected';
+
+export interface JMR {
+  id: string;
+  jmrNo: string;
+  projectId: string;
+  boqId: string;
+  company: string;
+  clientName: string;
+  workOrderNo?: string;
+  date: string;
+  startDate: string;
+  endDate: string;
+  location?: string;
+  referenceNo?: string;
+  remarks?: string;
+  items: JMRItem[];
+  status: JMRStatus;
+  preparedBy?: string;
+  preparedDate?: string;
+  submittedBy?: string;
+  submittedDate?: string;
+  verifiedBy?: string;
+  verifiedDate?: string;
+  approvedBy?: string;
+  approvedDate?: string;
+  approvalRemarks?: string;
+  returnReason?: string;
+  linkedBillId?: string;
+  linkedBillNo?: string;
+  createdDate?: string;
+  modifiedDate?: string;
+}
+
+export interface JMRAuditLog {
+  id: string;
+  jmrNo: string;
+  timestamp: string;
+  username: string;
+  action: string;
+  details: string;
+}
+
+export interface JMRBillAllocation {
+  id: string;
+  jmrId: string;
+  billId: string;
+  boqItemId: string;
+  billedQuantity: number;
+  billedAmount: number;
+  allocationDate: string;
+}
+
 export interface DMSDocument {
   id: string;
   projectId?: string;

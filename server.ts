@@ -1191,6 +1191,59 @@ function initDbSchema() {
       details TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS jmrs (
+      id TEXT PRIMARY KEY,
+      jmrNo TEXT NOT NULL UNIQUE,
+      projectId TEXT NOT NULL,
+      boqId TEXT NOT NULL,
+      company TEXT DEFAULT 'SN ENTERPRISES',
+      clientName TEXT NOT NULL,
+      workOrderNo TEXT,
+      date TEXT NOT NULL,
+      startDate TEXT,
+      endDate TEXT,
+      location TEXT,
+      referenceNo TEXT,
+      remarks TEXT,
+      items TEXT,
+      status TEXT NOT NULL DEFAULT 'Draft',
+      preparedBy TEXT,
+      preparedDate TEXT,
+      submittedBy TEXT,
+      submittedDate TEXT,
+      verifiedBy TEXT,
+      verifiedDate TEXT,
+      approvedBy TEXT,
+      approvedDate TEXT,
+      approvalRemarks TEXT,
+      returnReason TEXT,
+      linkedBillId TEXT,
+      linkedBillNo TEXT,
+      createdDate TEXT,
+      modifiedDate TEXT,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (boqId) REFERENCES boqs(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS jmr_audit_logs (
+      id TEXT PRIMARY KEY,
+      jmrNo TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      username TEXT NOT NULL,
+      action TEXT NOT NULL,
+      details TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS jmr_bill_allocations (
+      id TEXT PRIMARY KEY,
+      jmrId TEXT NOT NULL,
+      billId TEXT NOT NULL,
+      boqItemId TEXT NOT NULL,
+      billedQuantity REAL NOT NULL,
+      billedAmount REAL NOT NULL,
+      allocationDate TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS dms_documents (
       id TEXT PRIMARY KEY,
       projectId TEXT,
@@ -1363,6 +1416,322 @@ function initDbSchema() {
     }
   } catch (err) {
     console.error("Failed to seed subcontractor numbering settings:", err);
+  }
+
+  // ============================================================================
+  // SEED INITIAL APPROVED BOQ & JMR RECORDS (For Instant Offline Functionality)
+  // ============================================================================
+  try {
+    const boqCount = db.prepare("SELECT COUNT(*) as count FROM boqs").get() as { count: number };
+    if (boqCount.count === 0) {
+      console.log("Seeding initial Contract BOQ and JMR records...");
+      const sampleBoqItems = [
+        {
+          id: "item_seed_10",
+          itemNumber: "10",
+          itemCode: "CIV-EXC-01",
+          section: "Earthwork",
+          workCategory: "Civil",
+          description: "Earthwork in excavation by mechanical means (Hydraulic Excavator) in all kinds of soil as per drawing specifications including dressing of sides and ramming of bottoms, lift upto 1.5 m, getting out excavated soil and disposal within 50 m lead.",
+          unit: "cum",
+          contractQuantity: 1500,
+          originalQuantity: 1500,
+          approvedRevisedQuantity: 1500,
+          boqQuantity: 1500,
+          unitRate: 285.00,
+          originalRate: 285.00,
+          approvedRevisedRate: 285.00,
+          boqRate: 285.00,
+          contractAmount: 427500.00,
+          revisedAmount: 427500.00,
+          measuredQuantity: 840,
+          billedQuantity: 0,
+          balanceQuantity: 660,
+          remarks: "Drawing Ref: STR/DWG/001-A"
+        },
+        {
+          id: "item_seed_20",
+          itemNumber: "20",
+          itemCode: "CIV-PCC-02",
+          section: "Concrete Works",
+          workCategory: "Civil",
+          description: "Providing and laying in position cement concrete of specified grade excluding centering and shuttering - All work up to plinth level: 1:4:8 (1 Cement : 4 coarse sand : 8 stone aggregate 40 mm nominal size).",
+          unit: "cum",
+          contractQuantity: 350,
+          originalQuantity: 350,
+          approvedRevisedQuantity: 350,
+          boqQuantity: 350,
+          unitRate: 4650.00,
+          originalRate: 4650.00,
+          approvedRevisedRate: 4650.00,
+          boqRate: 4650.00,
+          contractAmount: 1627500.00,
+          revisedAmount: 1627500.00,
+          measuredQuantity: 120,
+          billedQuantity: 0,
+          balanceQuantity: 230,
+          remarks: "Drawing Ref: STR/DWG/002-B"
+        },
+        {
+          id: "item_seed_30",
+          itemNumber: "30",
+          itemCode: "CIV-RCC-03",
+          section: "Concrete Works",
+          workCategory: "Civil",
+          description: "Reinforced cement concrete work in beams, suspended floors, roofs having slope up to 15 degrees, landings, balconies, columns up to floor five level: 1:1.5:3 (1 cement : 1.5 coarse sand : 3 graded stone aggregate 20 mm).",
+          unit: "cum",
+          contractQuantity: 680,
+          originalQuantity: 680,
+          approvedRevisedQuantity: 680,
+          boqQuantity: 680,
+          unitRate: 7200.00,
+          originalRate: 7200.00,
+          approvedRevisedRate: 7200.00,
+          boqRate: 7200.00,
+          contractAmount: 4896000.00,
+          revisedAmount: 4896000.00,
+          measuredQuantity: 0,
+          billedQuantity: 0,
+          balanceQuantity: 680,
+          remarks: "Drawing Ref: STR/DWG/003-C"
+        },
+        {
+          id: "item_seed_40",
+          itemNumber: "40",
+          itemCode: "CIV-STL-04",
+          section: "Reinforcement Steel",
+          workCategory: "Civil",
+          description: "Steel reinforcement for R.C.C. work including straightening, cutting, bending, placing in position and binding all complete up to plinth level: Thermo-Mechanically Treated bars of grade Fe-500D.",
+          unit: "kg",
+          contractQuantity: 55000,
+          originalQuantity: 55000,
+          approvedRevisedQuantity: 55000,
+          boqQuantity: 55000,
+          unitRate: 78.50,
+          originalRate: 78.50,
+          approvedRevisedRate: 78.50,
+          boqRate: 78.50,
+          contractAmount: 4317500.00,
+          revisedAmount: 4317500.00,
+          measuredQuantity: 0,
+          billedQuantity: 0,
+          balanceQuantity: 55000,
+          remarks: "IS: 1786 Standard"
+        }
+      ];
+
+      db.prepare(`
+        INSERT INTO boqs (
+          id, boqNo, projectId, clientName, date, revisionNo, remarks,
+          items, revisions, extraItems, status, createdBy, createdDate,
+          company, title, contractRef, effectiveDate, currency
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "boq_seed_1",
+        "BOQ/S3ECO/2026/001",
+        "p1",
+        "S3 Infrastructures Ltd",
+        "2026-01-15",
+        0,
+        "Master Contract BOQ for Civil & Foundation Works",
+        JSON.stringify(sampleBoqItems),
+        JSON.stringify([]),
+        JSON.stringify([]),
+        "Approved",
+        "Admin",
+        "2026-01-15T10:00:00.000Z",
+        "SN ENTERPRISES",
+        "S3 Eco City Civil & Structure Contract",
+        "WO-2026-S3-088",
+        "2026-01-15",
+        "INR (₹)"
+      );
+
+      // Seed JMR 1 (Approved)
+      const sampleJmr1Items = [
+        {
+          id: "jmritem_seed_1",
+          boqItemId: "item_seed_10",
+          itemNumber: "10",
+          itemCode: "CIV-EXC-01",
+          description: "Earthwork in excavation by mechanical means (Hydraulic Excavator) in all kinds of soil as per drawing specifications...",
+          unit: "cum",
+          rate: 285.00,
+          contractQuantity: 1500,
+          previouslyApprovedQuantity: 0,
+          availableContractQuantity: 1500,
+          netQuantity: 840,
+          currentClaimAmount: 239400.00,
+          measurementRows: [
+            {
+              id: "meas_row_1",
+              entryType: "Add",
+              startDate: "2026-02-01",
+              endDate: "2026-02-05",
+              location: "Grid A1-D4 Main Tower Foundation Pit",
+              equipmentNo: "EXC-CAT-320D",
+              method: "dimensions",
+              length: 25,
+              width: 14,
+              height: 2.5,
+              numberOfTimes: 1,
+              calculatedQuantity: 875,
+              remarks: "Foundation pit mass excavation"
+            },
+            {
+              id: "meas_row_2",
+              entryType: "Subtract",
+              startDate: "2026-02-06",
+              endDate: "2026-02-06",
+              location: "Grid B2 Rock Outcrop Void",
+              equipmentNo: "",
+              method: "dimensions",
+              length: 5,
+              width: 3.5,
+              height: 2.0,
+              numberOfTimes: 1,
+              calculatedQuantity: 35,
+              remarks: "Deduction for unexcavated hard rock boulder void"
+            }
+          ],
+          remarks: "Verified jointly at site"
+        },
+        {
+          id: "jmritem_seed_2",
+          boqItemId: "item_seed_20",
+          itemNumber: "20",
+          itemCode: "CIV-PCC-02",
+          description: "Providing and laying in position cement concrete 1:4:8...",
+          unit: "cum",
+          rate: 4650.00,
+          contractQuantity: 350,
+          previouslyApprovedQuantity: 0,
+          availableContractQuantity: 350,
+          netQuantity: 120,
+          currentClaimAmount: 558000.00,
+          measurementRows: [
+            {
+              id: "meas_row_3",
+              entryType: "Add",
+              startDate: "2026-02-07",
+              endDate: "2026-02-09",
+              location: "Grid A1-D4 Raft Blinding Level",
+              equipmentNo: "",
+              method: "dimensions",
+              length: 30,
+              width: 20,
+              height: 0.2,
+              numberOfTimes: 1,
+              calculatedQuantity: 120,
+              remarks: "PCC 1:4:8 blinding thickness 200mm"
+            }
+          ],
+          remarks: "Levels recorded via total station"
+        }
+      ];
+
+      db.prepare(`
+        INSERT INTO jmrs (
+          id, jmrNo, projectId, boqId, company, clientName, workOrderNo,
+          date, startDate, endDate, location, referenceNo, remarks,
+          items, status, preparedBy, preparedDate, verifiedBy, verifiedDate,
+          approvedBy, approvedDate, createdDate, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "jmr_seed_1",
+        "JMR/S3ECO/2026-27/001",
+        "p1",
+        "boq_seed_1",
+        "SN ENTERPRISES",
+        "S3 Infrastructures Ltd",
+        "WO-2026-S3-088",
+        "2026-02-10",
+        "2026-02-01",
+        "2026-02-10",
+        "Tower A - Foundation Raft Pit",
+        "S3/SITE/JMR/014",
+        "Joint measurement conducted with Site Engineer & Client PMC for foundation pit excavation and PCC blinding.",
+        JSON.stringify(sampleJmr1Items),
+        "Approved",
+        "Ramesh Patil (Site Engg)",
+        "2026-02-10",
+        "Alok Sharma (PMC Consultant)",
+        "2026-02-12",
+        "V. K. Nair (Chief Project Head)",
+        "2026-02-14",
+        "2026-02-10T11:00:00.000Z",
+        "2026-02-14T15:00:00.000Z"
+      );
+
+      // Seed JMR 2 (Submitted)
+      const sampleJmr2Items = [
+        {
+          id: "jmritem_seed_3",
+          boqItemId: "item_seed_30",
+          itemNumber: "30",
+          itemCode: "CIV-RCC-03",
+          description: "Reinforced cement concrete work in beams, suspended floors...",
+          unit: "cum",
+          rate: 7200.00,
+          contractQuantity: 680,
+          previouslyApprovedQuantity: 0,
+          availableContractQuantity: 680,
+          netQuantity: 85,
+          currentClaimAmount: 612000.00,
+          measurementRows: [
+            {
+              id: "meas_row_4",
+              entryType: "Add",
+              startDate: "2026-02-15",
+              endDate: "2026-02-22",
+              location: "Tower A - Basement Retaining Wall Lift 1",
+              equipmentNo: "CONC-PUMP-01",
+              method: "dimensions",
+              length: 42.5,
+              width: 0.4,
+              height: 5.0,
+              numberOfTimes: 1,
+              calculatedQuantity: 85,
+              remarks: "M25 grade concrete retaining wall"
+            }
+          ],
+          remarks: "Awaiting cube test reports"
+        }
+      ];
+
+      db.prepare(`
+        INSERT INTO jmrs (
+          id, jmrNo, projectId, boqId, company, clientName, workOrderNo,
+          date, startDate, endDate, location, referenceNo, remarks,
+          items, status, preparedBy, preparedDate, submittedBy, submittedDate,
+          createdDate, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "jmr_seed_2",
+        "JMR/S3ECO/2026-27/002",
+        "p1",
+        "boq_seed_1",
+        "SN ENTERPRISES",
+        "S3 Infrastructures Ltd",
+        "WO-2026-S3-088",
+        "2026-02-25",
+        "2026-02-15",
+        "2026-02-24",
+        "Tower A - Basement Retaining Wall",
+        "S3/SITE/JMR/022",
+        "Basement retaining wall lift-1 concrete pouring and formwork measurements.",
+        JSON.stringify(sampleJmr2Items),
+        "Submitted",
+        "Ramesh Patil (Site Engg)",
+        "2026-02-25",
+        "Ramesh Patil (Site Engg)",
+        "2026-02-25",
+        "2026-02-25T14:30:00.000Z",
+        "2026-02-25T14:30:00.000Z"
+      );
+    }
+  } catch (err) {
+    console.error("Failed to seed initial BOQ & JMR records:", err);
   }
 
   // ============================================================================
@@ -7838,6 +8207,210 @@ async function startServer() {
         oldValue || null,
         newValue || null,
         details || ""
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- JOINT MEASUREMENT RECORD (JMR01) API ---
+  app.get("/api/jmrs", (req, res) => {
+    try {
+      const { projectId, boqId } = req.query;
+      let query = "SELECT * FROM jmrs";
+      const params: any[] = [];
+      const conditions: string[] = [];
+      if (projectId) {
+        conditions.push("projectId = ?");
+        params.push(projectId);
+      }
+      if (boqId) {
+        conditions.push("boqId = ?");
+        params.push(boqId);
+      }
+      if (conditions.length > 0) {
+        query += " WHERE " + conditions.join(" AND ");
+      }
+      query += " ORDER BY date DESC, createdDate DESC";
+      const rows = db.prepare(query).all(...params) as any[];
+      const mapped = rows.map(r => ({
+        ...r,
+        items: r.items ? JSON.parse(r.items) : []
+      }));
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/jmrs/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const r = db.prepare("SELECT * FROM jmrs WHERE id = ?").get(id) as any;
+      if (!r) return res.status(404).json({ error: "JMR not found" });
+      res.json({
+        ...r,
+        items: r.items ? JSON.parse(r.items) : []
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/jmrs", (req, res) => {
+    try {
+      const {
+        id, jmrNo, projectId, boqId, company, clientName, workOrderNo,
+        date, startDate, endDate, location, referenceNo, remarks,
+        items, status, preparedBy, preparedDate, submittedBy, submittedDate
+      } = req.body;
+
+      db.prepare(`
+        INSERT INTO jmrs (
+          id, jmrNo, projectId, boqId, company, clientName, workOrderNo,
+          date, startDate, endDate, location, referenceNo, remarks,
+          items, status, preparedBy, preparedDate, submittedBy, submittedDate,
+          createdDate, modifiedDate
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, jmrNo, projectId, boqId, company || 'SN ENTERPRISES', clientName, workOrderNo || null,
+        date, startDate || date, endDate || date, location || '', referenceNo || null, remarks || '',
+        items ? JSON.stringify(items) : '[]', status || 'Draft',
+        preparedBy || 'Site Engineer', preparedDate || new Date().toISOString(),
+        submittedBy || null, submittedDate || null,
+        new Date().toISOString(), new Date().toISOString()
+      );
+
+      const authUser = (req.headers["x-user-username"] as string) || preparedBy || "Admin";
+      logActivity(authUser, "CREATE", "jmrs", id, `Created JMR ${jmrNo} for Project ${projectId}`);
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/jmrs/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        jmrNo, projectId, boqId, company, clientName, workOrderNo,
+        date, startDate, endDate, location, referenceNo, remarks,
+        items, status, preparedBy, preparedDate, submittedBy, submittedDate,
+        verifiedBy, verifiedDate, approvedBy, approvedDate, approvalRemarks,
+        returnReason, linkedBillId, linkedBillNo
+      } = req.body;
+
+      const oldVal = db.prepare("SELECT * FROM jmrs WHERE id = ?").get(id) as any;
+
+      db.prepare(`
+        UPDATE jmrs
+        SET jmrNo = ?, projectId = ?, boqId = ?, company = ?, clientName = ?, workOrderNo = ?,
+            date = ?, startDate = ?, endDate = ?, location = ?, referenceNo = ?, remarks = ?,
+            items = ?, status = ?, preparedBy = ?, preparedDate = ?,
+            submittedBy = ?, submittedDate = ?, verifiedBy = ?, verifiedDate = ?,
+            approvedBy = ?, approvedDate = ?, approvalRemarks = ?, returnReason = ?,
+            linkedBillId = ?, linkedBillNo = ?, modifiedDate = ?
+        WHERE id = ?
+      `).run(
+        jmrNo, projectId, boqId, company || 'SN ENTERPRISES', clientName, workOrderNo || null,
+        date, startDate || date, endDate || date, location || '', referenceNo || null, remarks || '',
+        items ? JSON.stringify(items) : '[]', status,
+        preparedBy || oldVal?.preparedBy, preparedDate || oldVal?.preparedDate,
+        submittedBy || oldVal?.submittedBy, submittedDate || oldVal?.submittedDate,
+        verifiedBy || oldVal?.verifiedBy, verifiedDate || oldVal?.verifiedDate,
+        approvedBy || oldVal?.approvedBy, approvedDate || oldVal?.approvedDate,
+        approvalRemarks || oldVal?.approvalRemarks, returnReason || oldVal?.returnReason,
+        linkedBillId || oldVal?.linkedBillId, linkedBillNo || oldVal?.linkedBillNo,
+        new Date().toISOString(),
+        id
+      );
+
+      const authUser = (req.headers["x-user-username"] as string) || approvedBy || verifiedBy || submittedBy || "Admin";
+      let detailsMsg = `Updated JMR ${jmrNo}`;
+      if (oldVal && oldVal.status !== status) {
+        detailsMsg += ` (Status changed from ${oldVal.status} to ${status})`;
+      }
+      logActivity(authUser, "UPDATE", "jmrs", id, detailsMsg);
+      res.json({ id, ...req.body });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/jmrs/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const oldVal = db.prepare("SELECT * FROM jmrs WHERE id = ?").get(id) as any;
+      if (!oldVal) return res.status(404).json({ error: "JMR not found" });
+
+      if (oldVal.status === 'Approved' || oldVal.status === 'Billed' || oldVal.status === 'Partially Billed') {
+        return res.status(400).json({ error: `Cannot delete JMR ${oldVal.jmrNo} in status "${oldVal.status}". Approved or billed measurement records must remain auditable.` });
+      }
+
+      db.prepare("DELETE FROM jmrs WHERE id = ?").run(id);
+
+      const authUser = (req.headers["x-user-username"] as string) || "Admin";
+      logActivity(authUser, "DELETE", "jmrs", id, `Deleted Draft JMR ${oldVal.jmrNo}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/jmrs-audit-logs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT * FROM jmr_audit_logs ORDER BY timestamp DESC LIMIT 500").all();
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/jmrs-audit-logs", (req, res) => {
+    try {
+      const { id, jmrNo, timestamp, username, action, details } = req.body;
+      db.prepare(`
+        INSERT INTO jmr_audit_logs (id, jmrNo, timestamp, username, action, details)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        id || "jal_" + Math.random().toString(36).substring(2, 11),
+        jmrNo,
+        timestamp || new Date().toISOString(),
+        username || "Admin",
+        action,
+        details || ""
+      );
+      res.status(201).json(req.body);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/jmr-allocations/:billId", (req, res) => {
+    try {
+      const { billId } = req.params;
+      const rows = db.prepare("SELECT * FROM jmr_bill_allocations WHERE billId = ?").all(billId);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/jmr-allocations", (req, res) => {
+    try {
+      const { id, jmrId, billId, boqItemId, billedQuantity, billedAmount, allocationDate } = req.body;
+      db.prepare(`
+        INSERT INTO jmr_bill_allocations (id, jmrId, billId, boqItemId, billedQuantity, billedAmount, allocationDate)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id || "jba_" + Math.random().toString(36).substring(2, 11),
+        jmrId,
+        billId,
+        boqItemId,
+        Number(billedQuantity) || 0,
+        Number(billedAmount) || 0,
+        allocationDate || new Date().toISOString()
       );
       res.status(201).json(req.body);
     } catch (err: any) {

@@ -131,7 +131,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'BOQ',
       icon: <FileSpreadsheet size={14} className="text-[#5F6B75]" />,
       items: [
-        { id: 'boqs', label: 'BOQ Master', tcode: 'BOQ01' }
+        { id: 'boqs', label: 'BOQ Master', tcode: 'BOQ01' },
+        { id: 'jmr', label: 'Joint Measurement (JMR)', tcode: 'JMR01' }
       ]
     },
     {

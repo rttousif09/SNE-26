@@ -1,0 +1,6 @@
+{
+  "summary": "Complete implementation plan for BOQ01 redesign and JMR01 (Joint Measurement Record) module with SupplierFirst-inspired workflow in classic SAP GUI style. Covers SQLite schema, server endpoints, state management, BOQ/Work Order register, BOQ Master, JMR Register, JMR Creation wizard, Service Description measurement entry window with Add/Subtract entries, Excel bulk upload/download, verification/approval workflow, RA Billing integration, and PDF/Print reports.",
+  "updatedAt": "2026-10-20T09:47:34.461672907Z",
+  "requestFeedback": true,
+  "userFacing": true
+}
