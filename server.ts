@@ -533,6 +533,14 @@ function initDbSchema() {
   try {
     db.exec("ALTER TABLE worker_payments ADD COLUMN overtimeHours REAL");
   } catch (e) {}
+
+  // BOQ01 Extended SAP Columns
+  try { db.exec("ALTER TABLE boqs ADD COLUMN company TEXT DEFAULT 'SN ENTERPRISES'"); } catch (e) {}
+  try { db.exec("ALTER TABLE boqs ADD COLUMN title TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE boqs ADD COLUMN contractRef TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE boqs ADD COLUMN effectiveDate TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE boqs ADD COLUMN currency TEXT DEFAULT 'INR'"); } catch (e) {}
+  try { db.exec("ALTER TABLE boqs ADD COLUMN attachments TEXT DEFAULT '[]'"); } catch (e) {}
   try {
     db.exec("ALTER TABLE worker_payments ADD COLUMN allowance REAL");
   } catch (e) {}
@@ -7668,7 +7676,8 @@ async function startServer() {
         ...r,
         items: r.items ? JSON.parse(r.items) : [],
         revisions: r.revisions ? JSON.parse(r.revisions) : [],
-        extraItems: r.extraItems ? JSON.parse(r.extraItems) : []
+        extraItems: r.extraItems ? JSON.parse(r.extraItems) : [],
+        attachments: r.attachments ? JSON.parse(r.attachments) : []
       }));
       res.json(mapped);
     } catch (err: any) {
@@ -7685,7 +7694,8 @@ async function startServer() {
         ...r,
         items: r.items ? JSON.parse(r.items) : [],
         revisions: r.revisions ? JSON.parse(r.revisions) : [],
-        extraItems: r.extraItems ? JSON.parse(r.extraItems) : []
+        extraItems: r.extraItems ? JSON.parse(r.extraItems) : [],
+        attachments: r.attachments ? JSON.parse(r.attachments) : []
       }));
       res.json(mapped);
     } catch (err: any) {
@@ -7698,7 +7708,8 @@ async function startServer() {
       const {
         id, boqNo, projectId, clientName, date, revisionNo, remarks,
         boqPdfName, boqPdfData, boqExcelName, boqExcelData,
-        items, revisions, extraItems, status, createdBy, createdDate
+        items, revisions, extraItems, status, createdBy, createdDate,
+        company, title, contractRef, effectiveDate, currency, attachments
       } = req.body;
 
       db.prepare(`
@@ -7706,8 +7717,9 @@ async function startServer() {
           id, boqNo, projectId, clientName, date, revisionNo, remarks,
           boqPdfName, boqPdfData, boqExcelName, boqExcelData,
           items, revisions, extraItems, status, createdBy, createdDate,
-          modifiedBy, modifiedDate
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          modifiedBy, modifiedDate,
+          company, title, contractRef, effectiveDate, currency, attachments
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, boqNo, projectId, clientName, date, parseInt(revisionNo) || 0, remarks || "",
         boqPdfName || null, boqPdfData || null, boqExcelName || null, boqExcelData || null,
@@ -7718,7 +7730,13 @@ async function startServer() {
         createdBy || "Admin",
         createdDate || new Date().toISOString(),
         createdBy || "Admin",
-        createdDate || new Date().toISOString()
+        createdDate || new Date().toISOString(),
+        company || "SN ENTERPRISES",
+        title || "",
+        contractRef || "",
+        effectiveDate || date,
+        currency || "INR",
+        attachments ? JSON.stringify(attachments) : "[]"
       );
 
       const authUser = (req.headers["x-user-username"] as string) || createdBy || "Admin";
@@ -7735,7 +7753,8 @@ async function startServer() {
       const {
         boqNo, projectId, clientName, date, revisionNo, remarks,
         boqPdfName, boqPdfData, boqExcelName, boqExcelData,
-        items, revisions, extraItems, status, modifiedBy, modifiedDate
+        items, revisions, extraItems, status, modifiedBy, modifiedDate,
+        company, title, contractRef, effectiveDate, currency, attachments
       } = req.body;
 
       const oldVal = db.prepare("SELECT * FROM boqs WHERE id = ?").get(id) as any;
@@ -7745,7 +7764,8 @@ async function startServer() {
         SET boqNo = ?, projectId = ?, clientName = ?, date = ?, revisionNo = ?, remarks = ?,
             boqPdfName = ?, boqPdfData = ?, boqExcelName = ?, boqExcelData = ?,
             items = ?, revisions = ?, extraItems = ?, status = ?,
-            modifiedBy = ?, modifiedDate = ?
+            modifiedBy = ?, modifiedDate = ?,
+            company = ?, title = ?, contractRef = ?, effectiveDate = ?, currency = ?, attachments = ?
         WHERE id = ?
       `).run(
         boqNo, projectId, clientName, date, parseInt(revisionNo) || 0, remarks || "",
@@ -7756,6 +7776,12 @@ async function startServer() {
         status,
         modifiedBy || "Admin",
         modifiedDate || new Date().toISOString(),
+        company || "SN ENTERPRISES",
+        title || "",
+        contractRef || "",
+        effectiveDate || date,
+        currency || "INR",
+        attachments ? JSON.stringify(attachments) : "[]",
         id
       );
 

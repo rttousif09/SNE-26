@@ -887,6 +887,15 @@ export interface BOQItemVariation {
   remarks?: string;
 }
 
+export interface BOQAttachment {
+  id: string;
+  name: string;
+  size?: number;
+  uploadDate?: string;
+  data?: string;
+  type?: string;
+}
+
 export interface BOQItem {
   id: string;
   itemCode: string;
@@ -905,6 +914,18 @@ export interface BOQItem {
   billingHistory?: BOQBillingHistory[];
   revisionsHistory?: BOQItemRevision[];
   variations?: BOQItemVariation[];
+  // SAP GUI BOQ01 Structure fields
+  section?: string;
+  subSection?: string;
+  itemNumber?: string;
+  contractQuantity?: number;
+  unitRate?: number;
+  approvedRevisedQuantity?: number;
+  approvedRevisedRate?: number;
+  revisedAmount?: number;
+  measuredQuantity?: number;
+  balanceQuantity?: number;
+  drawingRef?: string;
 }
 
 export interface BOQRevision {
@@ -950,11 +971,18 @@ export interface BOQ {
   items: BOQItem[];
   revisions: BOQRevision[];
   extraItems: BOQExtraItem[];
-  status: 'Draft' | 'Pending Approval' | 'Approved' | 'Revised' | 'Closed';
+  status: 'Draft' | 'Pending Approval' | 'Submitted' | 'Approved' | 'Revised' | 'Locked' | 'Closed';
   createdBy?: string;
   createdDate?: string;
   modifiedBy?: string;
   modifiedDate?: string;
+  // SAP GUI BOQ01 Metadata fields
+  company?: string;
+  title?: string;
+  contractRef?: string;
+  effectiveDate?: string;
+  currency?: string;
+  attachments?: BOQAttachment[];
 }
 
 export interface BOQAuditLog {
